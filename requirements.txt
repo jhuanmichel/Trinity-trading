@@ -2,14 +2,14 @@
 # Instale com: pip install -r requirements.txt
 
 ccxt==4.3.90              # Conexão com exchanges (MEXC, Binance, etc.)
-pandas==2.2.2             # Manipulação de dados
+pandas>=2.2.0             # Manipulação de dados
 ta==0.11.0                # Indicadores técnicos (RSI, MACD, Bollinger, etc.)
 anthropic==0.30.0         # Claude API (cérebro da IA)
 python-telegram-bot==21.3 # Alertas Telegram
 requests==2.32.3          # HTTP para APIs externas
 python-dotenv==1.0.1      # Carregar .env
 schedule==1.2.2           # Agendamento de tarefas
-numpy==1.26.4             # Dependência do pandas/ta
+numpy>=1.26.0             # Dependência do pandas/ta
 reportlab>=4.0.0          # PDF (Morning Brief, Cycle Intelligence)
 Pillow>=10.0.0           # Redimensionar imagens curadas nos PDFs
 yfinance>=0.2.40         # Dados macro: correlação cripto
