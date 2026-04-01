@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: trinity-trading
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python start.py
+    envVars:
+      - key: MEXC_API_KEY
+        sync: false
+      - key: MEXC_SECRET_KEY
+        sync: false
+      - key: TELEGRAM_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: COINGLASS_API_KEY
+        sync: false
+      - key: CRYPTOQUANT_API_KEY
+        sync: false
+      - key: GLASSNODE_API_KEY
+        sync: false
+      - key: SYMBOL
+        value: BTC/USDT:USDT
+      - key: TIMEFRAME
+        value: 15m
+      - key: SCORE_THRESHOLD
+        value: "65"
+      - key: INST_SCORE_THRESHOLD
+        value: "60"
+      - key: INST_INTERVAL_MINUTES
+        value: "60"
+      - key: SUMMARY_INTERVAL_MINUTES
+        value: "120"
+      - key: SIGNAL_INTERVAL_MINUTES
+        value: "240"
