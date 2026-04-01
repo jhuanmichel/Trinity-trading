@@ -20,7 +20,9 @@ STATIC_DIR = BASE_DIR / "dashboard" / "static"
 app = FastAPI(title="QuantDesk", version="1.0")
 
 # ── Price ticker cache ────────────────────────────────────────────────────────
-_MEXC_TICKER = "https://api.mexc.com/api/v3/ticker/24hr"
+_MEXC_TICKER  = "https://api.mexc.com/api/v3/ticker/24hr"
+_MEXC_KLINES  = "https://api.mexc.com/api/v3/klines"
+_INTERVAL_MAP = {"1m": "1m", "5m": "5m", "15m": "15m", "1h": "60m"}
 _price_cache: dict = {"price": None, "cached_at": 0.0}
 
 
@@ -74,6 +76,22 @@ def get_signals(limit: int = 30):
             pass
     signals.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
     return JSONResponse(content=signals[:limit])
+
+
+@app.get("/api/candles")
+async def get_candles(interval: str = "1m", limit: int = 60):
+    """OHLCV candles para sparkline — MEXC public API."""
+    tf = _INTERVAL_MAP.get(interval, "1m")
+    try:
+        def _fetch():
+            r = _req.get(_MEXC_KLINES, params={"symbol": "BTCUSDT", "interval": tf, "limit": min(limit, 200)}, timeout=5)
+            r.raise_for_status()
+            return r.json()
+        raw = await asyncio.to_thread(_fetch)
+        candles = [{"t": c[0], "o": float(c[1]), "h": float(c[2]), "l": float(c[3]), "c": float(c[4]), "v": float(c[5])} for c in raw]
+        return JSONResponse(content=candles)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 # Serve frontend

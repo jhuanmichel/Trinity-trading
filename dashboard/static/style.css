@@ -250,7 +250,7 @@ body {
   color: var(--text-muted);
 }
 
-.radar-score-right {
+.radar-score-right-old {
   display: flex;
   align-items: baseline;
   gap: 4px;
@@ -724,6 +724,340 @@ body {
 @keyframes shimmer {
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+/* ── STATUS MAIN BADGE ───────────────────────────────────────────────────── */
+.status-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  align-self: flex-start;
+}
+
+.status-long {
+  background: var(--green-dim);
+  color: var(--green);
+  border: 1px solid var(--green-border);
+  animation: statusPulseGreen 3s ease-in-out infinite;
+}
+
+.status-short {
+  background: var(--red-dim);
+  color: var(--red);
+  border: 1px solid var(--red-border);
+  animation: statusPulseRed 3s ease-in-out infinite;
+}
+
+.status-wait {
+  background: rgba(139,152,165,0.06);
+  color: var(--text-muted);
+  border: 1px solid rgba(139,152,165,0.15);
+}
+
+@keyframes statusPulseGreen {
+  0%, 100% { box-shadow: 0 0 12px var(--green-glow); }
+  50%       { box-shadow: 0 0 24px rgba(0,255,178,0.22); }
+}
+
+@keyframes statusPulseRed {
+  0%, 100% { box-shadow: 0 0 12px var(--red-glow); }
+  50%       { box-shadow: 0 0 24px rgba(255,77,79,0.22); }
+}
+
+/* ── CARD INSIGHTS (Regime / Volatility / Probability) ───────────────────── */
+.card-insights {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.insight-cell {
+  flex: 1;
+  padding: 14px 18px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.insight-cell:last-child { border-right: none; }
+.insight-cell-wide { flex: 2; }
+
+.insight-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.insight-value {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.regime-bull { color: var(--green); }
+.regime-bear { color: var(--red); }
+.regime-side { color: var(--yellow); }
+
+.regime-tag {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+/* ── PROBABILITY BAR ─────────────────────────────────────────────────────── */
+.prob-bar-wrap {
+  display: flex;
+  height: 20px;
+  border-radius: 4px;
+  overflow: hidden;
+  gap: 1px;
+}
+
+.prob-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+  transition: width 0.8s cubic-bezier(.4,0,.2,1);
+}
+
+.prob-short-seg {
+  background: rgba(255,77,79,0.18);
+  border: 1px solid rgba(255,77,79,0.28);
+  border-radius: 4px 0 0 4px;
+}
+
+.prob-long-seg {
+  background: rgba(0,255,178,0.12);
+  border: 1px solid rgba(0,255,178,0.22);
+  border-radius: 0 4px 4px 0;
+}
+
+.prob-label {
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  padding: 0 4px;
+}
+
+.prob-short-seg .prob-label { color: var(--red); }
+.prob-long-seg  .prob-label { color: var(--green); }
+
+.prob-tags {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-top: 3px;
+}
+
+/* ── SCORE UPDATES ───────────────────────────────────────────────────────── */
+.score-number-row {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.score-pct {
+  font-size: 28px;
+  font-weight: 800;
+  font-family: var(--mono);
+}
+
+.score-delta {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--mono);
+  margin-left: 8px;
+}
+
+.score-label-text {
+  font-size: 11px;
+  font-weight: 600;
+  display: block;
+  margin-top: 4px;
+}
+
+/* ── CONFLUENCE DOTS ─────────────────────────────────────────────────────── */
+.card-confluences {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.confluences-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 12px;
+}
+
+.conf-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.conf-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.conf-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* ── SPARKLINE CHART ─────────────────────────────────────────────────────── */
+.card-chart {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.spark-tf-row {
+  display: flex;
+  gap: 4px;
+}
+
+.spark-tf-btn {
+  background: none;
+  border: 1px solid var(--border-md);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--mono);
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.5px;
+}
+
+.spark-tf-btn:hover {
+  border-color: var(--text-muted);
+  color: var(--text-muted);
+}
+
+.spark-tf-btn.active {
+  background: var(--green-dim);
+  border-color: var(--green-border);
+  color: var(--green);
+}
+
+.sparkline-container {
+  min-height: 76px;
+}
+
+.spark-loading {
+  height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.spark-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--text-dim);
+}
+
+/* ── LIQUIDITY ZONES ─────────────────────────────────────────────────────── */
+.card-liquidity {
+  padding: 16px 24px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.liq-map {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.liq-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.liq-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  width: 36px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+.liq-line {
+  flex: 1;
+  height: 1px;
+  border-top: 1px dashed;
+  opacity: 0.4;
+}
+
+.liq-price {
+  font-size: 11px;
+  font-family: var(--mono);
+  font-weight: 600;
+  width: 88px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.liq-dist {
+  font-size: 10px;
+  font-family: var(--mono);
+  width: 52px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ── RADAR UPDATES ───────────────────────────────────────────────────────── */
+.radar-prob {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 28px;
+}
+
+.radar-prob .prob-bar-wrap {
+  width: 100%;
+  max-width: 220px;
+}
+
+.radar-score-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
 }
 
 /* ── RESPONSIVE ──────────────────────────────────────────────────────────── */
