@@ -20,7 +20,7 @@ STATIC_DIR = BASE_DIR / "dashboard" / "static"
 app = FastAPI(title="QuantDesk", version="1.0")
 
 # ── Price ticker cache ────────────────────────────────────────────────────────
-_exchange    = ccxt.mexc({"enableRateLimit": False})
+_MEXC_TICKER = "https://api.mexc.com/api/v3/ticker/24hr"
 _price_cache: dict = {"price": None, "cached_at": 0.0}
 
 
@@ -39,13 +39,17 @@ async def get_price():
     if _price_cache["price"] and (now - _price_cache["cached_at"]) < 1.0:
         return JSONResponse(content={k: v for k, v in _price_cache.items() if k != "cached_at"})
     try:
-        ticker = await asyncio.to_thread(_exchange.fetch_ticker, "BTC/USDT")
+        def _fetch():
+            r = _req.get(_MEXC_TICKER, params={"symbol": "BTCUSDT"}, timeout=3)
+            r.raise_for_status()
+            return r.json()
+        d = await asyncio.to_thread(_fetch)
         _price_cache.update({
-            "price":      ticker["last"],
-            "change_24h": ticker.get("percentage"),
-            "high_24h":   ticker.get("high"),
-            "low_24h":    ticker.get("low"),
-            "timestamp":  ticker.get("datetime"),
+            "price":      float(d["lastPrice"]),
+            "change_24h": float(d["priceChangePercent"]),
+            "high_24h":   float(d["highPrice"]),
+            "low_24h":    float(d["lowPrice"]),
+            "timestamp":  d.get("closeTime"),
             "cached_at":  now,
         })
         _price_cache.pop("error", None)
