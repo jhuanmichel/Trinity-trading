@@ -21,7 +21,6 @@ pip-selfcheck.json
 
 # ── Logs & dados gerados ─────────────────────────────────────────────────────
 logs/
-dashboard/current_state.json
 
 # ── macOS ─────────────────────────────────────────────────────────────────────
 .DS_Store

@@ -1,0 +1,88 @@
+{
+  "last_updated": "2026-04-01T16:02:34.090755",
+  "btc": {
+    "symbol": "BTC/USDT:USDT",
+    "price": 68134.5,
+    "direction": "AGUARDANDO",
+    "inst_score": 44.0,
+    "strength": "INSUFICIENTE",
+    "confluences": 2,
+    "valid": false,
+    "entry": 68134.5,
+    "stop": 68528.52,
+    "tp1": 67740.48,
+    "tp2": 67477.8,
+    "tp3": 67083.78,
+    "breakdown": {
+      "market_structure": {
+        "score": 50,
+        "weight": 20,
+        "contribution": 10.0,
+        "bias": "NEUTRO"
+      },
+      "liquidity": {
+        "score": 50,
+        "weight": 20,
+        "contribution": 10.0,
+        "bias": "NEUTRO"
+      },
+      "volume": {
+        "score": 40,
+        "weight": 20,
+        "contribution": 8.0,
+        "bias": "SHORT"
+      },
+      "trend": {
+        "score": 25,
+        "weight": 20,
+        "contribution": 5.0,
+        "bias": "SHORT"
+      },
+      "correlation": {
+        "score": 60,
+        "weight": 10,
+        "contribution": 6.0,
+        "bias": "LONG"
+      },
+      "volatility": {
+        "score": 50,
+        "weight": 10,
+        "contribution": 5.0,
+        "bias": "NEUTRO"
+      }
+    },
+    "layer_scores": {
+      "market_structure": 50,
+      "liquidity": 50,
+      "volume": 40,
+      "trend": 25,
+      "correlation": 60,
+      "volatility": 50
+    },
+    "market_structure": "TRANSIÇÃO",
+    "bos_bull": false,
+    "bos_bear": false,
+    "choch": false,
+    "sweep_low": false,
+    "sweep_high": false,
+    "equal_highs": false,
+    "equal_lows": false,
+    "high_volume": false,
+    "cvd_trending_up": true,
+    "vol_ratio": 0.1,
+    "healthy_move": false,
+    "trap_signal": false,
+    "ema_signal": "BAIXA PARCIAL",
+    "ichimoku_above_cloud": false,
+    "ichimoku_below_cloud": true,
+    "correlation_bias": "LONG FAVORÁVEL",
+    "btc_change": 0.3,
+    "eth_change": 1.41,
+    "btc_dominance": 56.1,
+    "usdt_dominance": 7.6,
+    "regime": "LATERAL",
+    "atr_pct": 0.39,
+    "squeeze": false,
+    "adx": 14.8
+  }
+}
