@@ -2,7 +2,7 @@ services:
   - type: web
     name: trinity-trading
     env: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: python start.py
     envVars:
       - key: MEXC_API_KEY
