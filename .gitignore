@@ -1,0 +1,41 @@
+# ── Secrets ──────────────────────────────────────────────────────────────────
+.env
+*.key
+*.pem
+secrets.json
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+.venv/
+env/
+pip-selfcheck.json
+
+# ── Logs & dados gerados ─────────────────────────────────────────────────────
+logs/
+dashboard/current_state.json
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# ── Editors ──────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── Misc ─────────────────────────────────────────────────────────────────────
+pip install -r requirements.txt
+.claude/

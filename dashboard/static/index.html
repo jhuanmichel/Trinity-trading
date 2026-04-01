@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trinity Trading — Institutional Crypto Signals</title>
+  <!-- Fonts loaded via CSS @import (Inter + JetBrains Mono) -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── HEADER ─────────────────────────────────────────────────────────── -->
+  <header class="header">
+    <div class="logo">
+      <span class="logo-name">TRINITY TRADING</span>
+      <span class="logo-sub">INSTITUTIONAL CRYPTO SIGNALS</span>
+    </div>
+    <div class="header-right">
+      <div class="live-indicator">
+        <span class="live-dot"></span>
+        <span class="live-text">LIVE</span>
+      </div>
+      <div class="update-time" id="updateTime">—</div>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <!-- ── SECTION 1: RADAR GLOBAL ──────────────────────────────────────── -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">RADAR GLOBAL</h2>
+        <span class="section-divider"></span>
+        <span class="section-sub">Sentimento institucional do mercado cripto</span>
+      </div>
+
+      <div class="radar-grid" id="radarGrid">
+        <div class="radar-item skeleton-card"></div>
+        <div class="radar-item skeleton-card"></div>
+        <div class="radar-item skeleton-card"></div>
+        <div class="radar-item skeleton-card"></div>
+      </div>
+
+      <div class="radar-status-bar" id="radarStatusBar">
+        <span style="color: var(--text-muted)">Carregando...</span>
+      </div>
+    </section>
+
+    <!-- ── SECTION 2: CARDS ──────────────────────────────────────────────── -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">ATIVOS</h2>
+        <span class="section-divider"></span>
+        <span class="section-sub">Análise institucional multi-camadas</span>
+      </div>
+
+      <div class="cards-grid" id="cardsGrid">
+        <div class="asset-card skeleton-card" style="min-height:420px"></div>
+        <div class="asset-card skeleton-card" style="min-height:420px"></div>
+      </div>
+    </section>
+
+    <!-- ── SECTION 3: HISTÓRICO ──────────────────────────────────────────── -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">HISTÓRICO DE SINAIS</h2>
+        <span class="section-divider"></span>
+        <span class="section-sub">Rastreamento de performance institucional</span>
+      </div>
+
+      <div class="table-wrapper">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Horário</th>
+              <th>Ativo</th>
+              <th>Direção</th>
+              <th>Score</th>
+              <th>Entry</th>
+              <th>Stop</th>
+              <th>Confluências</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody">
+            <tr><td colspan="8" class="table-empty">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <span>⚠️ Apenas análise — não é recomendação de investimento</span>
+    <span id="footerClock"></span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
