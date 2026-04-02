@@ -4,6 +4,8 @@ indicators/liquidations.py — Dados de Liquidações via Coinglass
 import requests
 from config import COINGLASS_API_KEY
 
+_CG_V3_BASE = "https://open-api-v3.coinglass.com/api"
+
 
 def analyze(symbol: str = "BTC"):
     try:
@@ -76,3 +78,46 @@ def analyze(symbol: str = "BTC"):
             "leverage_signal": "N/A",
             "miner_signal": "N/A",
         }
+
+
+def get_heatmap(symbol: str = "BTC", timeframe: str = "12h") -> dict:
+    """
+    Busca heatmap de liquidações via Coinglass API v3.
+    Retorna lista de níveis de preço com volumes de long/short liq em $M.
+
+    Returns:
+        {"levels": [{"price": float, "long_usd": float, "short_usd": float}, ...]}
+    """
+    try:
+        r = requests.get(
+            f"{_CG_V3_BASE}/futures/liquidation/map",
+            headers={"CG-API-KEY": COINGLASS_API_KEY},
+            params={"symbol": symbol, "timeframe": timeframe},
+            timeout=8,
+        )
+        raw = r.json()
+        d = raw.get("data") or {}
+
+        # Suporta variações de chave na resposta da API
+        prices = d.get("y")      or d.get("priceList")    or []
+        longs  = d.get("longs")  or d.get("longLiqList")  or d.get("longList")  or []
+        shorts = d.get("shorts") or d.get("shortLiqList") or d.get("shortList") or []
+
+        if not prices:
+            return {"levels": [], "error": "resposta vazia"}
+
+        levels = []
+        for i, p in enumerate(prices):
+            lv = float(longs[i])  if i < len(longs)  else 0.0
+            sv = float(shorts[i]) if i < len(shorts) else 0.0
+            if lv + sv > 0:
+                levels.append({
+                    "price":     round(float(p), 2),
+                    "long_usd":  round(lv / 1_000_000, 3),   # USD → $M
+                    "short_usd": round(sv / 1_000_000, 3),
+                })
+
+        return {"levels": levels}
+
+    except Exception as e:
+        return {"levels": [], "error": str(e)}

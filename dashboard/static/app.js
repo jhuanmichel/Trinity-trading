@@ -6,6 +6,8 @@ const PRICE_MS   = 1_000;
 let _prevBtcPrice = null;
 let _scoreHistory = [];   // [{score, ts}]
 let _sparkTf      = '1m';
+let _liqLevels    = [];   // liquidation heatmap levels
+let _liqApiError  = null; // última mensagem de erro da API de liquidações
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -431,11 +433,212 @@ function renderBTCCard(data) {
 
     ${liquidityZones(btc)}
 
+    ${renderLiqHeatmap(btc.price, _liqLevels)}
+
+    ${renderSmcPanel(data.btc?.smart_money)}
+
     <div class="card-layers">
-      <div class="layers-header">SCORE POR CAMADA</div>
+      <div class="layers-header">SCORE POR CAMADA (INSTITUCIONAL)</div>
       ${layerRows}
     </div>
   </div>`;
+}
+
+function renderSmcPanel(smc) {
+  if (!smc || smc.smc_score == null) return '';
+
+  const score   = smc.smc_score || 50;
+  const sc      = scoreColor(score);
+  const dir     = smc.direction || 'AGUARDANDO';
+  const valid   = smc.valid;
+  const align   = smc.alignment || '—';
+  const conf    = smc.confidence || '—';
+  const struct  = smc.structure || {};
+
+  const tfOrder = ['1D', '4H', '1H', '15m'];
+  const tfRows  = tfOrder.map(tf => {
+    const s = struct[tf] || '?';
+    const isBull = s.includes('BULL') || s.includes('CHOCH BULL');
+    const isBear = s.includes('BEAR') || s.includes('CHOCH BEAR');
+    const cls    = isBull ? 'c-green' : isBear ? 'c-red' : 'c-muted';
+    return `<div class="smc-tf-row">
+      <span class="smc-tf-label c-muted">${tf}</span>
+      <span class="smc-tf-struct ${cls}">${s}</span>
+    </div>`;
+  }).join('');
+
+  const dirCls = dir === 'LONG' ? 'c-green' : dir === 'SHORT' ? 'c-red' : 'c-muted';
+  const reasonHtml = smc.reasoning
+    ? `<div class="smc-reasoning c-muted">${smc.reasoning}</div>`
+    : '';
+
+  const smcEntry = smc.entry ? `<span class="level-val val-entry">${fmtPrice(smc.entry)}</span>` : '';
+  const smcStop  = smc.stop  ? `<span class="level-val val-stop">${fmtPrice(smc.stop)}</span>`  : '';
+  const t = smc.targets || {};
+  const tp1Html  = t.tp1 ? `<span class="level-val val-tp">${fmtPrice(t.tp1)} <span class="c-muted" style="font-size:9px">RR ${t.rr1}</span></span>` : '';
+  const tp2Html  = t.tp2 ? `<span class="level-val val-tp">${fmtPrice(t.tp2)} <span class="c-muted" style="font-size:9px">RR ${t.rr2}</span></span>` : '';
+  const tp3Html  = t.tp3 ? `<span class="level-val val-tp">${fmtPrice(t.tp3)} <span class="c-muted" style="font-size:9px">RR ${t.rr3}</span></span>` : '';
+
+  return `<div class="card-smc">
+    <div class="layers-header">SMART MONEY CONCEPTS
+      <span class="smc-badge ${valid ? 'smc-valid' : 'smc-wait'}">${valid ? '✅ VÁLIDO' : '⏳ AGUARDANDO'}</span>
+    </div>
+    <div class="smc-top-row">
+      <div>
+        <span class="score-number" style="color:${sc};font-size:28px">${score.toFixed(0)}</span>
+        <span class="score-pct" style="color:${sc}">%</span>
+        <span style="font-size:10px;color:${sc};margin-left:4px;font-weight:600">${scoreLabel(score)}</span>
+      </div>
+      <div style="text-align:right">
+        <div class="smc-dir ${dirCls}" style="font-size:13px;font-weight:700">${dir}</div>
+        <div class="c-muted" style="font-size:10px">${align} · ${conf}</div>
+      </div>
+    </div>
+    <div class="smc-tf-grid">${tfRows}</div>
+    ${(smcEntry || smcStop) ? `<div class="card-levels" style="margin-top:8px">
+      ${smcEntry ? `<div class="level-cell"><span class="level-lbl">SMC Entry</span>${smcEntry}</div>` : ''}
+      ${smcStop  ? `<div class="level-cell"><span class="level-lbl">SMC Stop</span>${smcStop}</div>`  : ''}
+      ${tp1Html  ? `<div class="level-cell"><span class="level-lbl">TP 1</span>${tp1Html}</div>`      : ''}
+      ${tp2Html  ? `<div class="level-cell"><span class="level-lbl">TP 2</span>${tp2Html}</div>`      : ''}
+      ${tp3Html  ? `<div class="level-cell"><span class="level-lbl">TP 3</span>${tp3Html}</div>`      : ''}
+    </div>` : ''}
+    ${reasonHtml}
+  </div>`;
+}
+
+// ── Liquidation Heatmap ───────────────────────────────────────────────────
+
+/**
+ * Escala de cor estilo Coinglass: dark-blue → teal → green → yellow
+ * pct: 0 (frio) → 1 (quente)
+ */
+function heatColor(pct) {
+  const stops = [
+    [14,  22,  80,  0.30],   // 0%   azul escuro
+    [20,  90,  140, 0.50],   // 25%  teal
+    [30,  170, 110, 0.68],   // 50%  verde médio
+    [130, 215,  50, 0.85],   // 75%  verde-amarelo
+    [255, 232,   8, 1.00],   // 100% amarelo (zona quente)
+  ];
+  const n   = stops.length - 1;
+  const pos = Math.min(1, Math.max(0, pct)) * n;
+  const i   = Math.min(Math.floor(pos), n - 1);
+  const t   = pos - i;
+  const [r1,g1,b1,a1] = stops[i];
+  const [r2,g2,b2,a2] = stops[i + 1];
+  const r = Math.round(r1 + (r2 - r1) * t);
+  const g = Math.round(g1 + (g2 - g1) * t);
+  const b = Math.round(b1 + (b2 - b1) * t);
+  const a = (a1 + (a2 - a1) * t).toFixed(2);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function renderLiqHeatmap(price, levels) {
+  const _header = `<div class="layers-header">LIQUIDATION MAP
+    <span style="font-size:9px;font-weight:400;color:var(--text-muted);margin-left:4px">±5% · 12h</span>
+  </div>`;
+
+  if (!levels?.length || !price) {
+    const msg = _liqApiError
+      ? `<span style="color:rgba(220,80,80,0.7)">${_liqApiError}</span>`
+      : `aguardando dados...`;
+    return `<div class="card-liqheat">${_header}
+      <div style="padding:14px 8px;text-align:center;font-size:10px;color:var(--text-muted)">${msg}</div>
+    </div>`;
+  }
+
+  const BAND     = 0.05;
+  const MAX_ROWS = 22;
+
+  const nearby = levels
+    .filter(l => Math.abs(l.price - price) / price <= BAND)
+    .sort((a, b) => b.price - a.price)
+    .slice(0, MAX_ROWS);
+
+  if (nearby.length < 3) return '';
+
+  // Normaliza pelo percentil 95 para evitar que outliers esmaguem a escala
+  const vols   = nearby.map(l => l.long_usd + l.short_usd).sort((a, b) => a - b);
+  const p95    = vols[Math.floor(vols.length * 0.95)] || vols[vols.length - 1] || 0.001;
+  const maxVol = Math.max(p95, 0.001);
+
+  let priceInserted = false;
+  const rows = [];
+
+  for (const l of nearby) {
+    if (!priceInserted && l.price < price) {
+      priceInserted = true;
+      rows.push(`<div class="liqheat-sep">
+        <span class="liqheat-sep-tag">${fmtPrice(price)}</span>
+      </div>`);
+    }
+
+    const isAbove  = l.price >= price;
+    const longVol  = l.long_usd;
+    const shortVol = l.short_usd;
+    const total    = longVol + shortVol;
+    const pct      = Math.min(1, total / maxVol);
+    const barPct   = Math.max(0.8, pct * 100).toFixed(1);
+    const col      = heatColor(pct);
+
+    // Glow proporcional à intensidade (zonas quentes brilham)
+    const glowSize = pct > 0.55 ? `${(pct * 7).toFixed(1)}px` : '0px';
+    const glowStyle = pct > 0.55 ? `box-shadow:0 0 ${glowSize} ${col};` : '';
+
+    const priceStr = '$' + Math.round(l.price).toLocaleString('en-US');
+    const volStr   = total >= 1
+      ? total.toFixed(1) + 'M'
+      : (total * 1000).toFixed(0) + 'K';
+
+    // Indicador L/S discreto
+    const dominant = isAbove ? 'S' : 'L';
+    const domCol   = isAbove ? 'rgba(80,200,120,0.65)' : 'rgba(220,80,80,0.65)';
+
+    rows.push(`<div class="liqheat-row">
+      <span class="liqheat-lbl">${priceStr}</span>
+      <div class="liqheat-track">
+        <div class="liqheat-bar" style="width:${barPct}%;background:${col};${glowStyle}"></div>
+      </div>
+      <span class="liqheat-vol">${volStr}</span>
+      <span class="liqheat-side" style="color:${domCol}">${dominant}</span>
+    </div>`);
+  }
+
+  if (!priceInserted) {
+    rows.push(`<div class="liqheat-sep">
+      <span class="liqheat-sep-tag">${fmtPrice(price)}</span>
+    </div>`);
+  }
+
+  // Legenda: barra de gradiente de intensidade
+  const gradStops = [0, 0.25, 0.5, 0.75, 1].map(p => heatColor(p)).join(',');
+
+  return `<div class="card-liqheat">
+    ${_header}
+    <div class="liqheat-wrap">${rows.join('')}</div>
+    <div class="liqheat-legend">
+      <span class="c-muted" style="font-size:8px">baixo</span>
+      <div style="flex:1;height:4px;border-radius:2px;background:linear-gradient(to right,${gradStops});opacity:0.75;margin:0 6px;align-self:center"></div>
+      <span class="c-muted" style="font-size:8px">alto</span>
+      <span style="margin-left:10px;font-size:8px;color:rgba(220,80,80,0.7)">L=long</span>
+      <span style="margin-left:6px;font-size:8px;color:rgba(80,200,120,0.7)">S=short</span>
+    </div>
+  </div>`;
+}
+
+async function updateLiqHeatmap() {
+  try {
+    const res  = await fetch('/api/liquidations');
+    const data = await res.json();
+    if (Array.isArray(data.levels) && data.levels.length > 0) {
+      _liqLevels   = data.levels;
+      _liqApiError = null;
+    } else {
+      _liqApiError = data.error || data.api_debug || 'sem dados';
+    }
+  } catch(e) {
+    _liqApiError = e.message;
+  }
 }
 
 function renderETHCard() {
@@ -550,8 +753,10 @@ function clockTick() {
 // Init
 refresh();
 priceTick();
-setInterval(refresh,        REFRESH_MS);
-setInterval(priceTick,      PRICE_MS);
-setInterval(clockTick,      1000);
-setInterval(updateSparkline, 30_000);
+updateLiqHeatmap();
+setInterval(refresh,          REFRESH_MS);
+setInterval(priceTick,        PRICE_MS);
+setInterval(clockTick,        1000);
+setInterval(updateSparkline,  30_000);
+setInterval(updateLiqHeatmap, 60_000);
 clockTick();

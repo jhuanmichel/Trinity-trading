@@ -25,6 +25,10 @@ _MEXC_KLINES  = "https://api.mexc.com/api/v3/klines"
 _INTERVAL_MAP = {"1m": "1m", "5m": "5m", "15m": "15m", "1h": "60m"}
 _price_cache: dict = {"price": None, "cached_at": 0.0}
 
+# ── Liquidation heatmap cache ─────────────────────────────────────────────────
+_CG_LIQ_MAP   = "https://open-api-v3.coinglass.com/api/futures/liquidation/map"
+_liq_cache: dict = {"data": None, "cached_at": 0.0}
+
 
 @app.get("/api/status")
 def get_status():
@@ -92,6 +96,57 @@ async def get_candles(interval: str = "1m", limit: int = 60):
         return JSONResponse(content=candles)
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/liquidations")
+async def get_liquidations():
+    """Heatmap de liquidações BTC via Coinglass v3 — cache 60s."""
+    import os as _os
+    now    = _time.time()
+    cached = _liq_cache["data"]
+    if cached and (now - _liq_cache["cached_at"]) < 60.0:
+        return JSONResponse(content=cached)
+    try:
+        cg_key = _os.getenv("COINGLASS_API_KEY", "")
+
+        def _fetch():
+            r = _req.get(
+                _CG_LIQ_MAP,
+                headers={"CG-API-KEY": cg_key},
+                params={"symbol": "BTC", "timeframe": "12h"},
+                timeout=8,
+            )
+            return r.json()
+
+        raw = await asyncio.to_thread(_fetch)
+        d   = raw.get("data") or {}
+
+        # Suporta diferentes formatos de resposta Coinglass v3
+        prices = d.get("y")      or d.get("priceList")    or []
+        longs  = d.get("longs")  or d.get("longLiqList")  or d.get("longList")  or []
+        shorts = d.get("shorts") or d.get("shortLiqList") or d.get("shortList") or []
+
+        levels = []
+        for i, p in enumerate(prices):
+            lv = float(longs[i])  if i < len(longs)  else 0.0
+            sv = float(shorts[i]) if i < len(shorts) else 0.0
+            if lv + sv > 0:
+                levels.append({
+                    "price":     round(float(p), 2),
+                    "long_usd":  round(lv  / 1_000_000, 3),  # → $M
+                    "short_usd": round(sv / 1_000_000, 3),
+                })
+
+        result = {"levels": levels, "ts": int(now)}
+        # Se não veio nenhum nível, inclui debug para diagnóstico
+        if not levels:
+            result["error"]     = "API retornou 0 níveis"
+            result["api_debug"] = str(raw)[:500]
+        _liq_cache.update({"data": result, "cached_at": now})
+        return JSONResponse(content=result)
+
+    except Exception as e:
+        return JSONResponse(content={"levels": [], "error": str(e)})
 
 
 # Serve frontend

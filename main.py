@@ -16,6 +16,7 @@ from indicators     import regime, trend, momentum, volume, derivatives, onchain
 from indicators     import market_structure, correlation
 from scoring        import calculate_score
 from institutional_scoring import calculate_institutional_score
+from smart_money_engine import SmartMoneyEngine
 import agent
 import alerts
 from config         import (
@@ -167,7 +168,8 @@ def run_analysis_signal():
 
 def _write_dashboard_state(
     price, inst, ms_data, volume_data, trend_data,
-    corr_data, regime_data, entry, stop, tp1, tp2, tp3
+    corr_data, regime_data, entry, stop, tp1, tp2, tp3,
+    smc_signal=None,
 ):
     """Persiste o estado atual para o dashboard web (dashboard/current_state.json)."""
     state = {
@@ -214,7 +216,21 @@ def _write_dashboard_state(
             "atr_pct":  regime_data.get("atr_pct", 0),
             "squeeze":  regime_data.get("squeeze", False),
             "adx":      regime_data.get("adx", 0),
-        }
+            # Smart Money Concepts
+            "smart_money": {
+                "smc_score":  smc_signal.get("smc_score")    if smc_signal else None,
+                "bias":       smc_signal.get("bias")          if smc_signal else None,
+                "direction":  smc_signal.get("direction")     if smc_signal else None,
+                "alignment":  smc_signal.get("alignment")     if smc_signal else None,
+                "confidence": smc_signal.get("confidence")    if smc_signal else None,
+                "valid":      smc_signal.get("valid", False)  if smc_signal else False,
+                "entry":      smc_signal.get("entry")         if smc_signal else None,
+                "stop":       smc_signal.get("stop")          if smc_signal else None,
+                "targets":    smc_signal.get("targets", {})   if smc_signal else {},
+                "structure":  smc_signal.get("structure", {}) if smc_signal else {},
+                "reasoning":  smc_signal.get("reasoning")     if smc_signal else None,
+            } if smc_signal else None,
+        },
     }
     import numpy as np
 
@@ -345,6 +361,16 @@ def run_institutional_analysis():
         mtf = _run_mtf_market_structure()
         log.info(f"   MTF: {mtf['agreed_timeframes']} confirmam {mtf['bias']}")
 
+        # ── SMC Engine (Order Blocks, FVG, MTF SMC) ────────────────────────
+        log.info("🧿 [10] Smart Money Concepts (OB + FVG + MTF)...")
+        try:
+            engine     = SmartMoneyEngine(df, SYMBOL)
+            smc_signal = engine.analyze()
+            log.info(f"   SMC: {smc_signal['direction']} | score={smc_signal['smc_score']} | {smc_signal['alignment']} | {smc_signal['confidence']}")
+        except Exception as e:
+            log.warning(f"   SMC Engine falhou: {e}")
+            smc_signal = None
+
         # ── Invincible Mode ────────────────────────────────────────────────
         score    = inst["inst_score"]
         valid    = inst["valid"]
@@ -357,7 +383,8 @@ def run_institutional_analysis():
             e_ns, s_ns, t1_ns, t2_ns, t3_ns = _calc_levels(price, inst.get("direction", "LONG"), atr_ns)
             _write_dashboard_state(
                 price, inst, ms_data, volume_data, trend_data,
-                corr_data, regime_data, e_ns, s_ns, t1_ns, t2_ns, t3_ns
+                corr_data, regime_data, e_ns, s_ns, t1_ns, t2_ns, t3_ns,
+                smc_signal=smc_signal,
             )
             if not valid:
                 log.info(f"💤 Invincible Mode: apenas {inst['confluences']}/6 confluências — sem sinal")
@@ -377,7 +404,8 @@ def run_institutional_analysis():
 
         _write_dashboard_state(
             price, inst, ms_data, volume_data, trend_data,
-            corr_data, regime_data, entry, stop, tp1, tp2, tp3
+            corr_data, regime_data, entry, stop, tp1, tp2, tp3,
+            smc_signal=smc_signal,
         )
         log.info("💾 Estado salvo no dashboard.")
 

@@ -1060,6 +1060,150 @@ body {
   gap: 4px;
 }
 
+/* ── SMC PANEL ───────────────────────────────────────────────────────────── */
+.card-smc {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+}
+.smc-badge {
+  float: right;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.smc-valid { background: var(--green-dim); color: var(--green); }
+.smc-wait  { background: var(--yellow-dim); color: var(--yellow); }
+.smc-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 10px 0 12px;
+}
+.smc-tf-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.smc-tf-row {
+  background: var(--surface2);
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.smc-tf-label  { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.smc-tf-struct { font-size: 10px; font-weight: 600; }
+.smc-dir       { letter-spacing: .05em; }
+.smc-reasoning {
+  font-size: 10px;
+  line-height: 1.5;
+  margin-top: 8px;
+  padding: 8px;
+  background: var(--surface2);
+  border-radius: 6px;
+  border-left: 2px solid var(--border);
+}
+
+/* ── LIQUIDATION HEATMAP ─────────────────────────────────────────────────── */
+.card-liqheat {
+  border-top: 1px solid var(--border);
+  padding: 10px 16px 10px;
+  background: rgba(6, 8, 18, 0.55);
+}
+
+.liqheat-wrap {
+  display: flex;
+  flex-direction: column;
+  margin: 8px 0 6px;
+}
+
+.liqheat-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 11px;
+  margin-bottom: 2px;
+}
+
+.liqheat-lbl {
+  width: 64px;
+  flex-shrink: 0;
+  font-size: 8px;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  color: rgba(255,255,255,0.32);
+  text-align: right;
+  letter-spacing: -0.3px;
+}
+
+.liqheat-track {
+  flex: 1;
+  height: 8px;
+  background: rgba(255,255,255,0.025);
+  border-radius: 1px;
+  overflow: visible;
+  position: relative;
+}
+
+.liqheat-bar {
+  height: 100%;
+  border-radius: 1px;
+  transition: width 0.5s ease;
+}
+
+.liqheat-vol {
+  width: 32px;
+  flex-shrink: 0;
+  font-size: 7px;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  color: rgba(255,255,255,0.22);
+  text-align: right;
+}
+
+.liqheat-side {
+  width: 10px;
+  flex-shrink: 0;
+  font-size: 7px;
+  font-weight: 700;
+  text-align: center;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+/* Separador de preço atual */
+.liqheat-sep {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 5px 0 4px;
+}
+.liqheat-sep::before,
+.liqheat-sep::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 232, 8, 0.5);
+  box-shadow: 0 0 5px rgba(255, 232, 8, 0.35);
+}
+.liqheat-sep-tag {
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255, 232, 8, 0.95);
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  text-shadow: 0 0 8px rgba(255, 232, 8, 0.55);
+  letter-spacing: 0.02em;
+}
+
+.liqheat-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding-top: 2px;
+}
+
 /* ── RESPONSIVE ──────────────────────────────────────────────────────────── */
 @media (max-width: 1024px) {
   .cards-grid { grid-template-columns: 1fr; }
