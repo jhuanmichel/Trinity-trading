@@ -72,6 +72,19 @@ function timeAgo(iso) {
   return `${Math.floor(s / 3600)}h atrás`;
 }
 
+function dataAgeSeconds(iso) {
+  if (!iso) return Infinity;
+  return Math.floor((Date.now() - new Date(iso)) / 1000);
+}
+
+// Sinal expirado: entry muito distante do preço atual (>1.5%) ou dados > 2h
+function isSignalStale(entry, currentPrice, lastUpdated) {
+  const ageS = dataAgeSeconds(lastUpdated);
+  if (ageS > 7200) return true;   // > 2 horas
+  if (!entry || !currentPrice) return false;
+  return Math.abs(entry - currentPrice) / currentPrice > 0.015;
+}
+
 function statusBadge(dir, score) {
   if (!dir || dir === 'AGUARDANDO') {
     return `<div class="status-main status-wait"><span>●</span> NEUTRO</div>`;
@@ -336,7 +349,15 @@ function renderBTCCard(data) {
     btc.sweep_high ? '↑ Sweep High'  : '',
   ].filter(Boolean).join(' · ') || '—';
 
-  const dirCls = btc.direction?.includes('LONG') ? 'dir-long' : btc.direction?.includes('SHORT') ? 'dir-short' : '';
+  const dirCls   = btc.direction?.includes('LONG') ? 'dir-long' : btc.direction?.includes('SHORT') ? 'dir-short' : '';
+  const stale    = isSignalStale(btc.entry, btc.price, data.last_updated);
+  const ageH     = Math.floor(dataAgeSeconds(data.last_updated) / 3600);
+  const staleBanner = stale ? `
+    <div style="background:rgba(220,50,50,0.15);border:1px solid rgba(220,50,50,0.4);border-radius:6px;
+                padding:7px 12px;margin:0 0 10px 0;font-size:11px;color:rgba(255,100,100,0.9);display:flex;
+                align-items:center;gap:6px;">
+      ⚠ DADOS DESATUALIZADOS (${ageH}h) — aguardando nova análise. Entry/SL/TP ocultados.
+    </div>` : '';
 
   return `<div class="asset-card ${dirCls}">
     <div class="card-stripe" style="background:${stripeColor}"></div>
@@ -350,7 +371,7 @@ function renderBTCCard(data) {
             <span class="tick-dot" id="btcTickDot"></span>
             <span class="tick-val" id="btcTickVal">—</span>
           </span>
-          <span class="card-updated">${timeAgo(data.last_updated)}</span>
+          <span class="card-updated" style="${stale ? 'color:rgba(220,80,80,0.8)' : ''}">${timeAgo(data.last_updated)}</span>
         </div>
       </div>
       ${statusBadge(btc.direction, score)}
@@ -422,12 +443,19 @@ function renderBTCCard(data) {
       </div>
     </div>
 
+    ${staleBanner}
+
     <div class="card-levels">
-      <div class="level-cell"><span class="level-lbl">Entry</span><span class="level-val val-entry">${fmtPrice(btc.entry)}</span></div>
-      <div class="level-cell"><span class="level-lbl">Stop Loss</span><span class="level-val val-stop">${fmtPrice(btc.stop)}</span></div>
-      <div class="level-cell"><span class="level-lbl">TP 1</span><span class="level-val val-tp">${fmtPrice(btc.tp1)}</span></div>
-      <div class="level-cell"><span class="level-lbl">TP 2</span><span class="level-val val-tp">${fmtPrice(btc.tp2)}</span></div>
-      <div class="level-cell"><span class="level-lbl">TP 3</span><span class="level-val val-tp">${fmtPrice(btc.tp3)}</span></div>
+      ${stale
+        ? `<div class="level-cell" style="grid-column:1/-1;text-align:center;color:var(--text-muted);font-size:10px;padding:8px 0">
+             Sinal expirado — aguardando nova análise do bot
+           </div>`
+        : `<div class="level-cell"><span class="level-lbl">Entry</span><span class="level-val val-entry">${fmtPrice(btc.entry)}</span></div>
+           <div class="level-cell"><span class="level-lbl">Stop Loss</span><span class="level-val val-stop">${fmtPrice(btc.stop)}</span></div>
+           <div class="level-cell"><span class="level-lbl">TP 1</span><span class="level-val val-tp">${fmtPrice(btc.tp1)}</span></div>`
+      }
+      ${!stale ? `<div class="level-cell"><span class="level-lbl">TP 2</span><span class="level-val val-tp">${fmtPrice(btc.tp2)}</span></div>
+      <div class="level-cell"><span class="level-lbl">TP 3</span><span class="level-val val-tp">${fmtPrice(btc.tp3)}</span></div>` : ''}
       <div class="level-cell"><span class="level-lbl">ATR</span><span class="level-val c-muted">${(btc.atr_pct || 0).toFixed(2)}%${btc.squeeze ? ' 🔥' : ''}</span></div>
     </div>
 
