@@ -104,6 +104,9 @@ async def _apify_loop():
         await asyncio.sleep(6000)   # 100 minutos
 
 
+_analysis_running = False   # flag para evitar runs concorrentes
+
+
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(_apify_loop())
@@ -114,6 +117,56 @@ async def startup_event():
     except Exception as _e:
         import logging as _log
         _log.getLogger(__name__).warning(f"Liquidation engine não iniciado: {_e}")
+    # Roda análise imediatamente ao subir (Render free tier: ephemerals FS fix)
+    asyncio.create_task(_run_analysis_bg())
+
+
+async def _run_analysis_bg(force: bool = False):
+    """
+    Roda run_institutional_analysis em thread separada (não bloqueia event loop).
+    Só executa se dados estiverem velhos (> 45 min) ou force=True.
+    Evita runs concorrentes via _analysis_running flag.
+    """
+    global _analysis_running
+    if _analysis_running:
+        return
+
+    # Verifica se o estado já é recente (scheduler do start.py pode ter rodado primeiro)
+    if not force and STATE_FILE.exists():
+        try:
+            state = json.loads(STATE_FILE.read_text())
+            last  = state.get("last_updated")
+            if last:
+                age_min = (_time.time() - _time.mktime(_time.strptime(last[:19], "%Y-%m-%dT%H:%M:%S"))) / 60
+                if age_min < 45:   # menos de 45 min → não precisa rodar
+                    return
+        except Exception:
+            pass  # em caso de erro, roda mesmo assim
+
+    _analysis_running = True
+    try:
+        import sys as _sys
+        _sys.path.insert(0, str(BASE_DIR))
+        from main import run_institutional_analysis as _run
+        await asyncio.to_thread(_run)
+    except Exception as _e:
+        import logging as _log
+        _log.getLogger(__name__).warning(f"Background analysis falhou: {_e}")
+    finally:
+        _analysis_running = False
+
+
+@app.get("/api/run-now")
+async def trigger_analysis():
+    """
+    Força análise institucional imediata — para cron externo (cron-job.org / UptimeRobot).
+    Retorna 202 se iniciou, 409 se já está rodando.
+    """
+    global _analysis_running
+    if _analysis_running:
+        return JSONResponse(content={"status": "already_running"}, status_code=409)
+    asyncio.create_task(_run_analysis_bg(force=True))
+    return JSONResponse(content={"status": "started"}, status_code=202)
 
 
 @app.get("/api/liq-screenshot")
