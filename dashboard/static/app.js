@@ -461,7 +461,7 @@ function renderBTCCard(data) {
 
     ${liquidityZones(btc)}
 
-    ${renderLiqHeatmap(btc.price, _liqLevels)}
+    ${renderLiqHeatmap(_prevBtcPrice || btc.price, _liqLevels)}
 
     ${renderSmcPanel(data.btc?.smart_money)}
 
@@ -583,7 +583,13 @@ function renderLiqHeatmap(price, levels) {
     .sort((a, b) => b.price - a.price)
     .slice(0, MAX_ROWS);
 
-  if (nearby.length < 3) return '';
+  if (nearby.length < 3) {
+    return `<div class="card-liqheat">${_header}
+      <div style="padding:14px 8px;text-align:center;font-size:10px;color:var(--text-muted)">
+        sem níveis próximos ao preço atual
+      </div>
+    </div>`;
+  }
 
   // Normaliza pelo percentil 95 para evitar que outliers esmaguem a escala
   const vols   = nearby.map(l => l.long_usd + l.short_usd).sort((a, b) => a - b);
