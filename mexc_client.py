@@ -1,14 +1,12 @@
 import ccxt
 import pandas as pd
-from config import MEXC_API_KEY, MEXC_SECRET_KEY, SYMBOL, TIMEFRAME
+from config import SYMBOL, TIMEFRAME
 
 def get_exchange():
+    # OHLCV, ticker e orderbook são endpoints públicos — não precisa de autenticação
     exchange = ccxt.mexc({
-        "apiKey": MEXC_API_KEY,
-        "secret": MEXC_SECRET_KEY,
         "options": {"defaultType": "swap"},
     })
-    pass
     return exchange
 
 def get_ohlcv(symbol=SYMBOL, timeframe=TIMEFRAME, limit=300):
