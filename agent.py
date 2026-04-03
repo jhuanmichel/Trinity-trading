@@ -88,10 +88,10 @@ Com base nesses dados, retorne EXATAMENTE este JSON:
   "risco_retorno": <razão risco/retorno, ex: "1:3">,
   "risco_nivel": "BAIXO" | "MÉDIO" | "ALTO",
   "regime_atual": <descrição do regime em 1 frase>,
-  "justificativa": <análise em 3-4 frases explicando o sinal>,
-  "alertas": [<lista de alertas importantes, ex: divergências, contradições entre indicadores>],
-  "melhor_cenario": <o que confirmaria o sinal>,
-  "pior_cenario": <o que invalidaria o sinal>
+  "justificativa": <análise em 1-2 frases curtas e diretas>,
+  "alertas": [<máximo 3 alertas críticos, sem repetição>],
+  "melhor_cenario": <1 frase curta com o gatilho principal>,
+  "pior_cenario": <1 frase curta com o invalidador principal>
 }}"""
 
 
@@ -107,7 +107,7 @@ def analyze(price: float, analyses: dict, score_data: dict) -> dict:
     try:
         message = client.messages.create(
             model="claude-opus-4-6",
-            max_tokens=1500,
+            max_tokens=800,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
         )
