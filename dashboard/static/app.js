@@ -792,5 +792,5 @@ setInterval(refresh,          REFRESH_MS);
 setInterval(priceTick,        PRICE_MS);
 setInterval(clockTick,        1000);
 setInterval(updateSparkline,  30_000);
-setInterval(updateLiqHeatmap, 60_000);
+setInterval(updateLiqHeatmap, 300_000);  // 5min — respeita rate limit Coinglass
 clockTick();

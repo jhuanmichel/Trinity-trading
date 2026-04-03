@@ -100,11 +100,12 @@ async def get_candles(interval: str = "1m", limit: int = 60):
 
 @app.get("/api/liquidations")
 async def get_liquidations():
-    """Heatmap de liquidações BTC via Coinglass v3 — cache 60s."""
+    """Heatmap de liquidações BTC via Coinglass v3 — cache 5min."""
     import os as _os
+    _CACHE_TTL = 300.0   # 5 minutos — evita rate limit 429
     now    = _time.time()
     cached = _liq_cache["data"]
-    if cached and (now - _liq_cache["cached_at"]) < 60.0:
+    if cached and (now - _liq_cache["cached_at"]) < _CACHE_TTL:
         return JSONResponse(content=cached)
     try:
         cg_key = _os.getenv("COINGLASS_API_KEY", "")
@@ -116,10 +117,17 @@ async def get_liquidations():
                 params={"symbol": "BTC", "timeframe": "12h"},
                 timeout=8,
             )
-            return r.json()
+            return r.status_code, r.json()
 
-        raw = await asyncio.to_thread(_fetch)
-        d   = raw.get("data") or {}
+        status, raw = await asyncio.to_thread(_fetch)
+
+        # Rate limit ou erro de API — mantém cache anterior se existir
+        if status == 429 or not raw.get("success", True) is not False and str(raw.get("code","")) == "429":
+            if cached:
+                return JSONResponse(content=cached)
+            return JSONResponse(content={"levels": [], "error": f"rate limit ({status})"})
+
+        d = raw.get("data") or {}
 
         # Suporta diferentes formatos de resposta Coinglass v3
         prices = d.get("y")      or d.get("priceList")    or []
@@ -137,15 +145,21 @@ async def get_liquidations():
                     "short_usd": round(sv / 1_000_000, 3),
                 })
 
-        result = {"levels": levels, "ts": int(now)}
-        # Se não veio nenhum nível, inclui debug para diagnóstico
+        # Se retornou 0 níveis, mantém cache anterior e retorna debug
         if not levels:
-            result["error"]     = "API retornou 0 níveis"
-            result["api_debug"] = str(raw)[:500]
+            if cached:
+                return JSONResponse(content=cached)
+            result = {"levels": [], "error": "API retornou 0 níveis", "api_debug": str(raw)[:500]}
+            return JSONResponse(content=result)
+
+        result = {"levels": levels, "ts": int(now)}
         _liq_cache.update({"data": result, "cached_at": now})
         return JSONResponse(content=result)
 
     except Exception as e:
+        # Em caso de exceção, mantém cache anterior se existir
+        if cached:
+            return JSONResponse(content=cached)
         return JSONResponse(content={"levels": [], "error": str(e)})
 
 
