@@ -8,6 +8,7 @@ let _scoreHistory = [];   // [{score, ts}]
 let _sparkTf      = '1m';
 let _liqLevels    = [];   // liquidation heatmap levels
 let _liqApiError  = null; // última mensagem de erro da API de liquidações
+let _liqImgUrl    = null; // URL da screenshot Apify (fallback quando sem dados estruturados)
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -567,9 +568,16 @@ function renderLiqHeatmap(price, levels) {
   </div>`;
 
   if (!levels?.length || !price) {
+    // Se tiver screenshot do Apify, exibe a imagem
+    if (_liqImgUrl) {
+      return `<div class="card-liqheat">${_header}
+        <img src="${_liqImgUrl}" alt="Liquidation Heatmap"
+             style="width:100%;border-radius:4px;display:block;margin-top:6px;opacity:0.92"/>
+      </div>`;
+    }
     const msg = _liqApiError
       ? `<span style="color:rgba(220,80,80,0.7)">${_liqApiError}</span>`
-      : `aguardando dados...`;
+      : `aguardando screenshot...`;
     return `<div class="card-liqheat">${_header}
       <div style="padding:14px 8px;text-align:center;font-size:10px;color:var(--text-muted)">${msg}</div>
     </div>`;
@@ -673,6 +681,14 @@ async function updateLiqHeatmap() {
   } catch(e) {
     _liqApiError = e.message;
   }
+}
+
+async function updateLiqScreenshot() {
+  try {
+    const res  = await fetch('/api/liq-screenshot');
+    const data = await res.json();
+    if (data.url) _liqImgUrl = data.url;
+  } catch(_) {}
 }
 
 function renderETHCard() {
@@ -788,9 +804,11 @@ function clockTick() {
 refresh();
 priceTick();
 updateLiqHeatmap();
-setInterval(refresh,          REFRESH_MS);
-setInterval(priceTick,        PRICE_MS);
-setInterval(clockTick,        1000);
-setInterval(updateSparkline,  30_000);
-setInterval(updateLiqHeatmap, 300_000);  // 5min — respeita rate limit Coinglass
+updateLiqScreenshot();                          // busca URL da screenshot Apify
+setInterval(refresh,             REFRESH_MS);
+setInterval(priceTick,           PRICE_MS);
+setInterval(clockTick,           1000);
+setInterval(updateSparkline,     30_000);
+setInterval(updateLiqHeatmap,    300_000);      // 5min — respeita rate limit Coinglass
+setInterval(updateLiqScreenshot, 300_000);      // 5min — sincroniza com ciclo do servidor
 clockTick();

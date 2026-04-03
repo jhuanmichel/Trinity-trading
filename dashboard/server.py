@@ -25,9 +25,94 @@ _MEXC_KLINES  = "https://api.mexc.com/api/v3/klines"
 _INTERVAL_MAP = {"1m": "1m", "5m": "5m", "15m": "15m", "1h": "60m"}
 _price_cache: dict = {"price": None, "cached_at": 0.0}
 
-# ── Liquidation heatmap cache ─────────────────────────────────────────────────
+# ── Liquidation heatmap cache (Coinglass v3) ──────────────────────────────────
 _CG_LIQ_MAP   = "https://open-api-v3.coinglass.com/api/futures/liquidation/map"
 _liq_cache: dict = {"data": None, "cached_at": 0.0}
+
+# ── Apify screenshot cache (heatmap imagem) ───────────────────────────────────
+_APIFY_ACTOR  = "ped2QOnVXksRv4Fx0"
+_liq_img: dict = {"url": None, "cached_at": 0.0, "error": None}
+
+
+async def _run_apify_heatmap():
+    """Captura screenshot do heatmap Coinglass via Apify Actor."""
+    import os as _os
+    token = _os.getenv("APIFY_TOKEN", "")
+    if not token:
+        _liq_img["error"] = "APIFY_TOKEN não configurado"
+        return
+    try:
+        # 1. Iniciar run
+        def _start():
+            return _req.post(
+                f"https://api.apify.com/v2/acts/{_APIFY_ACTOR}/runs",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"coin": "BTC", "type": "symbol", "width": 1280,
+                      "height": 720, "waitTime": 10, "headless": True},
+                timeout=15,
+            ).json()
+
+        run_data  = await asyncio.to_thread(_start)
+        run_id    = run_data.get("data", {}).get("id")
+        ds_id     = run_data.get("data", {}).get("defaultDatasetId")
+        if not run_id:
+            _liq_img["error"] = f"actor não iniciou: {str(run_data)[:200]}"
+            return
+
+        # 2. Aguardar conclusão (poll 8s, máx 3min)
+        for _ in range(23):
+            await asyncio.sleep(8)
+            def _check(rid=run_id):
+                return _req.get(
+                    f"https://api.apify.com/v2/actor-runs/{rid}",
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=10,
+                ).json()
+            status = (await asyncio.to_thread(_check)).get("data", {}).get("status", "")
+            if status == "SUCCEEDED":
+                break
+            if status in ("FAILED", "ABORTED", "TIMED-OUT"):
+                _liq_img["error"] = f"run {status}"
+                return
+
+        # 3. Pegar URL da imagem no dataset
+        def _items(did=ds_id):
+            return _req.get(
+                f"https://api.apify.com/v2/datasets/{did}/items",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10,
+            ).json()
+
+        items = await asyncio.to_thread(_items)
+        if isinstance(items, list) and items:
+            item = items[0]
+            url  = (item.get("imageUrl") or item.get("url") or
+                    item.get("screenshotUrl") or item.get("imageStorageUrl"))
+            if url:
+                _liq_img.update({"url": url, "cached_at": _time.time(), "error": None})
+                return
+        _liq_img["error"] = f"sem URL no dataset: {str(items)[:200]}"
+
+    except Exception as e:
+        _liq_img["error"] = str(e)
+
+
+async def _apify_loop():
+    """Roda o actor a cada 100 minutos em background."""
+    while True:
+        await _run_apify_heatmap()
+        await asyncio.sleep(6000)   # 100 minutos
+
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(_apify_loop())
+
+
+@app.get("/api/liq-screenshot")
+async def get_liq_screenshot():
+    """URL da última screenshot do heatmap (Apify)."""
+    return JSONResponse(content=_liq_img)
 
 
 @app.get("/api/status")
