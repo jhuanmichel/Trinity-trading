@@ -162,6 +162,7 @@ def send_institutional_signal(
     tp1: float,
     tp2: float,
     tp3: float,
+    mm_data: dict = None,
 ) -> bool:
     """
     Envia alerta institucional no formato Smart Money com todos os detalhes das 7 camadas.
@@ -241,5 +242,42 @@ def send_institutional_signal(
 🌋 Volatilidade: {regime_data.get('regime', '?')} | ATR {regime_data.get('atr_pct', 0):.2f}%{'| 🔥 SQUEEZE' if regime_data.get('squeeze') else ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️ <i>Apenas análise — não é recomendação de investimento.</i>"""
+
+    # ── Seção Market Maker (se disponível) ───────────────────────────────────
+    if mm_data:
+        mm_bias   = mm_data.get("bias", "neutral").upper()
+        mm_score  = mm_data.get("market_maker_score", 0)
+        mm_conf   = mm_data.get("confidence", 0)
+        trap_prob = mm_data.get("trap_probability", 0)
+        trap_dir  = mm_data.get("trap_direction", "NEUTRO")
+        sweep_str = mm_data.get("sweep_strength", 0)
+        sweep_bias= mm_data.get("sweep_bias", "NEUTRO")
+        liq_hi    = mm_data.get("liquidity_target_high")
+        liq_lo    = mm_data.get("liquidity_target_low")
+        premium   = mm_data.get("premium_zone", False)
+        discount  = mm_data.get("discount_zone", False)
+        eq_zone   = mm_data.get("equilibrium_zone", False)
+        pos_pct   = mm_data.get("range_position_pct", 50)
+        inst_bias = mm_data.get("institutional_bias", "NEUTRAL")
+        trap_sigs = mm_data.get("trap_signals", [])
+
+        zone_label = "🔴 PREMIUM"  if premium else "🟢 DISCOUNT" if discount else "🟡 EQUILIBRIUM"
+        trap_emoji = "🚨" if trap_prob >= 60 else "⚠️" if trap_prob >= 35 else "✅"
+        sweep_emoji = "🟢" if sweep_bias == "BULLISH" else "🔴" if sweep_bias == "BEARISH" else "⚪️"
+
+        mm_section = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<b>🏦 MARKET MAKER ENGINE:</b>
+📊 MM Score: <b>{mm_score}/100</b>  |  Bias: <b>{mm_bias}</b>  |  Conf: <b>{mm_conf:.0f}%</b>
+🌐 MTF Institutional: <b>{inst_bias}</b>
+{zone_label}  |  Posição no range: <b>{pos_pct:.1f}%</b>
+💧 Liq. Alvo Alto: <b>${liq_hi:,.2f}</b>  |  Baixo: <b>${liq_lo:,.2f}</b>
+{sweep_emoji} Sweep: <b>{sweep_bias}</b> (força {sweep_str}/100)
+{trap_emoji} Trap: <b>{trap_prob}%</b>{f' — {trap_dir}' if trap_dir != 'NEUTRO' else ''}"""
+
+        if trap_sigs:
+            mm_section += f"\n⚡ {' | '.join(trap_sigs[:2])}"
+
+        msg = msg.rstrip() + mm_section + "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ <i>Apenas análise — não é recomendação de investimento.</i>"
 
     return send_message(msg.strip())

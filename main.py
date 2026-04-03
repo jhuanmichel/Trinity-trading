@@ -17,6 +17,7 @@ from indicators     import market_structure, correlation
 from scoring        import calculate_score
 from institutional_scoring import calculate_institutional_score
 from smart_money_engine import SmartMoneyEngine
+from market_maker_engine import run_market_maker_analysis
 import agent
 import alerts
 from config         import (
@@ -169,7 +170,7 @@ def run_analysis_signal():
 def _write_dashboard_state(
     price, inst, ms_data, volume_data, trend_data,
     corr_data, regime_data, entry, stop, tp1, tp2, tp3,
-    smc_signal=None,
+    smc_signal=None, mm_data=None,
 ):
     """Persiste o estado atual para o dashboard web (dashboard/current_state.json)."""
     state = {
@@ -230,6 +231,32 @@ def _write_dashboard_state(
                 "structure":  smc_signal.get("structure", {}) if smc_signal else {},
                 "reasoning":  smc_signal.get("reasoning")     if smc_signal else None,
             } if smc_signal else None,
+            # Market Maker Engine
+            "market_maker": {
+                "bias":                  mm_data.get("bias"),
+                "confidence":            mm_data.get("confidence"),
+                "market_maker_score":    mm_data.get("market_maker_score"),
+                "trap_probability":      mm_data.get("trap_probability"),
+                "trap_direction":        mm_data.get("trap_direction"),
+                "trap_signals":          mm_data.get("trap_signals", []),
+                "sweep_strength":        mm_data.get("sweep_strength"),
+                "sweep_bias":            mm_data.get("sweep_bias"),
+                "liquidity_target_high": mm_data.get("liquidity_target_high"),
+                "liquidity_target_low":  mm_data.get("liquidity_target_low"),
+                "premium_zone":          mm_data.get("premium_zone"),
+                "discount_zone":         mm_data.get("discount_zone"),
+                "equilibrium_zone":      mm_data.get("equilibrium_zone"),
+                "range_position_pct":    mm_data.get("range_position_pct"),
+                "equilibrium_price":     mm_data.get("equilibrium_price"),
+                "fib_382":               mm_data.get("fib_382"),
+                "fib_618":               mm_data.get("fib_618"),
+                "institutional_bias":    mm_data.get("institutional_bias"),
+                "valid":                 mm_data.get("valid", False),
+                "confluences":           mm_data.get("confluences", 0),
+                "equal_highs":           mm_data.get("equal_highs", []),
+                "equal_lows":            mm_data.get("equal_lows", []),
+                "stop_hunt_zones":       mm_data.get("stop_hunt_zones", []),
+            } if mm_data else None,
         },
     }
     import numpy as np
@@ -371,6 +398,24 @@ def run_institutional_analysis():
             log.warning(f"   SMC Engine falhou: {e}")
             smc_signal = None
 
+        # ── Market Maker Engine ────────────────────────────────────────────
+        log.info("🏦 [11] Market Maker Engine (liquidez, sweep, trap, premium/discount)...")
+        try:
+            mm_data = run_market_maker_analysis(
+                symbol           = SYMBOL,
+                df               = df,
+                trend_score      = trend_data.get("score", 50),
+                correlation_score= corr_data.get("score", 50),
+            )
+            log.info(
+                f"   MM: bias={mm_data['bias']} | score={mm_data['market_maker_score']} "
+                f"| trap={mm_data['trap_probability']}% | sweep={mm_data['sweep_strength']} "
+                f"| {'PREMIUM' if mm_data['premium_zone'] else 'DISCOUNT' if mm_data['discount_zone'] else 'EQUILIBRIUM'}"
+            )
+        except Exception as e:
+            log.warning(f"   Market Maker Engine falhou: {e}")
+            mm_data = None
+
         # ── Invincible Mode ────────────────────────────────────────────────
         score    = inst["inst_score"]
         valid    = inst["valid"]
@@ -384,7 +429,7 @@ def run_institutional_analysis():
             _write_dashboard_state(
                 price, inst, ms_data, volume_data, trend_data,
                 corr_data, regime_data, e_ns, s_ns, t1_ns, t2_ns, t3_ns,
-                smc_signal=smc_signal,
+                smc_signal=smc_signal, mm_data=mm_data,
             )
             if not valid:
                 log.info(f"💤 Invincible Mode: apenas {inst['confluences']}/6 confluências — sem sinal")
@@ -405,7 +450,7 @@ def run_institutional_analysis():
         _write_dashboard_state(
             price, inst, ms_data, volume_data, trend_data,
             corr_data, regime_data, entry, stop, tp1, tp2, tp3,
-            smc_signal=smc_signal,
+            smc_signal=smc_signal, mm_data=mm_data,
         )
         log.info("💾 Estado salvo no dashboard.")
 
@@ -427,6 +472,7 @@ def run_institutional_analysis():
             tp1              = tp1,
             tp2              = tp2,
             tp3              = tp3,
+            mm_data          = mm_data,
         )
         log.info("✅ Sinal institucional enviado ao Telegram.\n")
 
