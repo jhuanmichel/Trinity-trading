@@ -18,6 +18,7 @@ from scoring        import calculate_score
 from institutional_scoring import calculate_institutional_score
 from smart_money_engine import SmartMoneyEngine
 from market_maker_engine import run_market_maker_analysis
+from btc_liquidation_engine import get_dashboard_section as _liq_section, start_background as _liq_start
 import agent
 import alerts
 from config         import (
@@ -231,6 +232,8 @@ def _write_dashboard_state(
                 "structure":  smc_signal.get("structure", {}) if smc_signal else {},
                 "reasoning":  smc_signal.get("reasoning")     if smc_signal else None,
             } if smc_signal else None,
+            # Liquidações em tempo real (Binance WebSocket)
+            "liquidations_live": _liq_section(),
             # Market Maker Engine
             "market_maker": {
                 "bias":                  mm_data.get("bias"),
@@ -498,6 +501,7 @@ def run_institutional_analysis():
 
 if __name__ == "__main__":
     log.info("🤖 Agente de IA para Futuros MEXC iniciado!")
+    _liq_start()   # inicia WebSocket Binance liquidações em background
     log.info(f"   Par: {SYMBOL} | Timeframe: {TIMEFRAME} | Score threshold: {SCORE_THRESHOLD}")
     log.info(f"   Resumo (sem IA): a cada {SUMMARY_INTERVAL_MINUTES} min")
     log.info(f"   Sinal completo (com Claude): a cada {SIGNAL_INTERVAL_MINUTES} min")

@@ -29,6 +29,10 @@ def _run_scheduler():
 
 if __name__ == "__main__":
     import uvicorn
+    from btc_liquidation_engine import start_background as _start_liq
+
+    # Inicia engine de liquidações Binance em background thread
+    _start_liq()
 
     t = threading.Thread(target=_run_scheduler, daemon=True)
     t.start()

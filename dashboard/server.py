@@ -107,12 +107,29 @@ async def _apify_loop():
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(_apify_loop())
+    # Inicia engine de liquidações Binance como task async
+    try:
+        from btc_liquidation_engine import start_async as _liq_async
+        asyncio.create_task(_liq_async())
+    except Exception as _e:
+        import logging as _log
+        _log.getLogger(__name__).warning(f"Liquidation engine não iniciado: {_e}")
 
 
 @app.get("/api/liq-screenshot")
 async def get_liq_screenshot():
     """URL da última screenshot do heatmap (Apify)."""
     return JSONResponse(content=_liq_img)
+
+
+@app.get("/api/liquidations-live")
+async def get_liquidations_live():
+    """Liquidações BTC em tempo real — WebSocket Binance (janelas 1m/5m/15m)."""
+    try:
+        from btc_liquidation_engine import get_snapshot as _liq_snap
+        return JSONResponse(content=_liq_snap())
+    except Exception as e:
+        return JSONResponse(content={"error": str(e), "connected": False})
 
 
 @app.get("/api/status")
