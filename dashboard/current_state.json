@@ -1,24 +1,24 @@
 {
-  "last_updated": "2026-04-01T16:02:34.090755",
+  "last_updated": "2026-04-03T18:37:48.272285",
   "btc": {
     "symbol": "BTC/USDT:USDT",
-    "price": 68134.5,
-    "direction": "AGUARDANDO",
-    "inst_score": 44.0,
-    "strength": "INSUFICIENTE",
-    "confluences": 2,
-    "valid": false,
-    "entry": 68134.5,
-    "stop": 68528.52,
-    "tp1": 67740.48,
-    "tp2": 67477.8,
-    "tp3": 67083.78,
+    "price": 66889.9,
+    "direction": "LONG",
+    "inst_score": 52.0,
+    "strength": "NEUTRO",
+    "confluences": 3,
+    "valid": true,
+    "entry": 66889.9,
+    "stop": 66749.0,
+    "tp1": 67030.8,
+    "tp2": 67124.72,
+    "tp3": 67265.62,
     "breakdown": {
       "market_structure": {
-        "score": 50,
+        "score": 65,
         "weight": 20,
-        "contribution": 10.0,
-        "bias": "NEUTRO"
+        "contribution": 13.0,
+        "bias": "LONG"
       },
       "liquidity": {
         "score": 50,
@@ -27,62 +27,182 @@
         "bias": "NEUTRO"
       },
       "volume": {
-        "score": 40,
+        "score": 10,
         "weight": 20,
-        "contribution": 8.0,
+        "contribution": 2.0,
         "bias": "SHORT"
       },
       "trend": {
-        "score": 25,
+        "score": 75,
         "weight": 20,
-        "contribution": 5.0,
-        "bias": "SHORT"
-      },
-      "correlation": {
-        "score": 60,
-        "weight": 10,
-        "contribution": 6.0,
+        "contribution": 15.0,
         "bias": "LONG"
       },
-      "volatility": {
+      "correlation": {
         "score": 50,
         "weight": 10,
         "contribution": 5.0,
         "bias": "NEUTRO"
+      },
+      "volatility": {
+        "score": 70,
+        "weight": 10,
+        "contribution": 7.0,
+        "bias": "LONG"
       }
     },
     "layer_scores": {
-      "market_structure": 50,
+      "market_structure": 65,
       "liquidity": 50,
-      "volume": 40,
-      "trend": 25,
-      "correlation": 60,
-      "volatility": 50
+      "volume": 10,
+      "trend": 75,
+      "correlation": 50,
+      "volatility": 70
     },
-    "market_structure": "TRANSIÇÃO",
+    "market_structure": "BULLISH",
     "bos_bull": false,
     "bos_bear": false,
     "choch": false,
     "sweep_low": false,
     "sweep_high": false,
-    "equal_highs": false,
-    "equal_lows": false,
+    "equal_highs": true,
+    "equal_lows": true,
     "high_volume": false,
-    "cvd_trending_up": true,
-    "vol_ratio": 0.1,
+    "cvd_trending_up": false,
+    "vol_ratio": 0.19,
     "healthy_move": false,
-    "trap_signal": false,
-    "ema_signal": "BAIXA PARCIAL",
+    "trap_signal": true,
+    "ema_signal": "ALTA PARCIAL",
     "ichimoku_above_cloud": false,
-    "ichimoku_below_cloud": true,
-    "correlation_bias": "LONG FAVORÁVEL",
-    "btc_change": 0.3,
-    "eth_change": 1.41,
+    "ichimoku_below_cloud": false,
+    "correlation_bias": "NEUTRO",
+    "btc_change": 0.1,
+    "eth_change": -0.1,
     "btc_dominance": 56.1,
-    "usdt_dominance": 7.6,
-    "regime": "LATERAL",
-    "atr_pct": 0.39,
-    "squeeze": false,
-    "adx": 14.8
+    "usdt_dominance": 7.7,
+    "regime": "LATERAL + SQUEEZE ⚡",
+    "atr_pct": 0.14,
+    "squeeze": true,
+    "adx": 10.52,
+    "smart_money": {
+      "smc_score": 53.0,
+      "bias": "NEUTRO",
+      "direction": "AGUARDANDO",
+      "alignment": "MIXED",
+      "confidence": "BAIXA",
+      "valid": false,
+      "entry": 66889.9,
+      "stop": null,
+      "targets": {
+        "tp1": null,
+        "rr1": null,
+        "tp2": null,
+        "rr2": null,
+        "tp3": null,
+        "rr3": null
+      },
+      "structure": {
+        "1D": "BEARISH",
+        "4H": "TRANSIÇÃO",
+        "1H": "LATERAL",
+        "15m": "BULLISH"
+      },
+      "reasoning": "1D: BEARISH | 4H: TRANSIÇÃO | 1H: LATERAL | 15m: BULLISH | Score: 53.0/100 (MIXED)"
+    },
+    "liquidations_live": {
+      "bias": "NEUTRAL",
+      "strength": 0,
+      "long_liq": 0.0,
+      "short_liq": 0.0,
+      "total": 0.0,
+      "connected": false,
+      "windows": {
+        "1m": {
+          "long": 0.0,
+          "short": 0.0,
+          "total": 0.0
+        },
+        "5m": {
+          "long": 0.0,
+          "short": 0.0,
+          "total": 0.0
+        },
+        "15m": {
+          "long": 0.0,
+          "short": 0.0,
+          "total": 0.0
+        }
+      }
+    },
+    "market_maker": {
+      "bias": "neutral",
+      "confidence": 58.6,
+      "market_maker_score": 54.1,
+      "trap_probability": 0,
+      "trap_direction": "NEUTRO",
+      "trap_signals": [],
+      "sweep_strength": 0,
+      "sweep_bias": "NEUTRO",
+      "liquidity_target_high": 67065.86,
+      "liquidity_target_low": 66698.9,
+      "premium_zone": false,
+      "discount_zone": false,
+      "equilibrium_zone": true,
+      "range_position_pct": 47.9,
+      "equilibrium_price": 66908.25,
+      "fib_382": 66806.38,
+      "fib_618": 67010.12,
+      "institutional_bias": "WEAK_BEAR",
+      "valid": false,
+      "confluences": 2,
+      "equal_highs": [
+        68347.63,
+        67065.86,
+        67368.15
+      ],
+      "equal_lows": [
+        67923.85,
+        66209.5,
+        66698.9
+      ],
+      "stop_hunt_zones": [
+        {
+          "type": "bear_hunt",
+          "zone_top": 67923.85,
+          "zone_bottom": 67902.35,
+          "distance_pct": -1.55
+        },
+        {
+          "type": "bear_hunt",
+          "zone_top": 66209.5,
+          "zone_bottom": 66188.0,
+          "distance_pct": 1.02
+        },
+        {
+          "type": "bear_hunt",
+          "zone_top": 66698.9,
+          "zone_bottom": 66677.4,
+          "distance_pct": 0.29
+        },
+        {
+          "type": "bull_hunt",
+          "zone_bottom": 68347.63,
+          "zone_top": 68369.13,
+          "distance_pct": 2.18
+        },
+        {
+          "type": "bull_hunt",
+          "zone_bottom": 67065.86,
+          "zone_top": 67087.36,
+          "distance_pct": 0.26
+        },
+        {
+          "type": "bull_hunt",
+          "zone_bottom": 67368.15,
+          "zone_top": 67389.65,
+          "distance_pct": 0.71
+        }
+      ]
+    }
   }
 }
