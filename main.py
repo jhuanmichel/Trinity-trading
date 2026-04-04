@@ -18,7 +18,9 @@ from scoring        import calculate_score
 from institutional_scoring import calculate_institutional_score
 from smart_money_engine import SmartMoneyEngine
 from market_maker_engine import run_market_maker_analysis
-from btc_liquidation_engine import get_dashboard_section as _liq_section, start_background as _liq_start
+from btc_liquidation_engine import get_dashboard_section as _liq_section, start_background as _liq_start, get_for_scoring as _liq_scoring
+from pressure_meter import calculate_pressure
+from rare_setup_detector import detect_rare_setup
 import agent
 import alerts
 from config         import (
@@ -172,6 +174,7 @@ def _write_dashboard_state(
     price, inst, ms_data, volume_data, trend_data,
     corr_data, regime_data, entry, stop, tp1, tp2, tp3,
     smc_signal=None, mm_data=None,
+    pressure_data=None, rare_data=None, trinity_score=None,
 ):
     """Persiste o estado atual para o dashboard web (dashboard/current_state.json)."""
     state = {
@@ -260,6 +263,24 @@ def _write_dashboard_state(
                 "equal_lows":            mm_data.get("equal_lows", []),
                 "stop_hunt_zones":       mm_data.get("stop_hunt_zones", []),
             } if mm_data else None,
+            # Medidor de Pressão Institucional (IPM — Cap. 4)
+            "pressure_meter": {
+                "pressure":      pressure_data.get("pressure", 0),
+                "direction":     pressure_data.get("direction", "NEUTRAL"),
+                "filter_passed": pressure_data.get("filter_passed", False),
+                "components":    pressure_data.get("components", {}),
+            } if pressure_data else None,
+            # Detector de Setups Raros (Cap. 3)
+            "rare_setup": {
+                "active":         rare_data.get("rare_setup", False),
+                "score":          rare_data.get("score", 0),
+                "setup_type":     rare_data.get("setup_type", "NENHUM"),
+                "factors_active": rare_data.get("factors_active", []),
+                "components":     rare_data.get("components", {}),
+                "signal_bonus":   rare_data.get("signal_bonus", 0),
+            } if rare_data else None,
+            # Trinity Score final (Cap. 7)
+            "trinity_score": trinity_score,
         },
     }
     import numpy as np
@@ -419,13 +440,74 @@ def run_institutional_analysis():
             log.warning(f"   Market Maker Engine falhou: {e}")
             mm_data = None
 
-        # ── Invincible Mode ────────────────────────────────────────────────
-        score    = inst["inst_score"]
-        valid    = inst["valid"]
-        struct   = ms_data.get("structure", "INDEFINIDA")
-        lateral  = struct in ("LATERAL", "INDEFINIDA", "TRANSIÇÃO")
+        # ── Medidor de Pressão Institucional (IPM — Cap. 4) ────────────────
+        log.info("📡 [12] Medidor de Pressão Institucional (IPM)...")
+        try:
+            pressure_data = calculate_pressure(
+                liq_scoring    = _liq_scoring(),
+                volume_data    = volume_data,
+                inst_breakdown = inst.get("breakdown", {}),
+                mm_data        = mm_data,
+                trend_data     = trend_data,
+                deriv_data     = deriv_data,
+                price          = price,
+            )
+            direction_ipm = pressure_data["direction"]
+            pressure_val  = pressure_data["pressure"]
+            ipm_ok        = pressure_data["filter_passed"]
+            log.info(f"   IPM: {direction_ipm} | pressão={pressure_val:+.1f} | filtro={'✅' if ipm_ok else '❌'}")
+        except Exception as e:
+            log.warning(f"   Pressure Meter falhou: {e}")
+            pressure_data = {"pressure": 0.0, "direction": "NEUTRAL", "filter_passed": False, "components": {}}
+            ipm_ok = False
 
-        if not valid or lateral or (score < INST_SCORE_THRESHOLD and score > (100 - INST_SCORE_THRESHOLD)):
+        # ── Detector de Setups Raros (Cap. 3) ─────────────────────────────
+        log.info("⭐ [13] Detector de Setups Raros...")
+        try:
+            direction_hint = inst.get("direction", "AGUARDANDO")
+            rare_data = detect_rare_setup(
+                smc_signal  = smc_signal,
+                mm_data     = mm_data,
+                liq_scoring = _liq_scoring(),
+                volume_data = volume_data,
+                trend_data  = trend_data,
+                price       = price,
+                direction   = direction_hint,
+            )
+            if rare_data["rare_setup"]:
+                log.info(f"   ⭐ SETUP RARO: {rare_data['setup_type']} | score={rare_data['score']} "
+                         f"| fatores={rare_data['factors_active']}")
+            else:
+                log.info(f"   Setup comum: score={rare_data['score']} | fatores ativos={len(rare_data['factors_active'])}")
+        except Exception as e:
+            log.warning(f"   Rare Setup Detector falhou: {e}")
+            rare_data = {"rare_setup": False, "score": 0.0, "signal_bonus": 0.0,
+                         "setup_type": "NENHUM", "components": {}, "factors_active": []}
+
+        # ── Score final Trinity (Cap. 7) ───────────────────────────────────
+        # formula: final = confluência*0.6 + |pressão|*0.3 + setup_raro*0.1
+        score         = inst["inst_score"]
+        valid         = inst["valid"]
+        struct        = ms_data.get("structure", "INDEFINIDA")
+        lateral       = struct in ("LATERAL", "INDEFINIDA", "TRANSIÇÃO")
+        rare_bonus    = rare_data["signal_bonus"]   # 0-100
+        pressure_abs  = abs(pressure_data["pressure"])
+
+        trinity_score = round(score * 0.6 + pressure_abs * 0.3 + rare_bonus * 0.1, 1)
+        log.info(f"   📊 Trinity Score: {trinity_score:.1f} = "
+                 f"conf({score})*0.6 + pressão({pressure_abs:.0f})*0.3 + raro({rare_bonus})*0.1")
+
+        # Filtro IPM (Cap. 4): se pressão < 40, entra no Invincible Mode
+        # mas ainda salva estado para o dashboard
+        ipm_blocked  = valid and not ipm_ok and not lateral
+        direction_ok = (
+            pressure_data["direction"] == "NEUTRAL" or
+            pressure_data["direction"] == inst.get("direction", "").replace("LONG", "BULLISH").replace("SHORT", "BEARISH") or
+            not ipm_ok   # sem filtro IPM ativo, não bloqueia por direção
+        )
+
+        # ── Invincible Mode ────────────────────────────────────────────────
+        if not valid or lateral or (trinity_score < INST_SCORE_THRESHOLD):
             # Mesmo sem sinal, salva estado para o dashboard exibir
             atr_ns = regime_data.get("atr", price * 0.005)
             e_ns, s_ns, t1_ns, t2_ns, t3_ns = _calc_levels(price, inst.get("direction", "LONG"), atr_ns)
@@ -433,13 +515,17 @@ def run_institutional_analysis():
                 price, inst, ms_data, volume_data, trend_data,
                 corr_data, regime_data, e_ns, s_ns, t1_ns, t2_ns, t3_ns,
                 smc_signal=smc_signal, mm_data=mm_data,
+                pressure_data=pressure_data, rare_data=rare_data,
+                trinity_score=trinity_score,
             )
             if not valid:
                 log.info(f"💤 Invincible Mode: apenas {inst['confluences']}/6 confluências — sem sinal")
             elif lateral:
                 log.info(f"💤 Mercado lateral ({struct}) — sem sinal institucional")
+            elif ipm_blocked:
+                log.info(f"💤 IPM bloqueou: pressão {pressure_data['pressure']:+.1f} < ±40 — sem sinal")
             else:
-                log.info(f"💤 Score {score} abaixo do threshold {INST_SCORE_THRESHOLD} — sem sinal")
+                log.info(f"💤 Trinity Score {trinity_score} abaixo do threshold {INST_SCORE_THRESHOLD} — sem sinal")
             return
 
         # ── Calcula níveis ─────────────────────────────────────────────────
@@ -447,13 +533,16 @@ def run_institutional_analysis():
         atr       = regime_data.get("atr", price * 0.005)
         entry, stop, tp1, tp2, tp3 = _calc_levels(price, direction, atr)
 
-        log.info(f"🔔 SINAL INSTITUCIONAL: {direction} | Score {score} | "
-                 f"Entry ${entry:,.2f} | Stop ${stop:,.2f}")
+        rare_tag = f" ⭐ {rare_data['setup_type']}" if rare_data["rare_setup"] else ""
+        log.info(f"🔔 SINAL INSTITUCIONAL: {direction} | Trinity {trinity_score} | "
+                 f"Entry ${entry:,.2f} | Stop ${stop:,.2f}{rare_tag}")
 
         _write_dashboard_state(
             price, inst, ms_data, volume_data, trend_data,
             corr_data, regime_data, entry, stop, tp1, tp2, tp3,
             smc_signal=smc_signal, mm_data=mm_data,
+            pressure_data=pressure_data, rare_data=rare_data,
+            trinity_score=trinity_score,
         )
         log.info("💾 Estado salvo no dashboard.")
 
@@ -476,6 +565,9 @@ def run_institutional_analysis():
             tp2              = tp2,
             tp3              = tp3,
             mm_data          = mm_data,
+            pressure_data    = pressure_data,
+            rare_data        = rare_data,
+            trinity_score    = trinity_score,
         )
         log.info("✅ Sinal institucional enviado ao Telegram.\n")
 

@@ -162,7 +162,10 @@ def send_institutional_signal(
     tp1: float,
     tp2: float,
     tp3: float,
-    mm_data: dict = None,
+    mm_data:       dict = None,
+    pressure_data: dict = None,
+    rare_data:     dict = None,
+    trinity_score: float = None,
 ) -> bool:
     """
     Envia alerta institucional no formato Smart Money com todos os detalhes das 7 camadas.
@@ -278,6 +281,34 @@ def send_institutional_signal(
         if trap_sigs:
             mm_section += f"\n⚡ {' | '.join(trap_sigs[:2])}"
 
-        msg = msg.rstrip() + mm_section + "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ <i>Apenas análise — não é recomendação de investimento.</i>"
+        msg = msg.rstrip() + mm_section
+
+    # ── Seção IPM + Setup Raro (Cap. 3 e 4) ──────────────────────────────────
+    has_trinity = pressure_data or rare_data or trinity_score is not None
+    if has_trinity:
+        p_val  = pressure_data.get("pressure", 0)      if pressure_data else 0
+        p_dir  = pressure_data.get("direction", "NEUTRAL") if pressure_data else "NEUTRAL"
+        p_ok   = pressure_data.get("filter_passed", False) if pressure_data else False
+        p_bar  = "🟢" if p_val >= 40 else "🔴" if p_val <= -40 else "🟡"
+
+        r_ok   = rare_data.get("rare_setup", False)    if rare_data else False
+        r_sc   = rare_data.get("score", 0)             if rare_data else 0
+        r_type = rare_data.get("setup_type", "NENHUM") if rare_data else "NENHUM"
+        r_facs = rare_data.get("factors_active", [])   if rare_data else []
+        r_star = "⭐" if r_ok else "○"
+
+        ts_str = f"<b>{trinity_score:.1f}/100</b>" if trinity_score is not None else "—"
+
+        trinity_section = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<b>🔬 TRINITY SCORE: {ts_str}</b>
+{p_bar} IPM: <b>{p_val:+.0f}</b> ({p_dir}) {'✅ filtro OK' if p_ok else '❌ pressão insuficiente'}
+{r_star} Setup: <b>{r_type}</b> ({r_sc:.0f}/100)"""
+        if r_facs:
+            trinity_section += f"\n   Fatores: {' · '.join(r_facs)}"
+
+        msg = msg.rstrip() + trinity_section
+
+    msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ <i>Apenas análise — não é recomendação de investimento.</i>"
 
     return send_message(msg.strip())
