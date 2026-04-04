@@ -2,9 +2,18 @@
 news_fetcher.py — Async multi-source news fetcher
 Trinity Trading | Geopolitical Engine
 
-Fontes:
-  RSS:   Reuters, CoinDesk, CoinTelegraph, The Block, Decrypt, Federal Reserve
-  API:   CryptoPanic (requer CRYPTOPANIC_API_KEY)
+Fontes (21 RSS + 1 API):
+  Macro Global:      Reuters, Federal Reserve, BIS, IMF, ZeroHedge, CNBC Economy
+  Crypto Market:     CoinDesk, CoinTelegraph, The Block, Decrypt, Messari, Glassnode Insights
+  Liquidez Global:   FRED Blog, ECB, Bank of Japan, US Treasury
+  Crypto Fast News:  Bitcoin Magazine, Blockworks, Wu Blockchain
+  Macro Economy:     Investing.com, MarketWatch
+  API:               CryptoPanic (requer CRYPTOPANIC_API_KEY)
+
+Notas:
+  - Bloomberg, FT, WSJ: sem RSS gratuito (paywalled) — substituídos por CNBC/Reuters
+  - Whale Alert: sem RSS gratuito — cobre via CryptoPanic
+  - CryptoQuant: sem RSS gratuito — dados on-chain via onchain_model.py
 
 Cache TTL: 15 minutos por fonte.
 Fetching: paralelo via ThreadPoolExecutor.
@@ -27,14 +36,43 @@ log = logging.getLogger(__name__)
 REQUEST_TIMEOUT  = 12    # segundos por fonte
 CACHE_TTL        = 900   # 15 minutos
 MAX_ARTICLES_SRC = 15    # artigos por fonte
-MAX_WORKERS      = 6     # threads paralelas
+MAX_WORKERS      = 14    # threads paralelas (aumentado para 21 fontes)
 
 RSS_SOURCES = {
+
+    # ── Macro Global ─────────────────────────────────────────────────────────
     "reuters": {
         "url":    "https://feeds.reuters.com/reuters/businessNews",
         "weight": 0.95,
         "category_hint": "MONETARY",
     },
+    "federal_reserve": {
+        "url":    "https://www.federalreserve.gov/feeds/press_all.xml",
+        "weight": 1.00,  # credibilidade máxima
+        "category_hint": "MONETARY",
+    },
+    "bis": {
+        "url":    "https://www.bis.org/rss/speeches.rss",
+        "weight": 0.95,
+        "category_hint": "MONETARY",
+    },
+    "imf": {
+        "url":    "https://www.imf.org/en/News/rss?language=eng",
+        "weight": 0.95,
+        "category_hint": "MONETARY",
+    },
+    "zerohedge": {
+        "url":    "https://zerohedge.com/fullrss2.xml",
+        "weight": 0.75,
+        "category_hint": "MONETARY",
+    },
+    "cnbc_economy": {
+        "url":    "https://www.cnbc.com/id/20910258/device/rss/rss.html",
+        "weight": 0.85,
+        "category_hint": "MONETARY",
+    },
+
+    # ── Crypto Market ─────────────────────────────────────────────────────────
     "coindesk": {
         "url":    "https://www.coindesk.com/arc/outboundfeeds/rss/",
         "weight": 0.90,
@@ -55,11 +93,57 @@ RSS_SOURCES = {
         "weight": 0.80,
         "category_hint": "MARKET",
     },
-    "federal_reserve": {
-        "url":    "https://www.federalreserve.gov/feeds/press_all.xml",
-        "weight": 1.00,  # credibilidade máxima
+    "messari": {
+        "url":    "https://messari.io/rss",
+        "weight": 0.85,
+        "category_hint": "MARKET",
+    },
+    "glassnode_insights": {
+        "url":    "https://insights.glassnode.com/rss/",
+        "weight": 0.90,
+        "category_hint": "MARKET",
+    },
+
+    # ── Liquidez Global ───────────────────────────────────────────────────────
+    "fred_blog": {
+        "url":    "https://fredblog.stlouisfed.org/feed/",
+        "weight": 0.90,
         "category_hint": "MONETARY",
     },
+    "ecb": {
+        "url":    "https://www.ecb.europa.eu/rss/press.html",
+        "weight": 0.95,
+        "category_hint": "MONETARY",
+    },
+    "boj": {
+        "url":    "https://www.boj.or.jp/en/rss/siten.xml",
+        "weight": 0.90,
+        "category_hint": "MONETARY",
+    },
+    "us_treasury": {
+        "url":    "https://home.treasury.gov/news/press-releases/rss.xml",
+        "weight": 0.95,
+        "category_hint": "MONETARY",
+    },
+
+    # ── Crypto Fast News ──────────────────────────────────────────────────────
+    "bitcoin_magazine": {
+        "url":    "https://bitcoinmagazine.com/feed",
+        "weight": 0.80,
+        "category_hint": "MARKET",
+    },
+    "blockworks": {
+        "url":    "https://blockworks.co/feed",
+        "weight": 0.80,
+        "category_hint": "MARKET",
+    },
+    "wu_blockchain": {
+        "url":    "https://wublockchain.substack.com/feed",
+        "weight": 0.80,
+        "category_hint": "MARKET",
+    },
+
+    # ── Macro Economy ─────────────────────────────────────────────────────────
     "investing_economy": {
         "url":    "https://www.investing.com/rss/news_14.rss",
         "weight": 0.80,
@@ -249,5 +333,6 @@ def fetch_all_news(max_age_minutes: int = 240) -> list:
     except Exception:
         pass
 
-    log.info(f"   News fetcher: {len(fresh)} artigos frescos de {len(all_articles)} totais")
+    log.info(f"   News fetcher: {len(fresh)} artigos frescos de {len(all_articles)} totais "
+             f"({len(RSS_SOURCES)} RSS + CryptoPanic)")
     return fresh
