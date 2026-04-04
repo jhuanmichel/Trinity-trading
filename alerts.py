@@ -162,12 +162,13 @@ def send_institutional_signal(
     tp1: float,
     tp2: float,
     tp3: float,
-    mm_data:       dict = None,
-    pressure_data: dict = None,
-    rare_data:     dict = None,
-    trinity_score: float = None,
-    geo_data:      dict = None,
-    cycle_data:    dict = None,
+    mm_data:        dict = None,
+    pressure_data:  dict = None,
+    rare_data:      dict = None,
+    trinity_score:  float = None,
+    geo_data:       dict = None,
+    cycle_data:     dict = None,
+    direction_data: dict = None,
 ) -> bool:
     """
     Envia alerta institucional no formato Smart Money com todos os detalhes das 7 camadas.
@@ -410,6 +411,70 @@ def send_institutional_signal(
 🔗 {mvrv_str}  |  {ma200_str}{rare_c_line}"""
 
         msg = msg.rstrip() + cycle_section
+
+    # ── Seção Institutional Direction Intelligence (Cap. 16) ───────────────────
+    if direction_data:
+        d_dir    = direction_data.get("direction",              "NEUTRAL")
+        d_conf   = direction_data.get("direction_confidence",   50.0)
+        d_score  = direction_data.get("direction_score",        50.0)
+        d_break  = direction_data.get("breakout_probability",   30.0)
+        d_fake   = direction_data.get("fake_move_probability",  30.0)
+        d_dom    = direction_data.get("dominant_market",        "BALANCED")
+        d_valid  = direction_data.get("move_validity",          "WEAK")
+        d_mmdef  = direction_data.get("market_maker_defense",   False)
+        d_mmlvl  = direction_data.get("defense_level",          None)
+        d_mmstr  = direction_data.get("defense_strength",       0.0)
+        d_mmtype = direction_data.get("defense_type",           None)
+        d_ibias  = direction_data.get("institutional_bias",     "NEUTRAL")
+        d_dabs   = direction_data.get("absorption_type",        None)
+        d_fund   = direction_data.get("funding_bias",           "NEUTRAL")
+        d_fext   = direction_data.get("funding_extreme",        False)
+        d_fann   = direction_data.get("funding_annual_pct",     0.0)
+        d_oi     = direction_data.get("oi_change_pct",          0.0)
+        d_rare   = direction_data.get("rare_direction_setup",   False)
+        d_rtype  = direction_data.get("rare_direction_type",    None)
+        d_rstr   = direction_data.get("rare_direction_strength", 0.0)
+
+        # Emojis
+        dir_arrow   = {"UP": "↑", "DOWN": "↓"}.get(d_dir, "→")
+        dir_emoji_d = {"UP": "🟢", "DOWN": "🔴", "NEUTRAL": "⚪️"}.get(d_dir, "⚪️")
+        valid_emoji = {"REAL": "✅", "WEAK": "🟡", "FAKE": "❌"}.get(d_valid, "⚪️")
+        fund_emoji  = {
+            "BEARISH":          "🔴",
+            "SLIGHTLY_BEARISH": "🟡",
+            "NEUTRAL":          "⚪️",
+            "SLIGHTLY_BULLISH": "🟡",
+            "BULLISH":          "🟢",
+        }.get(d_fund, "⚪️")
+
+        mm_line = (
+            f"🏦 MM Defense: <b>Detectado</b> | Nível: ${d_mmlvl:,.0f} | "
+            f"Força: {d_mmstr:.0f}% | {d_mmtype}"
+            if d_mmdef and d_mmlvl else
+            "🏦 MM Defense: —"
+        )
+        abs_line = (
+            f"🌊 Delta: <b>{d_ibias}</b> | Absorção: <b>{d_dabs}</b>"
+            if d_dabs else
+            f"🌊 Delta: <b>{d_ibias}</b>"
+        )
+        fund_ext_flag = " 🚨 EXTREMO" if d_fext else ""
+        rare_dir_line = (
+            f"\n★ <b>RARE SETUP: {d_rtype}</b> | força: {d_rstr:.0f}%"
+            if d_rare and d_rtype else ""
+        )
+
+        direction_section = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<b>📊 INSTITUTIONAL DIRECTION INTELLIGENCE:</b>
+{mm_line}
+{abs_line}
+⚖️ Perp vs Spot: <b>{d_dom}</b> | Move: {valid_emoji} <b>{d_valid}</b>
+{dir_emoji_d} Direção: <b>{d_dir}{dir_arrow}</b> | Conf: <b>{d_conf:.0f}%</b> | Score: <b>{d_score:.0f}/100</b>
+🎭 Fake Move: <b>{d_fake:.0f}%</b> | Breakout: <b>{d_break:.0f}%</b>
+{fund_emoji} Funding: <b>{d_fund}{fund_ext_flag}</b> ({d_fann:+.1f}% a.a.) | OI: <b>{d_oi:+.1f}%</b>{rare_dir_line}"""
+
+        msg = msg.rstrip() + direction_section
 
     msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ <i>Apenas análise — não é recomendação de investimento.</i>"
 

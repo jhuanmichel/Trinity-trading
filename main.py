@@ -23,6 +23,7 @@ from pressure_meter import calculate_pressure
 from rare_setup_detector import detect_rare_setup
 from geopolitical_engine import run_geo_analysis
 from bitcoin_cycle_engine import run_bitcoin_cycle_analysis
+from institutional_direction_engine import run_institutional_direction_analysis
 import agent
 import alerts
 from config         import (
@@ -177,7 +178,7 @@ def _write_dashboard_state(
     corr_data, regime_data, entry, stop, tp1, tp2, tp3,
     smc_signal=None, mm_data=None,
     pressure_data=None, rare_data=None, trinity_score=None,
-    geo_data=None, cycle_data=None,
+    geo_data=None, cycle_data=None, direction_data=None,
 ):
     """Persiste o estado atual para o dashboard web (dashboard/current_state.json)."""
     state = {
@@ -320,6 +321,33 @@ def _write_dashboard_state(
                 "trend":              cycle_data.get("trend",              {}),
                 "onchain":            cycle_data.get("onchain",            {}),
             } if cycle_data else None,
+            # Institutional Direction Engine (Cap. 16)
+            "institutional_direction": {
+                "direction":              direction_data.get("direction",              "NEUTRAL"),
+                "direction_confidence":   direction_data.get("direction_confidence",   50.0),
+                "direction_score":        direction_data.get("direction_score",        50.0),
+                "breakout_probability":   direction_data.get("breakout_probability",   30.0),
+                "fake_move_probability":  direction_data.get("fake_move_probability",  30.0),
+                "dominant_market":        direction_data.get("dominant_market",        "BALANCED"),
+                "move_validity":          direction_data.get("move_validity",          "WEAK"),
+                "market_maker_defense":   direction_data.get("market_maker_defense",   False),
+                "defense_level":          direction_data.get("defense_level",          None),
+                "defense_type":           direction_data.get("defense_type",           None),
+                "defense_strength":       direction_data.get("defense_strength",       0.0),
+                "mm_score":               direction_data.get("mm_score",               50.0),
+                "delta_score":            direction_data.get("delta_score",            50.0),
+                "perp_spot_score":        direction_data.get("perp_spot_score",        50.0),
+                "institutional_bias":     direction_data.get("institutional_bias",     "NEUTRAL"),
+                "absorption_type":        direction_data.get("absorption_type",        None),
+                "funding_bias":           direction_data.get("funding_bias",           "NEUTRAL"),
+                "funding_extreme":        direction_data.get("funding_extreme",        False),
+                "funding_annual_pct":     direction_data.get("funding_annual_pct",     0.0),
+                "oi_change_pct":          direction_data.get("oi_change_pct",          0.0),
+                "rare_direction_setup":   direction_data.get("rare_direction_setup",   False),
+                "rare_direction_type":    direction_data.get("rare_direction_type",    None),
+                "rare_direction_strength":direction_data.get("rare_direction_strength",0.0),
+                "signals":                direction_data.get("signals",                []),
+            } if direction_data else None,
         },
     }
     import numpy as np
@@ -568,27 +596,56 @@ def run_institutional_analysis():
                 "halving": {}, "trend": {}, "onchain": {}, "volatility": {},
             }
 
-        # ── Score final Trinity v3 (Cap. 7 + Geo + Cycle) ─────────────────
-        # formula v3: Confluence×0.35 + |Pressure|×0.20 + RareSetup×0.15 + Geo×0.15 + Cycle×0.15
+        # ── Institutional Direction Engine (Step 16) ──────────────────────
+        log.info("📊 [16] Institutional Direction Engine...")
+        try:
+            direction_data = run_institutional_direction_analysis(SYMBOL)
+            log.info(
+                f"   Dir: {direction_data['direction']} | "
+                f"conf={direction_data['direction_confidence']:.0f}% | "
+                f"score={direction_data['direction_score']:.1f} | "
+                f"validity={direction_data['move_validity']} | "
+                f"fake={direction_data['fake_move_probability']:.0f}% | "
+                f"rare={direction_data['rare_direction_setup']}"
+            )
+        except Exception as e:
+            log.warning(f"   Direction Engine falhou: {e}")
+            direction_data = {
+                "direction": "NEUTRAL", "direction_confidence": 50.0,
+                "direction_score": 50.0, "breakout_probability": 30.0,
+                "fake_move_probability": 30.0, "dominant_market": "BALANCED",
+                "move_validity": "WEAK", "market_maker_defense": False,
+                "defense_level": None, "defense_type": None, "defense_strength": 0.0,
+                "mm_score": 50.0, "delta_score": 50.0, "perp_spot_score": 50.0,
+                "institutional_bias": "NEUTRAL", "absorption_type": None,
+                "funding_bias": "NEUTRAL", "funding_extreme": False,
+                "funding_annual_pct": 0.0, "oi_change_pct": 0.0,
+                "rare_direction_setup": False, "rare_direction_type": None,
+                "rare_direction_strength": 0.0, "signals": [],
+            }
+
+        # ── Score final Trinity v4 (Cap. 7 + Geo + Cycle + Direction) ─────
+        # formula v4: Confluence×0.30 + |Pressure|×0.15 + RareSetup×0.10 + Geo×0.15 + Cycle×0.15 + Direction×0.15
         score           = inst["inst_score"]
         valid           = inst["valid"]
         struct          = ms_data.get("structure", "INDEFINIDA")
         lateral         = struct in ("LATERAL", "INDEFINIDA", "TRANSIÇÃO")
         rare_bonus      = rare_data["signal_bonus"]    # 0-100
         pressure_abs    = abs(pressure_data["pressure"])
-        geo_score_val   = geo_data.get("geo_score",   50.0)
+        geo_score_val   = geo_data.get("geo_score",    50.0)
         cycle_score_val = cycle_data.get("cycle_score", 50.0)
+        direction_val   = float(direction_data.get("direction_score", 50.0))
 
         trinity_score = round(
-            score * 0.35 + pressure_abs * 0.20 + rare_bonus * 0.15
-            + geo_score_val * 0.15 + cycle_score_val * 0.15,
+            score * 0.30 + pressure_abs * 0.15 + rare_bonus * 0.10
+            + geo_score_val * 0.15 + cycle_score_val * 0.15 + direction_val * 0.15,
             1
         )
         log.info(
-            f"   📊 Trinity Score v3: {trinity_score:.1f} = "
-            f"conf({score})*0.35 + pressão({pressure_abs:.0f})*0.20 + "
-            f"raro({rare_bonus})*0.15 + geo({geo_score_val:.1f})*0.15 + "
-            f"cycle({cycle_score_val:.1f})*0.15"
+            f"   📊 Trinity Score v4: {trinity_score:.1f} = "
+            f"conf({score})*0.30 + pressão({pressure_abs:.0f})*0.15 + "
+            f"raro({rare_bonus})*0.10 + geo({geo_score_val:.1f})*0.15 + "
+            f"cycle({cycle_score_val:.1f})*0.15 + dir({direction_val:.1f})*0.15"
         )
 
         # Filtro IPM (Cap. 4): se pressão < 40, entra no Invincible Mode
@@ -611,6 +668,7 @@ def run_institutional_analysis():
                 smc_signal=smc_signal, mm_data=mm_data,
                 pressure_data=pressure_data, rare_data=rare_data,
                 trinity_score=trinity_score, geo_data=geo_data, cycle_data=cycle_data,
+                direction_data=direction_data,
             )
             if not valid:
                 log.info(f"💤 Invincible Mode: apenas {inst['confluences']}/6 confluências — sem sinal")
@@ -637,6 +695,7 @@ def run_institutional_analysis():
             smc_signal=smc_signal, mm_data=mm_data,
             pressure_data=pressure_data, rare_data=rare_data,
             trinity_score=trinity_score, geo_data=geo_data, cycle_data=cycle_data,
+            direction_data=direction_data,
         )
         log.info("💾 Estado salvo no dashboard.")
 
@@ -664,6 +723,7 @@ def run_institutional_analysis():
             trinity_score    = trinity_score,
             geo_data         = geo_data,
             cycle_data       = cycle_data,
+            direction_data   = direction_data,
         )
         log.info("✅ Sinal institucional enviado ao Telegram.\n")
 
