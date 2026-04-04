@@ -167,6 +167,7 @@ def send_institutional_signal(
     rare_data:     dict = None,
     trinity_score: float = None,
     geo_data:      dict = None,
+    cycle_data:    dict = None,
 ) -> bool:
     """
     Envia alerta institucional no formato Smart Money com todos os detalhes das 7 camadas.
@@ -344,6 +345,71 @@ def send_institutional_signal(
    Fonte: {g_src} | {g_arts} artigos ({g_hi} alto impacto){rare_line}"""
 
         msg = msg.rstrip() + geo_section
+
+    # ── Seção Bitcoin Cycle Intelligence ─────────────────────────────────────
+    if cycle_data:
+        c_phase  = cycle_data.get("cycle_phase",        "ACCUMULATION")
+        c_conf   = cycle_data.get("cycle_confidence",   0.0)
+        c_str    = cycle_data.get("cycle_strength",     "WEAK")
+        c_score  = cycle_data.get("cycle_score",        50.0)
+        c_risk   = cycle_data.get("risk_level",         "MEDIUM")
+        c_bias   = cycle_data.get("bias_adjustment",    "NEUTRAL")
+        c_macro  = cycle_data.get("macro_trend",        "NEUTRAL")
+        c_vol    = cycle_data.get("expected_volatility","MEDIUM")
+        c_mult   = cycle_data.get("risk_multiplier",    1.0)
+        c_rare   = cycle_data.get("rare_cycle_setup",   False)
+        c_rtype  = cycle_data.get("rare_cycle_type",    None)
+        c_pos    = cycle_data.get("cycle_position_pct", 50.0)
+        c_desc   = cycle_data.get("phase_description",  "")
+
+        # Sub-modelos
+        halving  = cycle_data.get("halving",  {})
+        trend_c  = cycle_data.get("trend",    {})
+        onchain  = cycle_data.get("onchain",  {})
+
+        # Emojis por fase
+        phase_emoji = {
+            "ACCUMULATION": "🟡", "EARLY_BULL": "🟢", "MID_BULL": "🟢",
+            "LATE_BULL":    "🟠", "DISTRIBUTION": "🟠",
+            "BEAR":         "🔴", "CAPITULATION": "🔴",
+        }.get(c_phase, "⚪️")
+
+        bias_emoji = {
+            "AGGRESSIVE_LONG": "🚀", "FAVOR_LONG": "🟢",
+            "NEUTRAL":         "⚪️", "REDUCE_LONGS": "🟡",
+            "FAVOR_SHORT":     "🔴",
+        }.get(c_bias, "⚪️")
+
+        macro_emoji = {"BULLISH": "🟢", "BEARISH": "🔴", "NEUTRAL": "⚪️"}.get(c_macro, "⚪️")
+        risk_emoji_c = {"MEDIUM": "🟡", "HIGH": "🟠", "VERY_HIGH": "🔴"}.get(c_risk, "⚪️")
+        vol_emoji   = {"LOW": "😴", "MEDIUM": "📊", "HIGH": "🔥"}.get(c_vol, "📊")
+
+        # Halving info
+        h_phase    = halving.get("phase", "?")
+        h_days     = halving.get("days_since", "?")
+        h_age      = halving.get("cycle_age_pct", 0.0)
+
+        # MVRV
+        mvrv_val   = onchain.get("mvrv", None)
+        mvrv_str   = f"MVRV: <b>{mvrv_val:.2f}</b>" if mvrv_val else "MVRV: N/A"
+
+        # 200W MA
+        above_200w = trend_c.get("above_200w_ma", None)
+        ma200_str  = "200W MA: ✅" if above_200w else "200W MA: ❌" if above_200w is not None else "200W MA: ?"
+
+        rare_c_line = f"\n★ <b>RARE CYCLE SETUP: {c_rtype}</b>" if c_rare and c_rtype else ""
+
+        cycle_section = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<b>🧠 BITCOIN CYCLE INTELLIGENCE:</b>
+{phase_emoji} Fase: <b>{c_phase.replace('_', ' ')}</b>  |  Score: <b>{c_score:.0f}/100</b>  |  Conf: <b>{c_conf:.0f}%</b>
+{bias_emoji} Bias: <b>{c_bias.replace('_', ' ')}</b>  |  Risk Mult: <b>{c_mult}x</b>
+{macro_emoji} Macro: <b>{c_macro}</b>  |  {risk_emoji_c} Risco: <b>{c_risk}</b>
+{vol_emoji} Volatilidade: <b>{c_vol}</b>  |  Ciclo: <b>{c_pos:.0f}%</b> completo
+⛏️ Halving: <b>{h_phase}</b>  |  {h_days}d desde último  |  {h_age:.0f}% do ciclo
+🔗 {mvrv_str}  |  {ma200_str}{rare_c_line}"""
+
+        msg = msg.rstrip() + cycle_section
 
     msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ <i>Apenas análise — não é recomendação de investimento.</i>"
 

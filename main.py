@@ -22,6 +22,7 @@ from btc_liquidation_engine import get_dashboard_section as _liq_section, start_
 from pressure_meter import calculate_pressure
 from rare_setup_detector import detect_rare_setup
 from geopolitical_engine import run_geo_analysis
+from bitcoin_cycle_engine import run_bitcoin_cycle_analysis
 import agent
 import alerts
 from config         import (
@@ -176,7 +177,7 @@ def _write_dashboard_state(
     corr_data, regime_data, entry, stop, tp1, tp2, tp3,
     smc_signal=None, mm_data=None,
     pressure_data=None, rare_data=None, trinity_score=None,
-    geo_data=None,
+    geo_data=None, cycle_data=None,
 ):
     """Persiste o estado atual para o dashboard web (dashboard/current_state.json)."""
     state = {
@@ -299,6 +300,26 @@ def _write_dashboard_state(
                 "article_count":     geo_data.get("article_count",     0),
                 "top_articles":      geo_data.get("top_articles",      []),
             } if geo_data else None,
+            # Bitcoin Cycle Engine (Cap. 15)
+            "bitcoin_cycle": {
+                "cycle_phase":        cycle_data.get("cycle_phase",        "ACCUMULATION"),
+                "cycle_confidence":   cycle_data.get("cycle_confidence",   0.0),
+                "cycle_strength":     cycle_data.get("cycle_strength",     "WEAK"),
+                "cycle_score":        cycle_data.get("cycle_score",        50.0),
+                "risk_level":         cycle_data.get("risk_level",         "MEDIUM"),
+                "risk_multiplier":    cycle_data.get("risk_multiplier",    1.0),
+                "bias_adjustment":    cycle_data.get("bias_adjustment",    "NEUTRAL"),
+                "macro_trend":        cycle_data.get("macro_trend",        "NEUTRAL"),
+                "cycle_position_pct": cycle_data.get("cycle_position_pct", 50.0),
+                "expected_volatility":cycle_data.get("expected_volatility","MEDIUM"),
+                "rare_cycle_setup":   cycle_data.get("rare_cycle_setup",   False),
+                "rare_cycle_type":    cycle_data.get("rare_cycle_type",    None),
+                "phase_description":  cycle_data.get("phase_description",  ""),
+                "active_signals":     cycle_data.get("active_signals",     []),
+                "halving":            cycle_data.get("halving",            {}),
+                "trend":              cycle_data.get("trend",              {}),
+                "onchain":            cycle_data.get("onchain",            {}),
+            } if cycle_data else None,
         },
     }
     import numpy as np
@@ -522,24 +543,52 @@ def run_institutional_analysis():
                 "high_impact_count": 0, "article_count": 0, "top_articles": [],
             }
 
-        # ── Score final Trinity v2 (Cap. 7 + Geo) ─────────────────────────
-        # formula v2: Confluence×0.45 + |Pressure|×0.25 + RareSetup×0.15 + Geo×0.15
-        score         = inst["inst_score"]
-        valid         = inst["valid"]
-        struct        = ms_data.get("structure", "INDEFINIDA")
-        lateral       = struct in ("LATERAL", "INDEFINIDA", "TRANSIÇÃO")
-        rare_bonus    = rare_data["signal_bonus"]   # 0-100
-        pressure_abs  = abs(pressure_data["pressure"])
-        geo_score_val = geo_data.get("geo_score", 50.0)
+        # ── Bitcoin Cycle Engine (Step 15) ────────────────────────────────
+        log.info("🧠 [15] Bitcoin Cycle Engine...")
+        try:
+            cycle_data = run_bitcoin_cycle_analysis()
+            log.info(
+                f"   Cycle: phase={cycle_data['cycle_phase']} | "
+                f"score={cycle_data['cycle_score']:.1f} | "
+                f"bias={cycle_data['bias_adjustment']} | "
+                f"risk_mult={cycle_data['risk_multiplier']}x | "
+                f"rare={cycle_data['rare_cycle_setup']}"
+            )
+        except Exception as e:
+            log.warning(f"   Cycle Engine falhou: {e}")
+            cycle_data = {
+                "cycle_phase": "ACCUMULATION", "cycle_confidence": 0.0,
+                "cycle_strength": "WEAK",      "cycle_score": 50.0,
+                "risk_level": "MEDIUM",         "risk_multiplier": 1.0,
+                "bias_adjustment": "NEUTRAL",   "macro_trend": "NEUTRAL",
+                "macro_score": 50.0,            "cycle_position_pct": 50.0,
+                "expected_volatility": "MEDIUM","rare_cycle_setup": False,
+                "rare_cycle_type": None,         "rare_cycle_desc": None,
+                "phase_description": f"erro: {e}", "active_signals": [],
+                "halving": {}, "trend": {}, "onchain": {}, "volatility": {},
+            }
+
+        # ── Score final Trinity v3 (Cap. 7 + Geo + Cycle) ─────────────────
+        # formula v3: Confluence×0.35 + |Pressure|×0.20 + RareSetup×0.15 + Geo×0.15 + Cycle×0.15
+        score           = inst["inst_score"]
+        valid           = inst["valid"]
+        struct          = ms_data.get("structure", "INDEFINIDA")
+        lateral         = struct in ("LATERAL", "INDEFINIDA", "TRANSIÇÃO")
+        rare_bonus      = rare_data["signal_bonus"]    # 0-100
+        pressure_abs    = abs(pressure_data["pressure"])
+        geo_score_val   = geo_data.get("geo_score",   50.0)
+        cycle_score_val = cycle_data.get("cycle_score", 50.0)
 
         trinity_score = round(
-            score * 0.45 + pressure_abs * 0.25 + rare_bonus * 0.15 + geo_score_val * 0.15,
+            score * 0.35 + pressure_abs * 0.20 + rare_bonus * 0.15
+            + geo_score_val * 0.15 + cycle_score_val * 0.15,
             1
         )
         log.info(
-            f"   📊 Trinity Score v2: {trinity_score:.1f} = "
-            f"conf({score})*0.45 + pressão({pressure_abs:.0f})*0.25 + "
-            f"raro({rare_bonus})*0.15 + geo({geo_score_val:.1f})*0.15"
+            f"   📊 Trinity Score v3: {trinity_score:.1f} = "
+            f"conf({score})*0.35 + pressão({pressure_abs:.0f})*0.20 + "
+            f"raro({rare_bonus})*0.15 + geo({geo_score_val:.1f})*0.15 + "
+            f"cycle({cycle_score_val:.1f})*0.15"
         )
 
         # Filtro IPM (Cap. 4): se pressão < 40, entra no Invincible Mode
@@ -561,7 +610,7 @@ def run_institutional_analysis():
                 corr_data, regime_data, e_ns, s_ns, t1_ns, t2_ns, t3_ns,
                 smc_signal=smc_signal, mm_data=mm_data,
                 pressure_data=pressure_data, rare_data=rare_data,
-                trinity_score=trinity_score, geo_data=geo_data,
+                trinity_score=trinity_score, geo_data=geo_data, cycle_data=cycle_data,
             )
             if not valid:
                 log.info(f"💤 Invincible Mode: apenas {inst['confluences']}/6 confluências — sem sinal")
@@ -587,7 +636,7 @@ def run_institutional_analysis():
             corr_data, regime_data, entry, stop, tp1, tp2, tp3,
             smc_signal=smc_signal, mm_data=mm_data,
             pressure_data=pressure_data, rare_data=rare_data,
-            trinity_score=trinity_score, geo_data=geo_data,
+            trinity_score=trinity_score, geo_data=geo_data, cycle_data=cycle_data,
         )
         log.info("💾 Estado salvo no dashboard.")
 
@@ -614,6 +663,7 @@ def run_institutional_analysis():
             rare_data        = rare_data,
             trinity_score    = trinity_score,
             geo_data         = geo_data,
+            cycle_data       = cycle_data,
         )
         log.info("✅ Sinal institucional enviado ao Telegram.\n")
 
