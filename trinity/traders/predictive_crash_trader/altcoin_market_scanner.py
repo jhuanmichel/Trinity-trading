@@ -1,39 +1,34 @@
 """
-altcoin_market_scanner.py — Scanner Multi-Exchange de Altcoins (Cap. 19)
+altcoin_market_scanner.py — Scanner MEXC Futures (Cap. 19)
 
-Escaneia o universo de altcoins em Bybit Linear Perpetuals e retorna candidatos
-pré-filtrados para análise profunda de crash.
+Escaneia altcoins em MEXC Linear Perpetuals filtrando candidatos de crash.
+Migrado de Bybit V5 → MEXC Futures (Bybit/Binance bloqueados no Render/AWS).
 
-Pipeline:
-  1. Universo  — busca todos os pares USDT lineares (Bybit)
-  2. Filtro    — volume > $10M/24h OU variação > ±3% OU funding extremo
-  3. Hot scan  — top 50 candidatos ordenados por risco de crash preliminar
-  4. Deep data — para cada hot candidate, busca orderbook + funding + OI + L/S + klines + trades
+MEXC Futures endpoints (públicos, sem API key):
+  Base: https://contract.mexc.com/api/v1/contract
+  - GET /ticker                     → todos os tickers
+  - GET /ticker?symbol=BTC_USDT     → ticker único
+  - GET /kline/{symbol}?interval=Min15&start=&end=
+  - GET /openInterest?symbol=BTC_USDT
+  - GET /deals?symbol=BTC_USDT&limit=100
+  - GET /depth?symbol=BTC_USDT&limit=50  (pode retornar 403, defaulta para vazio)
 
-Bybit V5 endpoints (públicos, sem API key, sem geo-block em cloud):
-  Base: https://api.bybit.com/v5
-  - GET /market/tickers?category=linear
-  - GET /market/orderbook?category=linear&symbol=X&limit=50
-  - GET /market/funding/history?category=linear&symbol=X&limit=1
-  - GET /market/open-interest?category=linear&symbol=X&intervalTime=5min&limit=1
-  - GET /market/kline?category=linear&symbol=X&interval=15&limit=48
-  - GET /market/recent-trade?category=linear&symbol=X&limit=100
-  - GET /market/account-ratio?category=linear&symbol=X&period=5min&limit=2
+Formato de símbolo MEXC: BTC_USDT (underscore) — convertido para BTCUSDT na saída.
 """
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import requests
 
 log = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-BYBIT_V5             = "https://api.bybit.com/v5"
+MEXC_CONTRACT        = "https://contract.mexc.com/api/v1/contract"
 UNIVERSE_CACHE_TTL   = 300
 HOT_SCAN_TOP_N       = 50
-REQUEST_TIMEOUT      = 8
+REQUEST_TIMEOUT      = 10
 MAX_WORKERS          = 10
 EXCLUDE_SYMBOLS      = {
     "BTCUSDT", "ETHUSDT",
@@ -42,20 +37,38 @@ EXCLUDE_SYMBOLS      = {
 
 MIN_VOLUME_24H_USD   = 10_000_000
 MIN_PRICE_CHANGE_PCT = 2.5
-FUNDING_EXTREME_ABS  = 0.0005
 
 _universe_cache: dict = {"data": [], "ts": 0.0}
+
+_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; TradingBot/1.0)",
+    "Accept": "application/json",
+}
+
+
+# ── Helpers de símbolo ────────────────────────────────────────────────────────
+
+def _to_mexc(symbol: str) -> str:
+    """BTCUSDT → BTC_USDT"""
+    if symbol.endswith("USDT") and "_" not in symbol:
+        return symbol[:-4] + "_USDT"
+    return symbol
+
+
+def _from_mexc(symbol: str) -> str:
+    """BTC_USDT → BTCUSDT"""
+    return symbol.replace("_", "")
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def scan_universe() -> List[dict]:
-    """Retorna top 50 hot candidates (cache 5min)."""
+    """Retorna top 50 hot candidates filtrados por risco de crash (cache 5min)."""
     now = time.time()
     if _universe_cache["data"] and (now - _universe_cache["ts"]) < UNIVERSE_CACHE_TTL:
         return _universe_cache["data"]
 
-    log.info("[Scanner] Atualizando universo Bybit Linear...")
+    log.info("[Scanner] Atualizando universo MEXC Futures...")
     raw = _fetch_universe()
     if not raw:
         log.warning("[Scanner] Universo vazio — retornando cache anterior")
@@ -70,13 +83,13 @@ def scan_universe() -> List[dict]:
 def fetch_coin_data(symbol: str) -> Optional[dict]:
     """Busca dados completos de um símbolo para análise de crash."""
     try:
-        ticker   = _get_ticker(symbol)
-        funding  = _get_funding_rate(symbol)
-        oi       = _get_open_interest(symbol)
-        ls_ratio = _get_long_short_ratio(symbol)
-        ob       = _get_orderbook(symbol)
-        klines   = _get_klines(symbol)
-        trades   = _get_recent_trades(symbol)
+        mexc_sym = _to_mexc(symbol)
+        ticker   = _get_ticker(mexc_sym)
+        funding  = float(ticker.get("fundingRate", 0)) if ticker else 0.0
+        oi       = _get_open_interest(mexc_sym)
+        ob       = _get_orderbook(mexc_sym)
+        klines   = _get_klines(mexc_sym)
+        trades   = _get_recent_trades(mexc_sym)
 
         if not ticker:
             return None
@@ -85,17 +98,19 @@ def fetch_coin_data(symbol: str) -> Optional[dict]:
         oi_usd    = float(oi) * price if oi else 0.0
         oi_change = _estimate_oi_change(symbol, oi_usd)
 
+        vol_24h = float(ticker.get("turnover24", 0) or ticker.get("volume24", 0) or 0)
+
         return {
             "symbol":           symbol,
             "price":            price,
-            "price_change_pct": float(ticker.get("price24hPcnt", 0)) * 100,
-            "volume_24h":       float(ticker.get("turnover24h", 0)),
-            "high_24h":         float(ticker.get("highPrice24h", price)),
-            "low_24h":          float(ticker.get("lowPrice24h", price)),
+            "price_change_pct": float(ticker.get("riseFallRate", 0)) * 100,
+            "volume_24h":       vol_24h,
+            "high_24h":         float(ticker.get("highPrice24", price)),
+            "low_24h":          float(ticker.get("lowPrice24", price)),
             "funding_rate":     funding,
             "open_interest":    oi_usd,
             "oi_change_pct":    oi_change,
-            "long_short_ratio": ls_ratio,
+            "long_short_ratio": 1.0,   # não disponível publicamente no MEXC
             "orderbook":        ob,
             "klines_15m":       klines,
             "recent_trades":    trades,
@@ -122,20 +137,24 @@ def fetch_batch(symbols: List[str], max_workers: int = MAX_WORKERS) -> List[dict
 def _fetch_universe() -> List[dict]:
     try:
         r = requests.get(
-            f"{BYBIT_V5}/market/tickers",
-            params={"category": "linear"},
+            f"{MEXC_CONTRACT}/ticker",
+            headers=_HEADERS,
             timeout=REQUEST_TIMEOUT,
         )
         r.raise_for_status()
-        tickers = r.json().get("result", {}).get("list", [])
+        raw = r.json()
+        tickers = raw.get("data", raw) if isinstance(raw, dict) else raw
+        if not isinstance(tickers, list):
+            log.error(f"[Scanner] Formato inesperado do ticker MEXC: {type(tickers)}")
+            return []
         return [
             t for t in tickers
             if isinstance(t, dict)
-            and t.get("symbol", "").endswith("USDT")
-            and t.get("symbol") not in EXCLUDE_SYMBOLS
+            and t.get("symbol", "").endswith("_USDT")
+            and _from_mexc(t.get("symbol", "")) not in EXCLUDE_SYMBOLS
         ]
     except Exception as e:
-        log.error(f"[Scanner] Erro ao buscar universo Bybit: {e}")
+        log.error(f"[Scanner] Erro ao buscar universo MEXC: {e}")
         return []
 
 
@@ -143,9 +162,9 @@ def _filter_hot_candidates(tickers: List[dict]) -> List[dict]:
     candidates = []
     for t in tickers:
         try:
-            symbol     = t.get("symbol", "")
-            vol_usd    = float(t.get("turnover24h", 0))
-            pct_change = float(t.get("price24hPcnt", 0)) * 100  # Bybit: decimal
+            symbol     = _from_mexc(t.get("symbol", ""))
+            vol_usd    = float(t.get("turnover24", 0) or t.get("volume24", 0) or 0)
+            pct_change = float(t.get("riseFallRate", 0)) * 100
 
             if not (vol_usd >= MIN_VOLUME_24H_USD or abs(pct_change) >= MIN_PRICE_CHANGE_PCT):
                 continue
@@ -155,11 +174,11 @@ def _filter_hot_candidates(tickers: List[dict]) -> List[dict]:
             risk_score   = drop_weight + volume_score
 
             candidates.append({
-                "symbol":      symbol,
-                "price":       float(t.get("lastPrice", 0)),
+                "symbol":       symbol,
+                "price":        float(t.get("lastPrice", 0)),
                 "price_change": pct_change,
-                "volume_24h":  vol_usd,
-                "risk_score":  risk_score,
+                "volume_24h":   vol_usd,
+                "risk_score":   risk_score,
             })
         except (ValueError, TypeError):
             continue
@@ -168,107 +187,117 @@ def _filter_hot_candidates(tickers: List[dict]) -> List[dict]:
     return candidates[:HOT_SCAN_TOP_N]
 
 
-def _get_ticker(symbol: str) -> dict:
-    r = requests.get(
-        f"{BYBIT_V5}/market/tickers",
-        params={"category": "linear", "symbol": symbol},
-        timeout=REQUEST_TIMEOUT,
-    )
-    r.raise_for_status()
-    lst = r.json().get("result", {}).get("list", [])
-    return lst[0] if lst else {}
-
-
-def _get_funding_rate(symbol: str) -> float:
+def _get_ticker(mexc_symbol: str) -> dict:
     try:
         r = requests.get(
-            f"{BYBIT_V5}/market/funding/history",
-            params={"category": "linear", "symbol": symbol, "limit": 1},
+            f"{MEXC_CONTRACT}/ticker",
+            params={"symbol": mexc_symbol},
+            headers=_HEADERS,
             timeout=REQUEST_TIMEOUT,
         )
         r.raise_for_status()
-        lst = r.json().get("result", {}).get("list", [])
-        return float(lst[0].get("fundingRate", 0)) if lst else 0.0
+        raw = r.json()
+        data = raw.get("data", raw) if isinstance(raw, dict) else raw
+        if isinstance(data, list):
+            return data[0] if data else {}
+        if isinstance(data, dict):
+            return data
+        return {}
+    except Exception as e:
+        log.debug(f"[Scanner] Ticker error {mexc_symbol}: {e}")
+        return {}
+
+
+def _get_open_interest(mexc_symbol: str) -> float:
+    try:
+        r = requests.get(
+            f"{MEXC_CONTRACT}/openInterest",
+            params={"symbol": mexc_symbol},
+            headers=_HEADERS,
+            timeout=REQUEST_TIMEOUT,
+        )
+        r.raise_for_status()
+        raw = r.json()
+        data = raw.get("data", {}) if isinstance(raw, dict) else {}
+        return float(data.get("openInterest", 0) if isinstance(data, dict) else 0)
     except Exception:
         return 0.0
 
 
-def _get_open_interest(symbol: str) -> float:
+def _get_orderbook(mexc_symbol: str) -> dict:
+    """Orderbook MEXC Futures — pode retornar 403, defaulta para vazio."""
     try:
         r = requests.get(
-            f"{BYBIT_V5}/market/open-interest",
-            params={"category": "linear", "symbol": symbol, "intervalTime": "5min", "limit": 1},
+            f"{MEXC_CONTRACT}/depth",
+            params={"symbol": mexc_symbol, "limit": 50},
+            headers=_HEADERS,
             timeout=REQUEST_TIMEOUT,
         )
+        if r.status_code == 403:
+            return {"bids": [], "asks": []}
         r.raise_for_status()
-        lst = r.json().get("result", {}).get("list", [])
-        return float(lst[0].get("openInterest", 0)) if lst else 0.0
-    except Exception:
-        return 0.0
-
-
-def _get_long_short_ratio(symbol: str) -> float:
-    try:
-        r = requests.get(
-            f"{BYBIT_V5}/market/account-ratio",
-            params={"category": "linear", "symbol": symbol, "period": "5min", "limit": 1},
-            timeout=REQUEST_TIMEOUT,
-        )
-        r.raise_for_status()
-        lst = r.json().get("result", {}).get("list", [])
-        if lst:
-            buy  = float(lst[0].get("buyRatio", 0.5))
-            sell = float(lst[0].get("sellRatio", 0.5))
-            return round(buy / sell, 4) if sell > 0 else 1.0
-        return 1.0
-    except Exception:
-        return 1.0
-
-
-def _get_orderbook(symbol: str) -> dict:
-    try:
-        r = requests.get(
-            f"{BYBIT_V5}/market/orderbook",
-            params={"category": "linear", "symbol": symbol, "limit": 50},
-            timeout=REQUEST_TIMEOUT,
-        )
-        r.raise_for_status()
-        result = r.json().get("result", {})
-        return {"bids": result.get("b", []), "asks": result.get("a", [])}
+        raw  = r.json()
+        data = raw.get("data", {}) if isinstance(raw, dict) else {}
+        bids = data.get("bids", []) if isinstance(data, dict) else []
+        asks = data.get("asks", []) if isinstance(data, dict) else []
+        return {"bids": bids, "asks": asks}
     except Exception:
         return {"bids": [], "asks": []}
 
 
-def _get_klines(symbol: str, interval: str = "15", limit: int = 48) -> list:
-    """Bybit interval: 1,3,5,15,30,60,120,240,360,720,D,W,M"""
+def _get_klines(mexc_symbol: str, interval: str = "Min15", limit: int = 48) -> list:
+    """
+    MEXC klines — formato de arrays paralelas:
+    {"data": {"time": [...], "open": [...], "high": [...], "low": [...], "close": [...], "vol": [...]}}
+    Converte para [[ts, o, h, l, c, v], ...]
+    """
     try:
+        end   = int(time.time())
+        start = end - limit * 15 * 60   # 15min * limit períodos
         r = requests.get(
-            f"{BYBIT_V5}/market/kline",
-            params={"category": "linear", "symbol": symbol, "interval": interval, "limit": limit},
+            f"{MEXC_CONTRACT}/kline/{mexc_symbol}",
+            params={"interval": interval, "start": start, "end": end},
+            headers=_HEADERS,
             timeout=REQUEST_TIMEOUT,
         )
         r.raise_for_status()
-        lst = r.json().get("result", {}).get("list", [])
-        # Bybit: [startTime, open, high, low, close, volume, turnover]
-        return [[k[0], k[1], k[2], k[3], k[4], k[5]] for k in lst]
+        raw  = r.json()
+        data = raw.get("data", {}) if isinstance(raw, dict) else {}
+        if not isinstance(data, dict):
+            return []
+        times  = data.get("time",  [])
+        opens  = data.get("open",  [])
+        highs  = data.get("high",  [])
+        lows   = data.get("low",   [])
+        closes = data.get("close", [])
+        vols   = data.get("vol",   [])
+        return [
+            [str(t), str(o), str(h), str(l), str(c), str(v)]
+            for t, o, h, l, c, v in zip(times, opens, highs, lows, closes, vols)
+        ]
     except Exception:
         return []
 
 
-def _get_recent_trades(symbol: str, limit: int = 100) -> list:
+def _get_recent_trades(mexc_symbol: str, limit: int = 100) -> list:
     try:
         r = requests.get(
-            f"{BYBIT_V5}/market/recent-trade",
-            params={"category": "linear", "symbol": symbol, "limit": limit},
+            f"{MEXC_CONTRACT}/deals",
+            params={"symbol": mexc_symbol, "limit": limit},
+            headers=_HEADERS,
             timeout=REQUEST_TIMEOUT,
         )
         r.raise_for_status()
-        lst = r.json().get("result", {}).get("list", [])
+        raw  = r.json()
+        data = raw.get("data", {}) if isinstance(raw, dict) else {}
+        lst  = data.get("dataList", data) if isinstance(data, dict) else data
+        if not isinstance(lst, list):
+            return []
         return [
             {
-                "p": t.get("price", 0),
-                "q": t.get("size", 0),
-                "m": t.get("side", "Buy") == "Sell",
+                "p": t.get("p", t.get("price", 0)),
+                "q": t.get("v", t.get("vol", t.get("size", 0))),
+                "m": t.get("T", t.get("side", 2)) == 2,  # MEXC: T=1 buy, T=2 sell
             }
             for t in lst
         ]
