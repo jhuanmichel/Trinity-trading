@@ -24,6 +24,7 @@ from rare_setup_detector import detect_rare_setup
 from geopolitical_engine import run_geo_analysis
 from bitcoin_cycle_engine import run_bitcoin_cycle_analysis
 from institutional_direction_engine import run_institutional_direction_analysis
+from neural_engine import run_neural_analysis
 import agent
 import alerts
 from config         import (
@@ -179,6 +180,7 @@ def _write_dashboard_state(
     smc_signal=None, mm_data=None,
     pressure_data=None, rare_data=None, trinity_score=None,
     geo_data=None, cycle_data=None, direction_data=None,
+    neural_data=None,
 ):
     """Persiste o estado atual para o dashboard web (dashboard/current_state.json)."""
     state = {
@@ -348,6 +350,30 @@ def _write_dashboard_state(
                 "rare_direction_strength":direction_data.get("rare_direction_strength",0.0),
                 "signals":                direction_data.get("signals",                []),
             } if direction_data else None,
+            # Neural Intelligence Engine (Cap. 17)
+            "neural_intelligence": {
+                "bull_probability":                 neural_data.get("bull_probability",                 20.0),
+                "bear_probability":                 neural_data.get("bear_probability",                 20.0),
+                "sideways_probability":             neural_data.get("sideways_probability",             35.0),
+                "volatility_expansion_probability": neural_data.get("volatility_expansion_probability", 15.0),
+                "manipulation_probability":         neural_data.get("manipulation_probability",         10.0),
+                "confidence_score":                 neural_data.get("confidence_score",                 20.0),
+                "market_regime":                    neural_data.get("market_regime",                    "RANGING"),
+                "neural_score":                     neural_data.get("neural_score",                     50.0),
+                "neural_bias":                      neural_data.get("neural_bias",                      "NEUTRAL"),
+                "bias_strength":                    neural_data.get("bias_strength",                    0.0),
+                "bias_confidence":                  neural_data.get("bias_confidence",                  20.0),
+                "bull_edge":                        neural_data.get("bull_edge",                        0.0),
+                "is_balanced":                      neural_data.get("is_balanced",                      True),
+                "rare_neural_setup":                neural_data.get("rare_neural_setup",                False),
+                "rare_neural_type":                 neural_data.get("rare_neural_type",                 None),
+                "rare_neural_strength":             neural_data.get("rare_neural_strength",             0.0),
+                "agreement_score":                  neural_data.get("agreement_score",                  50.0),
+                "dominant_model":                   neural_data.get("dominant_model",                   "unknown"),
+                "model_confidences":                neural_data.get("model_confidences",                {}),
+                "calibration_note":                 neural_data.get("calibration_note",                 ""),
+                "retrain_accuracy":                 neural_data.get("retrain_accuracy",                 0.0),
+            } if neural_data else None,
         },
     }
     import numpy as np
@@ -624,8 +650,57 @@ def run_institutional_analysis():
                 "rare_direction_strength": 0.0, "signals": [],
             }
 
-        # ── Score final Trinity v4 (Cap. 7 + Geo + Cycle + Direction) ─────
-        # formula v4: Confluence×0.30 + |Pressure|×0.15 + RareSetup×0.10 + Geo×0.15 + Cycle×0.15 + Direction×0.15
+        # ── Neural Intelligence Engine (Step 17) ──────────────────────────
+        log.info("🧠 [17] Neural Intelligence Engine v2...")
+        try:
+            # Monta smc_mtf_data se disponível no smc_signal
+            smc_mtf_data = smc_signal.get("mtf_analysis") if smc_signal else None
+            neural_data = run_neural_analysis(
+                symbol         = SYMBOL,
+                df             = df,
+                price          = price,
+                inst_data      = inst,
+                smc_data       = smc_signal,
+                mm_data        = mm_data,
+                pressure_data  = pressure_data,
+                rare_data      = rare_data,
+                geo_data       = geo_data,
+                cycle_data     = cycle_data,
+                direction_data = direction_data,
+                regime_data    = regime_data,
+                volume_data    = volume_data,
+                trend_data     = trend_data,
+                deriv_data     = deriv_data,
+                smc_mtf_data   = smc_mtf_data,
+            )
+            log.info(
+                f"   Neural: bias={neural_data['neural_bias']} | "
+                f"bull={neural_data['bull_probability']:.0f}% | "
+                f"bear={neural_data['bear_probability']:.0f}% | "
+                f"side={neural_data['sideways_probability']:.0f}% | "
+                f"regime={neural_data['market_regime']} | "
+                f"score={neural_data['neural_score']:.0f} | "
+                f"conf={neural_data['confidence_score']:.0f}% | "
+                f"rare={neural_data['rare_neural_setup']}"
+                + (f" [{neural_data['rare_neural_type']}]" if neural_data.get("rare_neural_type") else "")
+            )
+        except Exception as e:
+            log.warning(f"   Neural Engine falhou: {e}")
+            neural_data = {
+                "bull_probability": 20.0, "bear_probability": 20.0,
+                "sideways_probability": 35.0, "volatility_expansion_probability": 15.0,
+                "manipulation_probability": 10.0, "confidence_score": 20.0,
+                "market_regime": "RANGING", "neural_score": 50.0,
+                "neural_bias": "NEUTRAL", "bias_strength": 0.0, "bias_confidence": 20.0,
+                "bull_edge": 0.0, "is_balanced": True, "calibration_note": f"erro: {e}",
+                "rare_neural_setup": False, "rare_neural_type": None, "rare_neural_strength": 0.0,
+                "agreement_score": 50.0, "dominant_model": "none", "model_confidences": {},
+                "retrain_accuracy": 0.0,
+            }
+
+        # ── Score final Trinity v6 (Cap. 7 + Geo + Cycle + Direction + Neural) ─
+        # formula v6: Confluence×0.22 + |Pressure|×0.13 + RareSetup×0.10 +
+        #             Geo×0.10 + Cycle×0.10 + Direction×0.15 + Neural×0.20
         score           = inst["inst_score"]
         valid           = inst["valid"]
         struct          = ms_data.get("structure", "INDEFINIDA")
@@ -635,17 +710,20 @@ def run_institutional_analysis():
         geo_score_val   = geo_data.get("geo_score",    50.0)
         cycle_score_val = cycle_data.get("cycle_score", 50.0)
         direction_val   = float(direction_data.get("direction_score", 50.0))
+        neural_val      = float(neural_data.get("neural_score", 50.0))
 
         trinity_score = round(
-            score * 0.30 + pressure_abs * 0.15 + rare_bonus * 0.10
-            + geo_score_val * 0.15 + cycle_score_val * 0.15 + direction_val * 0.15,
+            score * 0.22 + pressure_abs * 0.13 + rare_bonus * 0.10
+            + geo_score_val * 0.10 + cycle_score_val * 0.10
+            + direction_val * 0.15 + neural_val * 0.20,
             1
         )
         log.info(
-            f"   📊 Trinity Score v4: {trinity_score:.1f} = "
-            f"conf({score})*0.30 + pressão({pressure_abs:.0f})*0.15 + "
-            f"raro({rare_bonus})*0.10 + geo({geo_score_val:.1f})*0.15 + "
-            f"cycle({cycle_score_val:.1f})*0.15 + dir({direction_val:.1f})*0.15"
+            f"   📊 Trinity Score v6: {trinity_score:.1f} = "
+            f"conf({score})*0.22 + pressão({pressure_abs:.0f})*0.13 + "
+            f"raro({rare_bonus})*0.10 + geo({geo_score_val:.1f})*0.10 + "
+            f"cycle({cycle_score_val:.1f})*0.10 + dir({direction_val:.1f})*0.15 + "
+            f"neural({neural_val:.1f})*0.20"
         )
 
         # Filtro IPM (Cap. 4): se pressão < 40, entra no Invincible Mode
@@ -668,7 +746,7 @@ def run_institutional_analysis():
                 smc_signal=smc_signal, mm_data=mm_data,
                 pressure_data=pressure_data, rare_data=rare_data,
                 trinity_score=trinity_score, geo_data=geo_data, cycle_data=cycle_data,
-                direction_data=direction_data,
+                direction_data=direction_data, neural_data=neural_data,
             )
             if not valid:
                 log.info(f"💤 Invincible Mode: apenas {inst['confluences']}/6 confluências — sem sinal")
@@ -695,7 +773,7 @@ def run_institutional_analysis():
             smc_signal=smc_signal, mm_data=mm_data,
             pressure_data=pressure_data, rare_data=rare_data,
             trinity_score=trinity_score, geo_data=geo_data, cycle_data=cycle_data,
-            direction_data=direction_data,
+            direction_data=direction_data, neural_data=neural_data,
         )
         log.info("💾 Estado salvo no dashboard.")
 
@@ -724,6 +802,7 @@ def run_institutional_analysis():
             geo_data         = geo_data,
             cycle_data       = cycle_data,
             direction_data   = direction_data,
+            neural_data      = neural_data,
         )
         log.info("✅ Sinal institucional enviado ao Telegram.\n")
 

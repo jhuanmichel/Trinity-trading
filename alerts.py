@@ -169,6 +169,7 @@ def send_institutional_signal(
     geo_data:       dict = None,
     cycle_data:     dict = None,
     direction_data: dict = None,
+    neural_data:    dict = None,
 ) -> bool:
     """
     Envia alerta institucional no formato Smart Money com todos os detalhes das 7 camadas.
@@ -475,6 +476,81 @@ def send_institutional_signal(
 {fund_emoji} Funding: <b>{d_fund}{fund_ext_flag}</b> ({d_fann:+.1f}% a.a.) | OI: <b>{d_oi:+.1f}%</b>{rare_dir_line}"""
 
         msg = msg.rstrip() + direction_section
+
+    # ── Seção Neural Intelligence Engine (Cap. 17) ────────────────────────────
+    if neural_data:
+        n_bull   = neural_data.get("bull_probability",                 20.0)
+        n_bear   = neural_data.get("bear_probability",                 20.0)
+        n_side   = neural_data.get("sideways_probability",             35.0)
+        n_vexp   = neural_data.get("volatility_expansion_probability", 15.0)
+        n_manip  = neural_data.get("manipulation_probability",         10.0)
+        n_conf   = neural_data.get("confidence_score",                 20.0)
+        n_regime = neural_data.get("market_regime",                    "RANGING")
+        n_score  = neural_data.get("neural_score",                     50.0)
+        n_bias   = neural_data.get("neural_bias",                      "NEUTRAL")
+        n_bstr   = neural_data.get("bias_strength",                    0.0)
+        n_edge   = neural_data.get("bull_edge",                        0.0)
+        n_agree  = neural_data.get("agreement_score",                  50.0)
+        n_dom    = neural_data.get("dominant_model",                   "unknown")
+        n_rare   = neural_data.get("rare_neural_setup",                False)
+        n_rtype  = neural_data.get("rare_neural_type",                 None)
+        n_rstr   = neural_data.get("rare_neural_strength",             0.0)
+        n_bal    = neural_data.get("is_balanced",                      True)
+        n_calib  = neural_data.get("calibration_note",                 "")
+        n_acc    = neural_data.get("retrain_accuracy",                 0.0)
+        n_mconf  = neural_data.get("model_confidences",                {})
+
+        # Emojis
+        bias_emoji = {"LONG": "🟢", "SHORT": "🔴", "NEUTRAL": "⚪️"}.get(n_bias, "⚪️")
+        regime_emoji = {
+            "TRENDING":             "📈",
+            "RANGING":              "↔️",
+            "REVERSAL":             "🔄",
+            "ACCUMULATION":         "🟡",
+            "DISTRIBUTION":         "🟠",
+            "VOLATILITY_EXPANSION": "💥",
+            "MANIPULATION":         "🎭",
+        }.get(n_regime, "❓")
+
+        # Barra de probabilidade visual (total ~100)
+        def _pbar(v, total=100): return "█" * int(v / 10) + "░" * (10 - int(v / 10))
+
+        # Modelos confiança compacta
+        mconf_str = ""
+        if n_mconf:
+            parts = [f"{k[:3].upper()}:{v:.0f}" for k, v in n_mconf.items()]
+            mconf_str = f"\n🔬 Modelos: {' | '.join(parts)}"
+
+        # Rare setup neural
+        rare_neural_line = ""
+        if n_rare and n_rtype:
+            rare_emojis = {
+                "ACCUMULATION_WHALE_BUYING": "🐋",
+                "DISTRIBUTION_ABSORPTION":   "🕳️",
+                "COMPRESSION_VOL_EXPANSION": "💥",
+            }
+            r_emoji = rare_emojis.get(n_rtype, "★")
+            rare_neural_line = f"\n{r_emoji} <b>RARE NEURAL: {n_rtype.replace('_', ' ')}</b> | força: {n_rstr:.0f}%"
+
+        balance_note = " ⚠️ desequilíbrio" if not n_bal else ""
+
+        neural_section = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<b>🧠 NEURAL INTELLIGENCE v2:</b>
+{regime_emoji} Regime: <b>{n_regime.replace('_', ' ')}</b>  |  Score: <b>{n_score:.0f}/100</b>  |  Conf: <b>{n_conf:.0f}%</b>
+{bias_emoji} Bias: <b>{n_bias}</b>  |  Força: <b>{n_bstr:.0f}%</b>  |  Edge: <b>{n_edge:+.1f}pts</b>
+🎯 Concordância: <b>{n_agree:.0f}%</b>  |  Modelo dom.: <b>{n_dom}</b>{balance_note}
+📊 Bull: <b>{n_bull:.0f}%</b> {_pbar(n_bull)}
+📉 Bear: <b>{n_bear:.0f}%</b> {_pbar(n_bear)}
+↔️  Side: <b>{n_side:.0f}%</b> {_pbar(n_side)}
+💥 VolExp: <b>{n_vexp:.0f}%</b>  |  🎭 Manip: <b>{n_manip:.0f}%</b>{mconf_str}{rare_neural_line}"""
+
+        if n_acc > 0:
+            neural_section += f"\n📈 Accuracy recente: <b>{n_acc:.0f}%</b>"
+        if n_calib and n_calib not in ("calibrado", ""):
+            neural_section += f"\n⚙️ Calib: <i>{n_calib}</i>"
+
+        msg = msg.rstrip() + neural_section
 
     msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ <i>Apenas análise — não é recomendação de investimento.</i>"
 
