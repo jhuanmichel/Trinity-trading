@@ -557,6 +557,189 @@ def send_institutional_signal(
     return send_message(msg.strip())
 
 
+def send_trinity_signal(
+    price: float,
+    trinity_result: dict,
+    symbol: str = None,
+) -> bool:
+    """
+    Envia o sinal do Trinity Core (Cap. 18) ao Telegram.
+
+    Só deve ser chamado quando alert_priority in (CRITICAL, HIGH) ou
+    quando trade_allowed == True.
+
+    Args:
+        price:          preço atual do ativo
+        trinity_result: saída completa de run_trinity_core()
+        symbol:         símbolo (padrão: SYMBOL do config)
+    """
+    sym = symbol or SYMBOL
+    now = datetime.now().strftime("%d/%m %H:%M")
+
+    # ── Campos do sinal ───────────────────────────────────────────────────────
+    signal          = trinity_result.get("signal",               "NEUTRAL")
+    strength        = trinity_result.get("signal_strength",      "NEUTRAL")
+    confidence      = trinity_result.get("confidence",           0.0)
+    trinity_score   = trinity_result.get("trinity_score",        50.0)
+    risk_level      = trinity_result.get("risk_level",           "HIGH")
+    market_bias     = trinity_result.get("market_bias",          "NEUTRAL")
+    trade_allowed   = trinity_result.get("trade_allowed",        False)
+    pos_factor      = trinity_result.get("position_size_factor", 0.0)
+    rationale       = trinity_result.get("signal_rationale",     "N/A")
+    alert_priority  = trinity_result.get("alert_priority",       "LOW")
+    consensus       = trinity_result.get("consensus",            "NEUTRAL")
+    conflict        = trinity_result.get("conflict",             False)
+    conflict_level  = trinity_result.get("conflict_level",       "HIGH")
+    engine_align    = trinity_result.get("engine_alignment",     50.0)
+    market_regime   = trinity_result.get("market_regime",        "RANGING")
+    pipeline_ms     = trinity_result.get("pipeline_ms",          0.0)
+
+    # ── Sub-dicts ─────────────────────────────────────────────────────────────
+    consensus_data  = trinity_result.get("consensus_data",  {})
+    conflict_data   = trinity_result.get("conflict_data",   {})
+    scoring_data    = trinity_result.get("scoring",         {})
+    confidence_data = trinity_result.get("confidence_data", {})
+    engine_results  = trinity_result.get("engine_results",  {})
+
+    bull_n    = consensus_data.get("bullish_count", 0)
+    bear_n    = consensus_data.get("bearish_count", 0)
+    neut_n    = consensus_data.get("neutral_count", 0)
+    top_contr = scoring_data.get("top_contributors", [])
+    regime_mod = scoring_data.get("regime_modifier", 1.0)
+
+    # ── Emojis ────────────────────────────────────────────────────────────────
+    if signal == "LONG":
+        sig_emoji  = "🟢📈"
+        sig_label  = "LONG"
+    elif signal == "SHORT":
+        sig_emoji  = "🔴📉"
+        sig_label  = "SHORT"
+    else:
+        sig_emoji  = "⚪️"
+        sig_label  = "NEUTRAL"
+
+    strength_map = {
+        "STRONG":   "💪💪 STRONG",
+        "MODERATE": "📊 MODERATE",
+        "WEAK":     "🟡 WEAK",
+        "NEUTRAL":  "⚪️ NEUTRAL",
+    }
+    strength_label = strength_map.get(strength, strength)
+
+    risk_map = {"LOW": "🟢 LOW", "MEDIUM": "🟡 MEDIUM", "HIGH": "🔴 HIGH"}
+    risk_label = risk_map.get(risk_level, risk_level)
+
+    conflict_map = {"LOW": "✅ LOW", "MEDIUM": "⚠️ MEDIUM", "HIGH": "🚨 HIGH"}
+    conflict_label = conflict_map.get(conflict_level, conflict_level)
+
+    priority_map = {
+        "CRITICAL": "🔴 CRITICAL",
+        "HIGH":     "🟠 HIGH",
+        "MEDIUM":   "🟡 MEDIUM",
+        "LOW":      "⚪️ LOW",
+    }
+    priority_label = priority_map.get(alert_priority, alert_priority)
+
+    regime_emoji = {
+        "TRENDING":             "📈",
+        "RANGING":              "↔️",
+        "REVERSAL":             "🔄",
+        "ACCUMULATION":         "🟡",
+        "DISTRIBUTION":         "🟠",
+        "VOLATILITY_EXPANSION": "💥",
+        "MANIPULATION":         "🎭",
+    }.get(market_regime, "❓")
+
+    trade_line = (
+        f"✅ Trade liberado  |  Tamanho: <b>{pos_factor*100:.0f}%</b>"
+        if trade_allowed else
+        "❌ Trade bloqueado (conflito ou sinal insuficiente)"
+    )
+
+    # ── Top engines contribuidores ────────────────────────────────────────────
+    top_engines_str = "N/A"
+    if top_contr:
+        top_engines_str = "  |  ".join(
+            f"{e}(<b>{v:.2f}</b>)" for e, v in top_contr[:3]
+        )
+
+    # ── Detalhes de conflito (se houver pares críticos) ────────────────────────
+    spec_conflicts = conflict_data.get("specific_conflicts", [])
+    conflict_detail = ""
+    if spec_conflicts:
+        pairs = [c["pair"] for c in spec_conflicts[:2]]
+        conflict_detail = f"\n⚠️ Pares críticos: <i>{', '.join(pairs)}</i>"
+
+    # ── Detalhes de confiança ─────────────────────────────────────────────────
+    qb = confidence_data.get("quality_breakdown", {})
+    degrad = confidence_data.get("degradation_reasons", [])
+    quality_str = ""
+    if qb:
+        quality_str = (
+            f"\n🔬 Acordo: <b>{qb.get('agreement',0):.0f}</b>  "
+            f"Força: <b>{qb.get('strength',0):.0f}</b>  "
+            f"HW: <b>{qb.get('hw_align',0):.0f}</b>  "
+            f"EngConf: <b>{qb.get('engine_conf',0):.0f}</b>"
+        )
+
+    degrad_str = ""
+    if degrad:
+        degrad_str = f"\n📉 Penalidades: <i>{' | '.join(degrad[:2])}</i>"
+
+    # ── Alinhamento dos engines (compacto) ────────────────────────────────────
+    engines_line = ""
+    if engine_results:
+        bull_eng = [k for k, v in engine_results.items() if v.get("direction") == "BULLISH"]
+        bear_eng = [k for k, v in engine_results.items() if v.get("direction") == "BEARISH"]
+        engines_line = (
+            f"\n🟢 Bull engines ({len(bull_eng)}): <i>{', '.join(bull_eng[:4])}</i>"
+            f"\n🔴 Bear engines ({len(bear_eng)}): <i>{', '.join(bear_eng[:4])}</i>"
+        )
+
+    msg = (
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{sig_emoji} <b>TRINITY CORE</b> — {sym}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📊 TF: {TIMEFRAME}  |  🕐 {now}\n"
+        f"💵 Preço: <b>${price:,.2f}</b>\n"
+        f"🚨 Prioridade: <b>{priority_label}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"<b>🎯 SINAL FINAL:</b>\n"
+        f"{sig_emoji} <b>{sig_label}</b>  |  {strength_label}\n"
+        f"💯 Confiança: <b>{confidence:.0f}%</b>\n"
+        f"🏆 Trinity Score: <b>{trinity_score:.1f}/100</b>\n"
+        f"📐 Market Bias: <b>{market_bias}</b>\n"
+        f"{risk_label} Risco: <b>{risk_level}</b>\n"
+        f"{trade_line}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"<b>🗳️ CONSENSO DOS ENGINES:</b>\n"
+        f"📊 {consensus}  |  Alinhamento: <b>{engine_align:.0f}%</b>\n"
+        f"🟢 Bullish: <b>{bull_n}</b>  🔴 Bearish: <b>{bear_n}</b>  ⚪️ Neutro: <b>{neut_n}</b>\n"
+        f"{engines_line}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"<b>⚡ CONFLITO & REGIME:</b>\n"
+        f"Conflito: {conflict_label}{conflict_detail}\n"
+        f"Regime: {regime_emoji} <b>{market_regime.replace('_', ' ')}</b>  |  "
+        f"Mod: <b>{regime_mod:.2f}x</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"<b>🔬 QUALIDADE DO SINAL:</b>\n"
+        f"Quality: <b>{confidence_data.get('signal_quality','LOW')}</b>  |  "
+        f"Tradeable: {'✅' if confidence_data.get('is_tradeable') else '❌'}"
+        f"{quality_str}"
+        f"{degrad_str}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"<b>🏅 TOP CONTRIBUIDORES:</b>\n"
+        f"{top_engines_str}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"<b>📝 RATIONALE:</b>\n"
+        f"<i>{rationale}</i>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"<i>⏱ Pipeline: {pipeline_ms:.0f}ms  |  ⚠️ Apenas análise.</i>"
+    )
+
+    return send_message(msg.strip())
+
+
 def send_status_update(
     price: float,
     trinity_score: float,
