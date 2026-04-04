@@ -712,16 +712,22 @@ def run_institutional_analysis():
         direction_val   = float(direction_data.get("direction_score", 50.0))
         neural_val      = float(neural_data.get("neural_score", 50.0))
 
+        # Remap pressure e rare para escala [50, 100] com neutro = 50
+        # Isso garante baseline Trinity ~50 com mercado neutro (sem pressão / sem raro)
+        # Fórmula: 0 → 50 (neutro), 100 → 100 (máximo) via: 50 + valor * 0.50
+        pressure_norm = 50.0 + min(pressure_abs, 100.0) * 0.50
+        rare_norm     = 50.0 + min(float(rare_bonus), 100.0) * 0.50
+
         trinity_score = round(
-            score * 0.22 + pressure_abs * 0.13 + rare_bonus * 0.10
+            score * 0.22 + pressure_norm * 0.13 + rare_norm * 0.10
             + geo_score_val * 0.10 + cycle_score_val * 0.10
             + direction_val * 0.15 + neural_val * 0.20,
             1
         )
         log.info(
             f"   📊 Trinity Score v6: {trinity_score:.1f} = "
-            f"conf({score})*0.22 + pressão({pressure_abs:.0f})*0.13 + "
-            f"raro({rare_bonus})*0.10 + geo({geo_score_val:.1f})*0.10 + "
+            f"conf({score:.0f})*0.22 + pressão({pressure_abs:.0f}→{pressure_norm:.0f})*0.13 + "
+            f"raro({rare_bonus:.0f}→{rare_norm:.0f})*0.10 + geo({geo_score_val:.1f})*0.10 + "
             f"cycle({cycle_score_val:.1f})*0.10 + dir({direction_val:.1f})*0.15 + "
             f"neural({neural_val:.1f})*0.20"
         )
@@ -750,12 +756,28 @@ def run_institutional_analysis():
             )
             if not valid:
                 log.info(f"💤 Invincible Mode: apenas {inst['confluences']}/6 confluências — sem sinal")
+                blocked = "confluencias"
             elif lateral:
                 log.info(f"💤 Mercado lateral ({struct}) — sem sinal institucional")
+                blocked = "lateral"
             elif ipm_blocked:
                 log.info(f"💤 IPM bloqueou: pressão {pressure_data['pressure']:+.1f} < ±40 — sem sinal")
+                blocked = "score_baixo"
             else:
                 log.info(f"💤 Trinity Score {trinity_score} abaixo do threshold {INST_SCORE_THRESHOLD} — sem sinal")
+                blocked = "score_baixo"
+
+            # Envia update periódico ao Telegram mesmo sem sinal de trade
+            alerts.send_status_update(
+                price          = price,
+                trinity_score  = trinity_score,
+                neural_data    = neural_data,
+                inst_data      = inst,
+                pressure_data  = pressure_data,
+                direction_data = direction_data,
+                blocked_reason = blocked,
+                struct         = struct,
+            )
             return
 
         # ── Calcula níveis ─────────────────────────────────────────────────

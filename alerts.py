@@ -6,7 +6,7 @@ import asyncio
 import requests
 import json
 from datetime import datetime
-from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, SYMBOL, TIMEFRAME, SCORE_THRESHOLD
+from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, SYMBOL, TIMEFRAME, SCORE_THRESHOLD, INST_INTERVAL_MINUTES
 
 
 def send_message(text: str) -> bool:
@@ -555,3 +555,90 @@ def send_institutional_signal(
     msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ <i>Apenas análise — não é recomendação de investimento.</i>"
 
     return send_message(msg.strip())
+
+
+def send_status_update(
+    price: float,
+    trinity_score: float,
+    neural_data: dict,
+    inst_data: dict,
+    pressure_data: dict,
+    direction_data: dict,
+    blocked_reason: str,
+    struct: str = "N/A",
+) -> None:
+    """
+    Envia atualização periódica de status ao Telegram mesmo sem sinal de trade.
+    Garante que o usuário receba feedback a cada ciclo de análise.
+    """
+    try:
+        now = datetime.now().strftime("%d/%m %H:%M")
+
+        # Neural
+        nd       = neural_data or {}
+        n_bias   = nd.get("neural_bias",                    "NEUTRAL")
+        n_score  = nd.get("neural_score",                    50.0)
+        n_regime = nd.get("market_regime",                  "RANGING")
+        n_conf   = nd.get("confidence_score",                0.0)
+        n_bull   = nd.get("bull_probability",                20.0)
+        n_bear   = nd.get("bear_probability",                20.0)
+        n_side   = nd.get("sideways_probability",            35.0)
+        n_rare   = nd.get("rare_neural_setup",               False)
+        n_rtype  = nd.get("rare_neural_type",                None)
+
+        # Institucional
+        confl    = inst_data.get("confluences",  0)
+        i_score  = inst_data.get("inst_score",   0.0)
+        i_dir    = inst_data.get("direction",    "N/A")
+
+        # Pressão / Direction
+        pressure  = pressure_data.get("pressure", 0.0)  if pressure_data  else 0.0
+        dir_score = direction_data.get("direction_score", 50.0) if direction_data else 50.0
+        dir_dir   = direction_data.get("direction",       "N/A") if direction_data else "N/A"
+
+        # Motivo do bloqueio
+        reason_map = {
+            "confluencias": f"Confluências insuficientes ({confl}/6)",
+            "lateral":      f"Mercado lateral/indefinido ({struct})",
+            "score_baixo":  f"Trinity Score abaixo do limiar ({trinity_score:.0f})",
+        }
+        reason_txt = reason_map.get(blocked_reason, blocked_reason)
+
+        bias_emoji = {"LONG": "🟢", "SHORT": "🔴", "NEUTRAL": "⚪️"}.get(n_bias, "⚪️")
+        regime_emoji = {
+            "TRENDING": "📈", "RANGING": "↔️", "REVERSAL": "🔄",
+            "ACCUMULATION": "🟡", "DISTRIBUTION": "🟠",
+            "VOLATILITY_EXPANSION": "💥", "MANIPULATION": "🎭",
+        }.get(n_regime, "❓")
+
+        rare_line = ""
+        if n_rare and n_rtype:
+            rare_emojis = {
+                "ACCUMULATION_WHALE_BUYING": "🐋",
+                "DISTRIBUTION_ABSORPTION":   "🕳️",
+                "COMPRESSION_VOL_EXPANSION": "💥",
+            }
+            r_emoji   = rare_emojis.get(n_rtype, "★")
+            rare_line = f"\n{r_emoji} <b>RARE NEURAL: {n_rtype.replace('_', ' ')}</b>"
+
+        msg = (
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📡 <b>STATUS — {SYMBOL}</b>  |  🕐 {now}  |  ⏱ {TIMEFRAME}\n"
+            f"💵 Preço: <b>${price:,.2f}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💤 <b>Sem sinal:</b> {reason_txt}\n"
+            f"🏛 Institucional: score <b>{i_score:.0f}</b>  |  {confl}/6 conf  |  Dir: <b>{i_dir}</b>\n"
+            f"⚡ Pressão: <b>{pressure:+.1f}</b>  |  Trinity: <b>{trinity_score:.0f}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"<b>🧠 Neural:</b>  {regime_emoji} {n_regime.replace('_', ' ')}\n"
+            f"{bias_emoji} Bias: <b>{n_bias}</b>  |  Score: <b>{n_score:.0f}</b>  |  Conf: <b>{n_conf:.0f}%</b>\n"
+            f"📊 Bull: <b>{n_bull:.0f}%</b>  Bear: <b>{n_bear:.0f}%</b>  Side: <b>{n_side:.0f}%</b>\n"
+            f"📊 Direction: <b>{dir_dir}</b>  |  Score: <b>{dir_score:.0f}</b>{rare_line}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"<i>⏰ Próxima análise em ~{INST_INTERVAL_MINUTES} min</i>"
+        )
+
+        send_message(msg.strip())
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(f"[alerts] send_status_update falhou: {exc}")
