@@ -39,7 +39,7 @@ log = logging.getLogger(__name__)
 
 _cycle_cache:    Optional[dict] = None
 _cycle_cache_ts: float          = 0.0
-CYCLE_CACHE_TTL = 3600           # 60 minutos
+CYCLE_CACHE_TTL = 86400          # 24 horas — dados macro mudam no máximo 1x/dia
 
 
 # ─── Rare Cycle Setup ─────────────────────────────────────────────────────────
