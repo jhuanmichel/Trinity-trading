@@ -1477,3 +1477,136 @@ body {
 .crash-fab-label {
   font-family: 'Inter', sans-serif;
 }
+
+/* ── Dual Radar Layout ─────────────────────────────────────────────────────── */
+.radar-dual-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .radar-dual-section { grid-template-columns: 1fr; }
+}
+.radar-panel { min-width: 0; }
+
+/* ── Pump Radar — Títulos e Badges ──────────────────────────────────────────── */
+.pump-title {
+  color: var(--green);
+  text-shadow: 0 0 20px rgba(0,230,118,0.4);
+  letter-spacing: 3px;
+}
+
+.pump-live-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 12px;
+  font-size: 11px; font-weight: 700; letter-spacing: 1px;
+  background: rgba(0,230,118,0.15); color: var(--green);
+  border: 1px solid rgba(0,230,118,0.3);
+}
+.pump-live-badge.badge-launch {
+  animation: pulse-green 1.2s ease-in-out infinite;
+  background: rgba(0,230,118,0.25); border-color: var(--green);
+}
+.pump-live-badge.badge-ready { background: rgba(0,200,83,0.18); color: #00C853; border-color: #00C85360; }
+.pump-live-badge.badge-active { background: rgba(0,230,118,0.1); }
+
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0,230,118,0.5); }
+  50%       { box-shadow: 0 0 0 8px rgba(0,230,118,0); }
+}
+
+/* ── Pump Meta Bar ─────────────────────────────────────────────────────────── */
+.pump-meta-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 6px 0 10px; font-size: 12px; color: var(--text-muted);
+}
+.pr-count-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+}
+.pr-count-badge.crit { background: rgba(0,230,118,0.2); color: var(--green); }
+.pr-count-badge.norm { background: var(--surface); color: var(--text-muted); }
+
+/* ── Pump Grid + Cards ─────────────────────────────────────────────────────── */
+.pump-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.pump-card {
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 14px 16px;
+  border-left: 3px solid var(--green);
+  border-top: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.pump-card:hover { box-shadow: 0 2px 16px rgba(0,230,118,0.08); }
+
+.pr-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px;
+}
+.pr-symbol {
+  font-size: 16px; font-weight: 700; letter-spacing: 1px;
+  color: var(--text-primary);
+}
+.pr-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+  padding: 2px 8px; border-radius: 8px;
+}
+.pr-score-row {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-bottom: 10px; flex-wrap: wrap;
+}
+.pr-comps { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.pr-comp-row {
+  display: grid; grid-template-columns: 80px 1fr 30px;
+  gap: 6px; align-items: center;
+}
+.pr-comp-label { font-size: 10px; color: var(--text-muted); }
+.pr-comp-track {
+  height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;
+}
+.pr-comp-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
+.pr-comp-val { font-size: 10px; color: var(--text-muted); text-align: right; }
+
+.pr-signals {
+  border-top: 1px solid var(--border); padding-top: 6px; margin: 6px 0;
+}
+.pr-signal-row {
+  font-size: 10px; color: var(--text-muted); padding: 1px 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pr-target {
+  font-size: 11px; color: var(--green); font-weight: 600; margin: 4px 0 2px;
+}
+.pr-action {
+  font-size: 10px; color: var(--text-muted); font-style: italic;
+  margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ── Pump FAB ──────────────────────────────────────────────────────────────── */
+.pump-fab {
+  position: fixed; bottom: 24px; right: 160px;
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 16px; border-radius: 24px;
+  background: rgba(0,230,118,0.18);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0,230,118,0.35);
+  cursor: pointer; z-index: 100;
+  box-shadow: 0 0 20px rgba(0,230,118,0.2);
+  animation: pump-pulse 2.5s ease-in-out infinite;
+  font-size: 12px; font-weight: 700; color: var(--green);
+  letter-spacing: 1px;
+}
+@keyframes pump-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(0,230,118,0.2); }
+  50%       { box-shadow: 0 0 30px rgba(0,230,118,0.45); }
+}
+.pump-fab-icon { font-size: 18px; line-height: 1; }
+.pump-fab-label { font-family: 'Inter', sans-serif; }

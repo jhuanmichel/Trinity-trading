@@ -89,24 +89,49 @@
       </div>
     </section>
 
-    <!-- ── SECTION 4: CRASH RADAR ─────────────────────────────────────────── -->
-    <section class="section" id="crashRadarSection">
-      <div class="section-header">
-        <h2 class="section-title crash-title">CRASH RADAR</h2>
-        <span class="section-divider"></span>
-        <span class="section-sub">Predição antecipada de crashes em altcoins — Binance Futures</span>
-        <span class="crash-live-badge" id="crashScanBadge">AGUARDANDO</span>
+    <!-- ── SECTION 4: CRASH + PUMP RADAR (lado a lado) ──────────────────────── -->
+    <section class="section radar-dual-section" id="radarSection">
+
+      <!-- CRASH RADAR -->
+      <div class="radar-panel" id="crashRadarSection">
+        <div class="section-header">
+          <h2 class="section-title crash-title">CRASH RADAR</h2>
+          <span class="section-divider"></span>
+          <span class="section-sub">Predição de crashes — Binance Futures</span>
+          <span class="crash-live-badge" id="crashScanBadge">AGUARDANDO</span>
+        </div>
+
+        <div class="crash-meta-bar" id="crashMetaBar">
+          <span class="c-muted" style="font-size:11px">Iniciando scanner...</span>
+        </div>
+
+        <div class="crash-grid" id="crashGrid">
+          <div class="crash-card skeleton-card" style="min-height:160px"></div>
+          <div class="crash-card skeleton-card" style="min-height:160px"></div>
+          <div class="crash-card skeleton-card" style="min-height:160px"></div>
+        </div>
       </div>
 
-      <div class="crash-meta-bar" id="crashMetaBar">
-        <span class="c-muted" style="font-size:11px">Iniciando scanner...</span>
+      <!-- PUMP RADAR -->
+      <div class="radar-panel" id="pumpRadarSection">
+        <div class="section-header">
+          <h2 class="section-title pump-title">PUMP RADAR</h2>
+          <span class="section-divider"></span>
+          <span class="section-sub">Predição de pumps — Binance Futures</span>
+          <span class="pump-live-badge" id="pumpScanBadge">AGUARDANDO</span>
+        </div>
+
+        <div class="pump-meta-bar" id="pumpMetaBar">
+          <span class="c-muted" style="font-size:11px">Iniciando scanner...</span>
+        </div>
+
+        <div class="pump-grid" id="pumpGrid">
+          <div class="pump-card skeleton-card" style="min-height:160px"></div>
+          <div class="pump-card skeleton-card" style="min-height:160px"></div>
+          <div class="pump-card skeleton-card" style="min-height:160px"></div>
+        </div>
       </div>
 
-      <div class="crash-grid" id="crashGrid">
-        <div class="crash-card skeleton-card" style="min-height:160px"></div>
-        <div class="crash-card skeleton-card" style="min-height:160px"></div>
-        <div class="crash-card skeleton-card" style="min-height:160px"></div>
-      </div>
     </section>
 
   </main>
@@ -116,10 +141,14 @@
     <span id="footerClock"></span>
   </footer>
 
-  <!-- ── FAB: scroll para Crash Radar ──────────────────────────────────────── -->
+  <!-- ── FABs ──────────────────────────────────────────────────────────────── -->
   <button class="crash-fab" onclick="document.getElementById('crashRadarSection').scrollIntoView({behavior:'smooth'})" title="Ir para Crash Radar">
     <span class="crash-fab-icon">🚨</span>
-    <span class="crash-fab-label">CRASH RADAR</span>
+    <span class="crash-fab-label">CRASH</span>
+  </button>
+  <button class="pump-fab" onclick="document.getElementById('pumpRadarSection').scrollIntoView({behavior:'smooth'})" title="Ir para Pump Radar">
+    <span class="pump-fab-icon">🚀</span>
+    <span class="pump-fab-label">PUMP</span>
   </button>
 
   <script src="app.js"></script>

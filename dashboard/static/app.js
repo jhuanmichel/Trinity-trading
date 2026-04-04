@@ -913,17 +913,135 @@ async function updateCrashRadar() {
   }
 }
 
-// FAB — aparece após scroll
+// FABs — aparecem após scroll
 (function() {
-  const fab = document.querySelector('.crash-fab');
-  if (!fab) return;
-  fab.style.cssText = 'opacity:0;pointer-events:none;transition:opacity 0.3s ease';
+  const fabs = document.querySelectorAll('.crash-fab, .pump-fab');
+  fabs.forEach(fab => {
+    if (!fab) return;
+    fab.style.cssText = 'opacity:0;pointer-events:none;transition:opacity 0.3s ease';
+  });
   window.addEventListener('scroll', () => {
     const show = window.scrollY > 300;
-    fab.style.opacity = show ? '1' : '0';
-    fab.style.pointerEvents = show ? 'auto' : 'none';
+    fabs.forEach(fab => {
+      fab.style.opacity = show ? '1' : '0';
+      fab.style.pointerEvents = show ? 'auto' : 'none';
+    });
   }, { passive: true });
 })();
+
+// ── Section 5: Pump Radar ─────────────────────────────────────────────────────
+
+const PUMP_REFRESH_MS = 30_000;
+
+function pumpUrgencyColor(urgency) {
+  const map = { LAUNCH: 'var(--green)', READY: '#00C853', ALERT: 'var(--yellow)', WATCH: 'var(--text-muted)' };
+  return map[urgency] || 'var(--text-muted)';
+}
+
+function pumpUrgencyEmoji(urgency) {
+  return { LAUNCH: '🚀', READY: '⚡', ALERT: '📡', WATCH: '👁' }[urgency] || '📡';
+}
+
+function fmtPumpScore(score) {
+  if (score >= 80) return `<span style="color:var(--green);font-weight:700">${score.toFixed(0)}</span>`;
+  if (score >= 60) return `<span style="color:#00C853;font-weight:700">${score.toFixed(0)}</span>`;
+  if (score >= 40) return `<span style="color:var(--yellow)">${score.toFixed(0)}</span>`;
+  return `<span style="color:var(--text-muted)">${score.toFixed(0)}</span>`;
+}
+
+function renderPumpComponentBar(label, value) {
+  const pct  = Math.min(100, Math.max(0, value));
+  const color = pct >= 70 ? 'var(--green)' : pct >= 50 ? '#00C853' : pct >= 30 ? 'var(--yellow)' : 'var(--text-muted)';
+  return `<div class="pr-comp-row">
+    <span class="pr-comp-label">${label}</span>
+    <div class="pr-comp-track"><div class="pr-comp-fill" style="width:${pct}%;background:${color}"></div></div>
+    <span class="pr-comp-val">${pct.toFixed(0)}</span>
+  </div>`;
+}
+
+function renderPumpCard(c) {
+  const urgColor = pumpUrgencyColor(c.urgency);
+  const pct      = c.price_change_pct >= 0 ? `+${c.price_change_pct.toFixed(1)}%` : `${c.price_change_pct.toFixed(1)}%`;
+  const pctColor = c.price_change_pct >= 0 ? 'var(--green)' : 'var(--red)';
+  const price    = c.price < 10 ? c.price.toFixed(4) : c.price.toFixed(2);
+  const comp     = c.component_scores || {};
+  const signals  = (c.top_signals || []).slice(0, 3).map(s => `<div class="pr-signal-row">▸ ${s}</div>`).join('');
+  const targetStr = c.pump_target && c.pump_target > c.price
+    ? `<div class="pr-target">🎯 Alvo: $${c.pump_target < 10 ? c.pump_target.toFixed(4) : c.pump_target.toFixed(2)}</div>`
+    : '';
+
+  return `<div class="pump-card" style="border-left:3px solid ${urgColor}">
+    <div class="pr-header">
+      <span class="pr-symbol">${c.symbol.replace('USDT','')}</span>
+      <span class="pr-badge" style="background:${urgColor}20;color:${urgColor};border:1px solid ${urgColor}40">
+        ${pumpUrgencyEmoji(c.urgency)} ${c.urgency}
+      </span>
+    </div>
+    <div class="pr-score-row">
+      <span style="color:var(--text-muted);font-size:11px">PUMP SCORE</span>
+      <span style="font-size:22px;font-weight:700;color:${urgColor}">${fmtPumpScore(c.pump_score)}<span style="font-size:12px;color:var(--text-muted)">/100</span></span>
+      <span style="color:${pctColor};font-size:13px">${pct}</span>
+      <span style="color:var(--text-muted);font-size:12px">$${price}</span>
+    </div>
+    <div class="pr-comps">
+      ${renderPumpComponentBar('Whale',  comp.whale || 0)}
+      ${renderPumpComponentBar('Squeeze',comp.squeeze || 0)}
+      ${renderPumpComponentBar('Gravity',comp.gravity || 0)}
+      ${renderPumpComponentBar('Breakout',comp.breakout || 0)}
+      ${renderPumpComponentBar('SmartMoney',comp.smart_money || 0)}
+    </div>
+    ${signals ? `<div class="pr-signals">${signals}</div>` : ''}
+    ${targetStr}
+    <div class="pr-action">${c.recommended_action || ''}</div>
+  </div>`;
+}
+
+function renderPumpRadar(data) {
+  const badge   = document.getElementById('pumpScanBadge');
+  const metaBar = document.getElementById('pumpMetaBar');
+  const grid    = document.getElementById('pumpGrid');
+
+  const candidates = data.candidates || [];
+  const scanTs     = data.scan_ts ? new Date(data.scan_ts).toLocaleTimeString('pt-BR') : '--:--';
+  const count      = candidates.length;
+  const launchCount = candidates.filter(c => c.urgency === 'LAUNCH').length;
+  const readyCount  = candidates.filter(c => c.urgency === 'READY').length;
+
+  if (badge) {
+    if (launchCount > 0) {
+      badge.className = 'pump-live-badge badge-launch';
+      badge.textContent = `🚀 ${launchCount} LAUNCH`;
+    } else if (readyCount > 0) {
+      badge.className = 'pump-live-badge badge-ready';
+      badge.textContent = `⚡ ${readyCount} READY`;
+    } else {
+      badge.className = 'pump-live-badge badge-active';
+      badge.textContent = count > 0 ? `LIVE · ${count}` : 'INICIANDO';
+    }
+  }
+
+  if (metaBar) {
+    const top = candidates[0];
+    const topStr = top
+      ? `<span class="pr-count-badge ${launchCount > 0 ? 'crit' : 'norm'}">${count} candidatos</span>
+         &nbsp;Top: <strong>${top.symbol.replace('USDT','')}</strong> pump_score <strong>${top.pump_score.toFixed(0)}</strong>
+         · <span style="color:var(--text-muted)">scan ${data.scan_duration_s || 0}s</span>
+         · <span style="color:var(--text-muted)">atualizado ${scanTs}</span>`
+      : `<span class="c-muted" style="font-size:11px">Scanner em execução... ${scanTs}</span>`;
+    metaBar.innerHTML = topStr;
+  }
+
+  if (grid) grid.innerHTML = candidates.map(renderPumpCard).join('');
+}
+
+async function updatePumpRadar() {
+  try {
+    const data = await fetch('/api/pump-scanner').then(r => r.json());
+    renderPumpRadar(data);
+  } catch (e) {
+    console.warn('Pump Radar fetch error:', e);
+  }
+}
 
 // Init
 refresh();
@@ -931,6 +1049,7 @@ priceTick();
 updateLiqHeatmap();
 updateLiqScreenshot();                          // busca URL da screenshot Apify
 updateCrashRadar();                             // Crash Radar — primeiro carregamento
+updatePumpRadar();                              // Pump Radar — primeiro carregamento
 setInterval(refresh,             REFRESH_MS);
 setInterval(priceTick,           PRICE_MS);
 setInterval(clockTick,           1000);
@@ -938,4 +1057,5 @@ setInterval(updateSparkline,     30_000);
 setInterval(updateLiqHeatmap,    300_000);      // 5min — respeita rate limit Coinglass
 setInterval(updateLiqScreenshot, 300_000);      // 5min — sincroniza com ciclo do servidor
 setInterval(updateCrashRadar,    CRASH_REFRESH_MS); // 30s — sincroniza com ciclo do scanner
+setInterval(updatePumpRadar,     PUMP_REFRESH_MS);  // 30s — sincroniza com ciclo do scanner
 clockTick();

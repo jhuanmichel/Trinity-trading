@@ -15,6 +15,7 @@ import requests as _req
 BASE_DIR         = Path(__file__).parent.parent
 STATE_FILE       = BASE_DIR / "dashboard" / "current_state.json"
 CRASH_SCAN_FILE  = BASE_DIR / "dashboard" / "crash_scan_latest.json"
+PUMP_SCAN_FILE   = BASE_DIR / "dashboard" / "pump_scan_latest.json"
 LOGS_DIR         = BASE_DIR / "logs"
 STATIC_DIR       = BASE_DIR / "dashboard" / "static"
 
@@ -145,6 +146,8 @@ async def startup_event():
     asyncio.create_task(_run_analysis_bg())
     # Crash Radar — loop background
     asyncio.create_task(_crash_scan_loop())
+    # Pump Radar — loop background (offset 10s para não competir com crash scan)
+    asyncio.create_task(_pump_scan_loop())
 
 
 async def _run_analysis_bg(force: bool = False):
@@ -342,6 +345,39 @@ async def get_liquidations():
         if cached:
             return JSONResponse(content=cached)
         return JSONResponse(content={"levels": [], "error": str(e)})
+
+
+async def _pump_scan_loop():
+    """Roda o Predictive Pump Trader a cada 30s em background."""
+    import logging as _log
+    _plog = _log.getLogger("pump_trader")
+    await asyncio.sleep(30)  # offset: crash começa em 20s, pump em 30s
+    while True:
+        try:
+            import sys as _sys
+            _sys.path.insert(0, str(BASE_DIR))
+            from trinity.traders.predictive_pump_trader.predictive_pump_trader import run_pump_scan
+            result = await asyncio.to_thread(run_pump_scan)
+            try:
+                PUMP_SCAN_FILE.write_text(
+                    __import__("json").dumps(result, indent=2, default=str)
+                )
+            except Exception as _we:
+                _plog.warning(f"Pump scan write error: {_we}")
+        except Exception as _e:
+            _plog.error(f"Pump scan loop error: {_e}")
+        await asyncio.sleep(30)
+
+
+@app.get("/api/pump-scanner")
+def get_pump_scanner():
+    """Último resultado do Predictive Pump Trader (Cap. 20)."""
+    if PUMP_SCAN_FILE.exists():
+        try:
+            return JSONResponse(content=json.loads(PUMP_SCAN_FILE.read_text()))
+        except Exception:
+            pass
+    return JSONResponse(content={"scan_ts": None, "candidates": [], "coins_scanned": 0})
 
 
 @app.get("/api/crash-scanner")
