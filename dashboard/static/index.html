@@ -89,12 +89,38 @@
       </div>
     </section>
 
+    <!-- ── SECTION 4: CRASH RADAR ─────────────────────────────────────────── -->
+    <section class="section" id="crashRadarSection">
+      <div class="section-header">
+        <h2 class="section-title crash-title">CRASH RADAR</h2>
+        <span class="section-divider"></span>
+        <span class="section-sub">Predição antecipada de crashes em altcoins — Binance Futures</span>
+        <span class="crash-live-badge" id="crashScanBadge">AGUARDANDO</span>
+      </div>
+
+      <div class="crash-meta-bar" id="crashMetaBar">
+        <span class="c-muted" style="font-size:11px">Iniciando scanner...</span>
+      </div>
+
+      <div class="crash-grid" id="crashGrid">
+        <div class="crash-card skeleton-card" style="min-height:160px"></div>
+        <div class="crash-card skeleton-card" style="min-height:160px"></div>
+        <div class="crash-card skeleton-card" style="min-height:160px"></div>
+      </div>
+    </section>
+
   </main>
 
   <footer class="footer">
     <span>⚠️ Apenas análise — não é recomendação de investimento</span>
     <span id="footerClock"></span>
   </footer>
+
+  <!-- ── FAB: scroll para Crash Radar ──────────────────────────────────────── -->
+  <button class="crash-fab" onclick="document.getElementById('crashRadarSection').scrollIntoView({behavior:'smooth'})" title="Ir para Crash Radar">
+    <span class="crash-fab-icon">🚨</span>
+    <span class="crash-fab-label">CRASH RADAR</span>
+  </button>
 
   <script src="app.js"></script>
 </body>

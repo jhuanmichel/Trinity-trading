@@ -800,15 +800,142 @@ function clockTick() {
   if (el) el.textContent = new Date().toLocaleTimeString('pt-BR');
 }
 
+// ── Section 4: Crash Radar ────────────────────────────────────────────────
+
+const CRASH_REFRESH_MS = 30_000;
+
+function crashUrgencyColor(urgency) {
+  const map = { CRITICAL: 'var(--red)', DANGER: '#FF8C00', ALERT: 'var(--yellow)', WATCH: 'var(--text-muted)' };
+  return map[urgency] || 'var(--text-muted)';
+}
+
+function crashUrgencyEmoji(urgency) {
+  const map = { CRITICAL: '🚨', DANGER: '⚠️', ALERT: '⚡', WATCH: '👁' };
+  return map[urgency] || '•';
+}
+
+function fmtCrashScore(score) {
+  const col = score >= 80 ? 'var(--red)' : score >= 60 ? '#FF8C00' : score >= 40 ? 'var(--yellow)' : 'var(--text-muted)';
+  return `<span style="color:${col};font-weight:700;font-size:22px">${score.toFixed(0)}</span><span style="color:${col};font-size:12px">/100</span>`;
+}
+
+function renderComponentBar(label, value) {
+  const col = value >= 70 ? 'var(--red)' : value >= 50 ? '#FF8C00' : 'var(--yellow)';
+  const w   = Math.max(2, Math.round((value / 100) * 60));
+  return `<div class="cr-comp-row">
+    <span class="cr-comp-label">${label}</span>
+    <div class="cr-comp-track"><div class="cr-comp-fill" style="width:${w}px;background:${col}"></div></div>
+    <span class="cr-comp-val" style="color:${col}">${value.toFixed(0)}</span>
+  </div>`;
+}
+
+function renderCrashCard(c) {
+  const urgColor = crashUrgencyColor(c.urgency);
+  const emoji    = crashUrgencyEmoji(c.urgency);
+  const pctStr   = c.price_change_pct >= 0
+    ? `<span class="c-green">+${c.price_change_pct.toFixed(1)}%</span>`
+    : `<span class="c-red">${c.price_change_pct.toFixed(1)}%</span>`;
+  const priceStr = c.price < 10
+    ? `$${c.price.toFixed(4)}`
+    : `$${c.price.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+  const comp   = c.component_scores || {};
+  const compBars = [
+    renderComponentBar('Liquidez',    comp.liquidity    || 0),
+    renderComponentBar('Alavancagem', comp.leverage     || 0),
+    renderComponentBar('Whale Dump',  comp.whale        || 0),
+    renderComponentBar('Compressão',  comp.compression  || 0),
+    renderComponentBar('Funding/OI',  comp.funding_oi   || 0),
+  ].join('');
+  const signals = (c.top_signals || []).slice(0, 3)
+    .map(s => `<div class="cr-signal-row">• ${s}</div>`).join('');
+  const ddStr = c.estimated_drawdown
+    ? `<span class="cr-dd">Cascata est.: -${c.estimated_drawdown.toFixed(1)}%</span>` : '';
+
+  return `<div class="crash-card" style="border-left:3px solid ${urgColor}">
+    <div class="cr-header">
+      <div>
+        <span class="cr-symbol">${c.symbol.replace('USDT','')}</span><span class="cr-usdt">USDT</span>
+        <span class="cr-price">${priceStr}</span> ${pctStr}
+      </div>
+      <div class="cr-badge" style="background:${urgColor}22;color:${urgColor};border:1px solid ${urgColor}44">${emoji} ${c.urgency}</div>
+    </div>
+    <div class="cr-score-row">
+      <div>${fmtCrashScore(c.crash_score)}</div>
+      <div class="cr-meta"><div class="cr-prob" style="color:${urgColor}">${c.crash_probability}</div>${ddStr}</div>
+    </div>
+    <div class="cr-components">${compBars}</div>
+    ${signals ? `<div class="cr-signals">${signals}</div>` : ''}
+    <div class="cr-action c-muted">${c.recommended_action}</div>
+  </div>`;
+}
+
+function renderCrashRadar(data) {
+  const grid  = document.getElementById('crashGrid');
+  const meta  = document.getElementById('crashMetaBar');
+  const badge = document.getElementById('crashScanBadge');
+
+  if (!data || !data.candidates || data.candidates.length === 0) {
+    if (grid)  grid.innerHTML  = '<div class="cr-empty">Scanner em execução — aguardando primeiro ciclo (±30s)...</div>';
+    if (badge) { badge.textContent = 'INICIANDO'; badge.className = 'crash-live-badge'; }
+    return;
+  }
+
+  const ts       = data.scan_ts ? new Date(data.scan_ts).toLocaleTimeString('pt-BR') : '—';
+  const duration = data.scan_duration_s ? `${data.scan_duration_s.toFixed(1)}s` : '—';
+  const critical = data.candidates.filter(c => c.crash_score >= 80).length;
+  const danger   = data.candidates.filter(c => c.crash_score >= 60 && c.crash_score < 80).length;
+
+  if (meta) {
+    meta.innerHTML = `
+      <span class="c-muted">Último scan: <b>${ts}</b> em ${duration}</span>
+      <span class="c-muted">${data.coins_scanned || 0} moedas</span>
+      ${critical ? `<span class="cr-count-badge cr-count-critical">🚨 ${critical} CRÍTICO</span>` : ''}
+      ${danger   ? `<span class="cr-count-badge cr-count-danger">⚠️ ${danger} DANGER</span>` : ''}
+    `;
+  }
+
+  if (badge) {
+    if (critical)     { badge.textContent = 'CRÍTICO'; badge.className = 'crash-live-badge badge-critical'; }
+    else if (danger)  { badge.textContent = 'DANGER';  badge.className = 'crash-live-badge badge-danger';   }
+    else              { badge.textContent = 'ATIVO';   badge.className = 'crash-live-badge badge-active';   }
+  }
+
+  if (grid) grid.innerHTML = data.candidates.map(renderCrashCard).join('');
+}
+
+async function updateCrashRadar() {
+  try {
+    const data = await fetch('/api/crash-scanner').then(r => r.json());
+    renderCrashRadar(data);
+  } catch (e) {
+    const grid = document.getElementById('crashGrid');
+    if (grid) grid.innerHTML = `<div class="cr-empty c-muted">Erro ao carregar: ${e.message}</div>`;
+  }
+}
+
+// FAB — aparece após scroll
+(function() {
+  const fab = document.querySelector('.crash-fab');
+  if (!fab) return;
+  fab.style.cssText = 'opacity:0;pointer-events:none;transition:opacity 0.3s ease';
+  window.addEventListener('scroll', () => {
+    const show = window.scrollY > 300;
+    fab.style.opacity = show ? '1' : '0';
+    fab.style.pointerEvents = show ? 'auto' : 'none';
+  }, { passive: true });
+})();
+
 // Init
 refresh();
 priceTick();
 updateLiqHeatmap();
 updateLiqScreenshot();                          // busca URL da screenshot Apify
+updateCrashRadar();                             // Crash Radar — primeiro carregamento
 setInterval(refresh,             REFRESH_MS);
 setInterval(priceTick,           PRICE_MS);
 setInterval(clockTick,           1000);
 setInterval(updateSparkline,     30_000);
 setInterval(updateLiqHeatmap,    300_000);      // 5min — respeita rate limit Coinglass
 setInterval(updateLiqScreenshot, 300_000);      // 5min — sincroniza com ciclo do servidor
+setInterval(updateCrashRadar,    CRASH_REFRESH_MS); // 30s — sincroniza com ciclo do scanner
 clockTick();

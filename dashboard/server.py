@@ -12,10 +12,11 @@ import asyncio
 import time as _time
 import requests as _req
 
-BASE_DIR   = Path(__file__).parent.parent
-STATE_FILE = BASE_DIR / "dashboard" / "current_state.json"
-LOGS_DIR   = BASE_DIR / "logs"
-STATIC_DIR = BASE_DIR / "dashboard" / "static"
+BASE_DIR         = Path(__file__).parent.parent
+STATE_FILE       = BASE_DIR / "dashboard" / "current_state.json"
+CRASH_SCAN_FILE  = BASE_DIR / "dashboard" / "crash_scan_latest.json"
+LOGS_DIR         = BASE_DIR / "logs"
+STATIC_DIR       = BASE_DIR / "dashboard" / "static"
 
 app = FastAPI(title="QuantDesk", version="1.0")
 
@@ -107,6 +108,29 @@ async def _apify_loop():
 _analysis_running = False   # flag para evitar runs concorrentes
 
 
+async def _crash_scan_loop():
+    """Roda o Predictive Crash Trader a cada 30s em background."""
+    import logging as _log
+    _clog = _log.getLogger("crash_trader")
+    # Aguarda 20s no startup para não competir com a análise institucional
+    await asyncio.sleep(20)
+    while True:
+        try:
+            import sys as _sys
+            _sys.path.insert(0, str(BASE_DIR))
+            from trinity.traders.predictive_crash_trader.predictive_crash_trader import run_crash_scan
+            result = await asyncio.to_thread(run_crash_scan)
+            try:
+                CRASH_SCAN_FILE.write_text(
+                    __import__("json").dumps(result, indent=2, default=str)
+                )
+            except Exception as _we:
+                _clog.warning(f"Crash scan write error: {_we}")
+        except Exception as _e:
+            _clog.error(f"Crash scan loop error: {_e}")
+        await asyncio.sleep(30)
+
+
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(_apify_loop())
@@ -119,6 +143,8 @@ async def startup_event():
         _log.getLogger(__name__).warning(f"Liquidation engine não iniciado: {_e}")
     # Roda análise imediatamente ao subir (Render free tier: ephemerals FS fix)
     asyncio.create_task(_run_analysis_bg())
+    # Crash Radar — loop background
+    asyncio.create_task(_crash_scan_loop())
 
 
 async def _run_analysis_bg(force: bool = False):
@@ -316,6 +342,17 @@ async def get_liquidations():
         if cached:
             return JSONResponse(content=cached)
         return JSONResponse(content={"levels": [], "error": str(e)})
+
+
+@app.get("/api/crash-scanner")
+def get_crash_scanner():
+    """Último resultado do Predictive Crash Trader (Cap. 19)."""
+    if CRASH_SCAN_FILE.exists():
+        try:
+            return JSONResponse(content=json.loads(CRASH_SCAN_FILE.read_text()))
+        except Exception:
+            pass
+    return JSONResponse(content={"scan_ts": None, "candidates": [], "coins_scanned": 0})
 
 
 # Serve frontend

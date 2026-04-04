@@ -1217,4 +1217,263 @@ body {
   .card-levels { grid-template-columns: repeat(2, 1fr); }
   .history-table th:nth-child(n+6),
   .history-table td:nth-child(n+6) { display: none; }
+  .crash-grid { grid-template-columns: 1fr; }
+  .crash-fab-label { display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CAP. 19 — CRASH RADAR
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Section header extras ────────────────────────────────────────────────── */
+.crash-title {
+  color: var(--red);
+  text-shadow: 0 0 20px rgba(255, 77, 79, 0.35);
+}
+
+.crash-live-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(255, 77, 79, 0.12);
+  color: var(--red);
+  border: 1px solid rgba(255, 77, 79, 0.3);
+  margin-left: auto;
+}
+.crash-live-badge.badge-critical {
+  background: rgba(255, 77, 79, 0.25);
+  color: var(--red);
+  border-color: var(--red);
+  animation: pulse-red 1.2s infinite;
+}
+.crash-live-badge.badge-danger {
+  background: rgba(255, 140, 0, 0.18);
+  color: #FF8C00;
+  border-color: #FF8C00;
+}
+.crash-live-badge.badge-active {
+  background: rgba(0, 255, 178, 0.10);
+  color: var(--green);
+  border-color: rgba(0, 255, 178, 0.3);
+}
+
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 79, 0); }
+  50%       { box-shadow: 0 0 0 4px rgba(255, 77, 79, 0.25); }
+}
+
+/* ── Meta bar ─────────────────────────────────────────────────────────────── */
+.crash-meta-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 11px;
+  padding: 8px 0 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.cr-count-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.cr-count-critical {
+  background: rgba(255, 77, 79, 0.2);
+  color: var(--red);
+  border: 1px solid rgba(255, 77, 79, 0.4);
+}
+.cr-count-danger {
+  background: rgba(255, 140, 0, 0.15);
+  color: #FF8C00;
+  border: 1px solid rgba(255, 140, 0, 0.35);
+}
+
+/* ── Crash grid ───────────────────────────────────────────────────────────── */
+.crash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+/* ── Crash card ───────────────────────────────────────────────────────────── */
+.crash-card {
+  background: var(--surface);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.2s ease;
+}
+.crash-card:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Header */
+.cr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cr-symbol {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--text);
+}
+.cr-usdt {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 2px;
+  vertical-align: middle;
+}
+.cr-price {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-left: 6px;
+}
+.cr-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* Score row */
+.cr-score-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cr-meta {
+  text-align: right;
+}
+.cr-prob {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.cr-dd {
+  font-size: 10px;
+  color: var(--red);
+  display: block;
+  margin-top: 2px;
+}
+
+/* Components */
+.cr-components {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cr-comp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cr-comp-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  width: 76px;
+  flex-shrink: 0;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cr-comp-track {
+  flex: 1;
+  height: 4px;
+  background: var(--surface2);
+  border-radius: 2px;
+  overflow: hidden;
+  max-width: 60px;
+}
+.cr-comp-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+.cr-comp-val {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  width: 22px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* Signals */
+.cr-signals {
+  background: rgba(255, 77, 79, 0.05);
+  border: 1px solid rgba(255, 77, 79, 0.12);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cr-signal-row {
+  font-size: 10px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* Action */
+.cr-action {
+  font-size: 10px;
+  font-style: italic;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+/* Empty state */
+.cr-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 48px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ── FAB: botão flutuante Crash Radar ─────────────────────────────────────── */
+.crash-fab {
+  position: fixed;
+  bottom: 28px;
+  right: 24px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 77, 79, 0.18);
+  border: 1px solid rgba(255, 77, 79, 0.5);
+  border-radius: 24px;
+  padding: 9px 16px;
+  cursor: pointer;
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(255, 77, 79, 0.25);
+  transition: background 0.2s ease, box-shadow 0.2s ease, opacity 0.3s ease;
+}
+.crash-fab:hover {
+  background: rgba(255, 77, 79, 0.28);
+  box-shadow: 0 4px 28px rgba(255, 77, 79, 0.40);
+}
+.crash-fab-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+.crash-fab-label {
+  font-family: 'Inter', sans-serif;
 }
