@@ -166,6 +166,7 @@ def send_institutional_signal(
     pressure_data: dict = None,
     rare_data:     dict = None,
     trinity_score: float = None,
+    geo_data:      dict = None,
 ) -> bool:
     """
     Envia alerta institucional no formato Smart Money com todos os detalhes das 7 camadas.
@@ -308,6 +309,41 @@ def send_institutional_signal(
             trinity_section += f"\n   Fatores: {' · '.join(r_facs)}"
 
         msg = msg.rstrip() + trinity_section
+
+    # ── Seção Geopolitical Intelligence ──────────────────────────────────────
+    if geo_data:
+        g_score = geo_data.get("geo_score",         50.0)
+        g_bias  = geo_data.get("geo_bias",          "NEUTRAL")
+        g_conf  = geo_data.get("geo_confidence",    0.0)
+        g_risk  = geo_data.get("risk_sentiment",    "NEUTRAL")
+        g_liq   = geo_data.get("liquidity_outlook", "NEUTRAL")
+        g_top   = geo_data.get("top_event",         "N/A")
+        g_src   = geo_data.get("top_event_source",  "N/A")
+        g_cat   = geo_data.get("top_event_category","MARKET")
+        g_rare  = geo_data.get("rare_macro_setup",  False)
+        g_combo = geo_data.get("rare_macro_combo",  None)
+        g_arts  = geo_data.get("article_count",     0)
+        g_hi    = geo_data.get("high_impact_count", 0)
+
+        # Emojis
+        g_bias_emoji = "🟢" if g_bias == "BULLISH" else "🔴" if g_bias == "BEARISH" else "⚪️"
+        risk_emoji   = {"RISK_ON": "🟢 RISK ON", "RISK_OFF": "🔴 RISK OFF", "NEUTRAL": "⚪️ NEUTRO"}.get(g_risk, g_risk)
+        liq_emoji    = {"INCREASING": "📈 ↑ AUMENTANDO", "DECREASING": "📉 ↓ DIMINUINDO", "NEUTRAL": "➡️ ESTÁVEL"}.get(g_liq, g_liq)
+        rare_line    = f"\n🚨 <b>RARE MACRO SETUP:</b> {g_combo}" if g_rare and g_combo else ("\n🚨 <b>RARE MACRO SETUP ATIVO</b>" if g_rare else "")
+
+        # Limita título do evento
+        g_top_short = (g_top[:70] + "...") if len(g_top) > 70 else g_top
+
+        geo_section = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<b>🌍 GEOPOLITICAL INTELLIGENCE:</b>
+{g_bias_emoji} Geo Score: <b>{g_score:.1f}/100</b>  |  Bias: <b>{g_bias}</b>  |  Conf: <b>{g_conf:.0f}%</b>
+💰 Liquidez: {liq_emoji}
+🎯 Risco:    {risk_emoji}
+📰 Top Event [{g_cat}]: <i>{g_top_short}</i>
+   Fonte: {g_src} | {g_arts} artigos ({g_hi} alto impacto){rare_line}"""
+
+        msg = msg.rstrip() + geo_section
 
     msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ <i>Apenas análise — não é recomendação de investimento.</i>"
 

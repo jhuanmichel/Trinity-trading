@@ -21,6 +21,7 @@ from market_maker_engine import run_market_maker_analysis
 from btc_liquidation_engine import get_dashboard_section as _liq_section, start_background as _liq_start, get_for_scoring as _liq_scoring
 from pressure_meter import calculate_pressure
 from rare_setup_detector import detect_rare_setup
+from geopolitical_engine import run_geo_analysis
 import agent
 import alerts
 from config         import (
@@ -175,6 +176,7 @@ def _write_dashboard_state(
     corr_data, regime_data, entry, stop, tp1, tp2, tp3,
     smc_signal=None, mm_data=None,
     pressure_data=None, rare_data=None, trinity_score=None,
+    geo_data=None,
 ):
     """Persiste o estado atual para o dashboard web (dashboard/current_state.json)."""
     state = {
@@ -279,8 +281,24 @@ def _write_dashboard_state(
                 "components":     rare_data.get("components", {}),
                 "signal_bonus":   rare_data.get("signal_bonus", 0),
             } if rare_data else None,
-            # Trinity Score final (Cap. 7)
+            # Trinity Score final (Cap. 7 + v2 com Geo)
             "trinity_score": trinity_score,
+            # Geopolitical Intelligence Engine (Cap. 14)
+            "geopolitical": {
+                "geo_score":         geo_data.get("geo_score",         50.0),
+                "geo_bias":          geo_data.get("geo_bias",          "NEUTRAL"),
+                "geo_confidence":    geo_data.get("geo_confidence",    0.0),
+                "risk_sentiment":    geo_data.get("risk_sentiment",    "NEUTRAL"),
+                "liquidity_outlook": geo_data.get("liquidity_outlook", "NEUTRAL"),
+                "top_event":         geo_data.get("top_event",         "N/A"),
+                "top_event_source":  geo_data.get("top_event_source",  "N/A"),
+                "top_event_category":geo_data.get("top_event_category","MARKET"),
+                "rare_macro_setup":  geo_data.get("rare_macro_setup",  False),
+                "rare_macro_combo":  geo_data.get("rare_macro_combo",  None),
+                "high_impact_count": geo_data.get("high_impact_count", 0),
+                "article_count":     geo_data.get("article_count",     0),
+                "top_articles":      geo_data.get("top_articles",      []),
+            } if geo_data else None,
         },
     }
     import numpy as np
@@ -484,18 +502,45 @@ def run_institutional_analysis():
             rare_data = {"rare_setup": False, "score": 0.0, "signal_bonus": 0.0,
                          "setup_type": "NENHUM", "components": {}, "factors_active": []}
 
-        # ── Score final Trinity (Cap. 7) ───────────────────────────────────
-        # formula: final = confluência*0.6 + |pressão|*0.3 + setup_raro*0.1
+        # ── Geopolitical Intelligence Engine (Step 14) ────────────────────
+        log.info("🌍 [14] Geopolitical Intelligence Engine...")
+        try:
+            geo_data = run_geo_analysis()
+            log.info(
+                f"   Geo: bias={geo_data['geo_bias']} | score={geo_data['geo_score']:.1f} | "
+                f"risk={geo_data['risk_sentiment']} | liq={geo_data['liquidity_outlook']} | "
+                f"rare_macro={geo_data['rare_macro_setup']} | "
+                f"top='{geo_data['top_event'][:55]}'"
+            )
+        except Exception as e:
+            log.warning(f"   Geo Engine falhou: {e}")
+            geo_data = {
+                "geo_score": 50.0, "geo_bias": "NEUTRAL", "geo_confidence": 0.0,
+                "risk_sentiment": "NEUTRAL", "liquidity_outlook": "NEUTRAL",
+                "top_event": "N/A", "top_event_source": "N/A", "top_event_category": "MARKET",
+                "rare_macro_setup": False, "rare_macro_combo": None,
+                "high_impact_count": 0, "article_count": 0, "top_articles": [],
+            }
+
+        # ── Score final Trinity v2 (Cap. 7 + Geo) ─────────────────────────
+        # formula v2: Confluence×0.45 + |Pressure|×0.25 + RareSetup×0.15 + Geo×0.15
         score         = inst["inst_score"]
         valid         = inst["valid"]
         struct        = ms_data.get("structure", "INDEFINIDA")
         lateral       = struct in ("LATERAL", "INDEFINIDA", "TRANSIÇÃO")
         rare_bonus    = rare_data["signal_bonus"]   # 0-100
         pressure_abs  = abs(pressure_data["pressure"])
+        geo_score_val = geo_data.get("geo_score", 50.0)
 
-        trinity_score = round(score * 0.6 + pressure_abs * 0.3 + rare_bonus * 0.1, 1)
-        log.info(f"   📊 Trinity Score: {trinity_score:.1f} = "
-                 f"conf({score})*0.6 + pressão({pressure_abs:.0f})*0.3 + raro({rare_bonus})*0.1")
+        trinity_score = round(
+            score * 0.45 + pressure_abs * 0.25 + rare_bonus * 0.15 + geo_score_val * 0.15,
+            1
+        )
+        log.info(
+            f"   📊 Trinity Score v2: {trinity_score:.1f} = "
+            f"conf({score})*0.45 + pressão({pressure_abs:.0f})*0.25 + "
+            f"raro({rare_bonus})*0.15 + geo({geo_score_val:.1f})*0.15"
+        )
 
         # Filtro IPM (Cap. 4): se pressão < 40, entra no Invincible Mode
         # mas ainda salva estado para o dashboard
@@ -516,7 +561,7 @@ def run_institutional_analysis():
                 corr_data, regime_data, e_ns, s_ns, t1_ns, t2_ns, t3_ns,
                 smc_signal=smc_signal, mm_data=mm_data,
                 pressure_data=pressure_data, rare_data=rare_data,
-                trinity_score=trinity_score,
+                trinity_score=trinity_score, geo_data=geo_data,
             )
             if not valid:
                 log.info(f"💤 Invincible Mode: apenas {inst['confluences']}/6 confluências — sem sinal")
@@ -542,7 +587,7 @@ def run_institutional_analysis():
             corr_data, regime_data, entry, stop, tp1, tp2, tp3,
             smc_signal=smc_signal, mm_data=mm_data,
             pressure_data=pressure_data, rare_data=rare_data,
-            trinity_score=trinity_score,
+            trinity_score=trinity_score, geo_data=geo_data,
         )
         log.info("💾 Estado salvo no dashboard.")
 
@@ -568,6 +613,7 @@ def run_institutional_analysis():
             pressure_data    = pressure_data,
             rare_data        = rare_data,
             trinity_score    = trinity_score,
+            geo_data         = geo_data,
         )
         log.info("✅ Sinal institucional enviado ao Telegram.\n")
 
