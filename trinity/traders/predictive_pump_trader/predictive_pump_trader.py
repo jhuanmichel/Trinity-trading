@@ -52,9 +52,11 @@ LAUNCH_THRESHOLD   = 88        # opp_score para alerta urgente
 BASE_DIR           = Path(__file__).parent.parent.parent.parent
 SCAN_OUTPUT_FILE   = BASE_DIR / "dashboard" / "pump_scan_latest.json"
 
-_alert_cooldown: dict = {}
-ALERT_COOLDOWN_S   = 300
-LAUNCH_COOLDOWN_S  = 150
+_alert_cooldown:   dict = {}    # {symbol: last_alert_ts}
+_alert_last_score: dict = {}    # {symbol: último opportunity_score alertado}
+_alert_last_class: dict = {}    # {symbol: último move_classification alertado}
+ALERT_COOLDOWN_S    = 1800      # 30min entre alertas do mesmo símbolo
+LAUNCH_COOLDOWN_S   = 600       # 10min para alertas urgentes (score >= LAUNCH_THRESHOLD)
 
 
 # ── Dataclass de resultado por coin ───────────────────────────────────────────
@@ -253,20 +255,31 @@ async def _send_telegram_alerts(candidates: list):
     alerted = 0
 
     for c in candidates:
-        score  = c.get("opportunity_score", 0) if isinstance(c, dict) else c.opportunity_score
-        symbol = c.get("symbol", "")           if isinstance(c, dict) else c.symbol
+        score  = c.get("opportunity_score", 0)    if isinstance(c, dict) else c.opportunity_score
+        symbol = c.get("symbol", "")              if isinstance(c, dict) else c.symbol
+        cls    = c.get("move_classification", "") if isinstance(c, dict) else c.move_classification
 
         if score < ALERT_THRESHOLD:
             break
 
+        # Cooldown por símbolo
         last_alert = _alert_cooldown.get(symbol, 0)
         cooldown   = LAUNCH_COOLDOWN_S if score >= LAUNCH_THRESHOLD else ALERT_COOLDOWN_S
+
         if (now - last_alert) < cooldown:
-            continue
+            # Dentro do cooldown: re-alerta só se tier subiu ou score saltou >= 8pts
+            last_cls   = _alert_last_class.get(symbol, "")
+            last_score = _alert_last_score.get(symbol, 0.0)
+            tier_up    = _tier_rank(cls) > _tier_rank(last_cls)
+            score_up   = (score - last_score) >= 8.0
+            if not tier_up and not score_up:
+                continue
 
         try:
             await asyncio.to_thread(_send_pump_telegram, c if isinstance(c, dict) else asdict(c))
-            _alert_cooldown[symbol] = now
+            _alert_cooldown[symbol]   = now
+            _alert_last_score[symbol] = score
+            _alert_last_class[symbol] = cls
             alerted += 1
         except Exception as e:
             log.warning(f"[PumpTrader] Telegram falhou para {symbol}: {e}")
@@ -370,3 +383,10 @@ def _empty_scan(scan_ts: str) -> dict:
 def _iso_now() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+# Ranking de tiers para detectar upgrade (MICRO→WEAK→TRADEABLE→STRONG→EXTREME)
+_TIER_RANK = {"MICRO": 0, "WEAK": 1, "TRADEABLE": 2, "STRONG": 3, "EXTREME": 4}
+
+def _tier_rank(cls: str) -> int:
+    return _TIER_RANK.get(cls, 0)
