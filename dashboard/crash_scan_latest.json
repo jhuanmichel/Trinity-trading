@@ -1,0 +1,466 @@
+{
+  "scan_ts": "2026-04-05T00:29:58Z",
+  "scan_duration_s": 96.25,
+  "coins_scanned": 50,
+  "candidates": [
+    {
+      "symbol": "XNYUSDT",
+      "price": 0.003652,
+      "price_change_pct": -8.54,
+      "crash_score": 36.7,
+      "crash_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Manter vigil\u00e2ncia \u2014 sinais emergentes",
+      "signal_valid": false,
+      "component_scores": {
+        "liquidity": 62.6,
+        "leverage": 29.9,
+        "whale": 11.4,
+        "compression": 0.0,
+        "funding_oi": 37.9,
+        "cascade": 34.9
+      },
+      "top_signals": [
+        "Orderbook fino \u2014 liquidez desaparecendo",
+        "Colapso do suporte de compra",
+        "OI subindo + pre\u00e7o estagnado = armadilha de longs",
+        "CVD negativo (-0.38) \u2014 press\u00e3o vendedora oculta",
+        "Lower highs detectados \u2192 breakout esperado para baixo"
+      ],
+      "funding_rate": 5e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 7.93,
+      "estimated_drawdown": 4.0,
+      "cascade_target": 0.0035,
+      "volume_24h": 1392303.0,
+      "scanned_at": "2026-04-05T00:29:58Z"
+    },
+    {
+      "symbol": "ATUSDT",
+      "price": 0.15377,
+      "price_change_pct": -3.98,
+      "crash_score": 34.4,
+      "crash_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Manter vigil\u00e2ncia \u2014 sinais emergentes",
+      "signal_valid": false,
+      "component_scores": {
+        "liquidity": 63.4,
+        "leverage": 0.0,
+        "whale": 62.2,
+        "compression": 0.0,
+        "funding_oi": 0.0,
+        "cascade": 40.5
+      },
+      "top_signals": [
+        "Orderbook fino \u2014 liquidez desaparecendo",
+        "Colapso do suporte de compra",
+        "CVD negativo (-0.92) \u2014 press\u00e3o vendedora oculta",
+        "Lower highs detectados \u2192 breakout esperado para baixo"
+      ],
+      "funding_rate": 5e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 0.0,
+      "estimated_drawdown": 4.0,
+      "cascade_target": 0.1476,
+      "volume_24h": 59332.0,
+      "scanned_at": "2026-04-05T00:29:58Z"
+    },
+    {
+      "symbol": "B2USDT",
+      "price": 0.6817,
+      "price_change_pct": -3.62,
+      "crash_score": 32.1,
+      "crash_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Manter vigil\u00e2ncia \u2014 sinais emergentes",
+      "signal_valid": false,
+      "component_scores": {
+        "liquidity": 69.6,
+        "leverage": 0.0,
+        "whale": 10.1,
+        "compression": 55.1,
+        "funding_oi": 0.0,
+        "cascade": 29.3
+      },
+      "top_signals": [
+        "Orderbook fino \u2014 liquidez desaparecendo",
+        "Colapso do suporte de compra",
+        "CVD negativo (-0.34) \u2014 press\u00e3o vendedora oculta",
+        "Compress\u00e3o de volatilidade (11 velas) \u2014 breakout iminente"
+      ],
+      "funding_rate": 5e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 0.0,
+      "estimated_drawdown": 4.0,
+      "cascade_target": 0.6544,
+      "volume_24h": 35407.0,
+      "scanned_at": "2026-04-05T00:29:58Z"
+    },
+    {
+      "symbol": "NFPUSDT",
+      "price": 0.0139,
+      "price_change_pct": -5.12,
+      "crash_score": 28.9,
+      "crash_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Manter vigil\u00e2ncia \u2014 sinais emergentes",
+      "signal_valid": false,
+      "component_scores": {
+        "liquidity": 63.4,
+        "leverage": 0.0,
+        "whale": 10.8,
+        "compression": 25.2,
+        "funding_oi": 0.0,
+        "cascade": 47.5
+      },
+      "top_signals": [
+        "Orderbook fino \u2014 liquidez desaparecendo",
+        "Colapso do suporte de compra",
+        "CVD negativo (-0.36) \u2014 press\u00e3o vendedora oculta",
+        "Compress\u00e3o de volatilidade (6 velas) \u2014 breakout iminente"
+      ],
+      "funding_rate": 5e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 0.0,
+      "estimated_drawdown": 4.0,
+      "cascade_target": 0.0133,
+      "volume_24h": 73678.0,
+      "scanned_at": "2026-04-05T00:29:58Z"
+    },
+    {
+      "symbol": "\u8349\u6839\u6587\u5316USDT",
+      "price": 0.000302,
+      "price_change_pct": -26.57,
+      "crash_score": 28.6,
+      "crash_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Manter vigil\u00e2ncia \u2014 sinais emergentes",
+      "signal_valid": false,
+      "component_scores": {
+        "liquidity": 64.1,
+        "leverage": 0.0,
+        "whale": 46.4,
+        "compression": 0.0,
+        "funding_oi": 0.0,
+        "cascade": 21.7
+      },
+      "top_signals": [
+        "Orderbook fino \u2014 liquidez desaparecendo",
+        "Colapso do suporte de compra",
+        "Lower highs detectados \u2192 breakout esperado para baixo"
+      ],
+      "funding_rate": 1.2e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 0.0,
+      "estimated_drawdown": 4.4,
+      "cascade_target": 0.0003,
+      "volume_24h": 69218.0,
+      "scanned_at": "2026-04-05T00:29:58Z"
+    },
+    {
+      "symbol": "BEATUSDT",
+      "price": 0.3342,
+      "price_change_pct": -10.93,
+      "crash_score": 28.3,
+      "crash_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Manter vigil\u00e2ncia \u2014 sinais emergentes",
+      "signal_valid": false,
+      "component_scores": {
+        "liquidity": 59.4,
+        "leverage": 0.0,
+        "whale": 31.2,
+        "compression": 1.5,
+        "funding_oi": 0.0,
+        "cascade": 46.5
+      },
+      "top_signals": [
+        "Orderbook fino \u2014 liquidez desaparecendo",
+        "Colapso do suporte de compra",
+        "Compress\u00e3o de volatilidade (0 velas) \u2014 breakout iminente",
+        "Lower highs detectados \u2192 breakout esperado para baixo"
+      ],
+      "funding_rate": 0.0001,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": -0.04,
+      "estimated_drawdown": 4.0,
+      "cascade_target": 0.3208,
+      "volume_24h": 3126541.0,
+      "scanned_at": "2026-04-05T00:29:58Z"
+    },
+    {
+      "symbol": "IRYSUSDT",
+      "price": 0.02026,
+      "price_change_pct": -4.52,
+      "crash_score": 28.3,
+      "crash_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Manter vigil\u00e2ncia \u2014 sinais emergentes",
+      "signal_valid": false,
+      "component_scores": {
+        "liquidity": 76.5,
+        "leverage": 0.0,
+        "whale": 0.1,
+        "compression": 13.7,
+        "funding_oi": 0.0,
+        "cascade": 47.5
+      },
+      "top_signals": [
+        "Orderbook fino \u2014 liquidez desaparecendo",
+        "Colapso do suporte de compra",
+        "Compress\u00e3o de volatilidade (0 velas) \u2014 breakout iminente"
+      ],
+      "funding_rate": 5e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 0.0,
+      "estimated_drawdown": 4.0,
+      "cascade_target": 0.0194,
+      "volume_24h": 467597.0,
+      "scanned_at": "2026-04-05T00:29:58Z"
+    },
+    {
+      "symbol": "ICNTUSDT",
+      "price": 0.3365,
+      "price_change_pct": -3.22,
+      "crash_score": 28.0,
+      "crash_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Manter vigil\u00e2ncia \u2014 sinais emergentes",
+      "signal_valid": false,
+      "component_scores": {
+        "liquidity": 65.9,
+        "leverage": 0.0,
+        "whale": 0.0,
+        "compression": 29.1,
+        "funding_oi": 0.0,
+        "cascade": 47.5
+      },
+      "top_signals": [
+        "Orderbook fino \u2014 liquidez desaparecendo",
+        "Colapso do suporte de compra",
+        "Compress\u00e3o de volatilidade (9 velas) \u2014 breakout iminente"
+      ],
+      "funding_rate": 0.0001,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 0.26,
+      "estimated_drawdown": 4.0,
+      "cascade_target": 0.323,
+      "volume_24h": 1544169.0,
+      "scanned_at": "2026-04-05T00:29:58Z"
+    },
+    {
+      "symbol": "TUTUSDT",
+      "price": 0.00882,
+      "price_change_pct": -3.96,
+      "crash_score": 27.6,
+      "crash_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Manter vigil\u00e2ncia \u2014 sinais emergentes",
+      "signal_valid": false,
+      "component_scores": {
+        "liquidity": 70.8,
+        "leverage": 0.0,
+        "whale": 1.2,
+        "compression": 16.9,
+        "funding_oi": 0.0,
+        "cascade": 47.5
+      },
+      "top_signals": [
+        "Orderbook fino \u2014 liquidez desaparecendo",
+        "Colapso do suporte de compra",
+        "Compress\u00e3o de volatilidade (0 velas) \u2014 breakout iminente"
+      ],
+      "funding_rate": 5e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": -0.43,
+      "estimated_drawdown": 4.0,
+      "cascade_target": 0.0085,
+      "volume_24h": 183737.0,
+      "scanned_at": "2026-04-05T00:29:58Z"
+    },
+    {
+      "symbol": "CETUSUSDT",
+      "price": 0.01828,
+      "price_change_pct": -2.82,
+      "crash_score": 27.5,
+      "crash_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Manter vigil\u00e2ncia \u2014 sinais emergentes",
+      "signal_valid": false,
+      "component_scores": {
+        "liquidity": 59.6,
+        "leverage": 0.0,
+        "whale": 3.7,
+        "compression": 31.4,
+        "funding_oi": 0.0,
+        "cascade": 47.5
+      },
+      "top_signals": [
+        "Orderbook fino \u2014 liquidez desaparecendo",
+        "Colapso do suporte de compra",
+        "Compress\u00e3o de volatilidade (10 velas) \u2014 breakout iminente",
+        "Lower highs detectados \u2192 breakout esperado para baixo"
+      ],
+      "funding_rate": 5e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 0.47,
+      "estimated_drawdown": 4.0,
+      "cascade_target": 0.0175,
+      "volume_24h": 96275.0,
+      "scanned_at": "2026-04-05T00:29:58Z"
+    },
+    {
+      "symbol": "EDGEXUSDT",
+      "price": 0.8711,
+      "price_change_pct": -21.35,
+      "crash_score": 27.2,
+      "crash_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Manter vigil\u00e2ncia \u2014 sinais emergentes",
+      "signal_valid": false,
+      "component_scores": {
+        "liquidity": 59.0,
+        "leverage": 0.0,
+        "whale": 26.6,
+        "compression": 0.0,
+        "funding_oi": 0.0,
+        "cascade": 47.5
+      },
+      "top_signals": [
+        "Orderbook fino \u2014 liquidez desaparecendo",
+        "Colapso do suporte de compra"
+      ],
+      "funding_rate": 5e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": -0.3,
+      "estimated_drawdown": 4.0,
+      "cascade_target": 0.8363,
+      "volume_24h": 13220929.0,
+      "scanned_at": "2026-04-05T00:29:58Z"
+    },
+    {
+      "symbol": "TAGUSDT",
+      "price": 0.0006793,
+      "price_change_pct": -13.31,
+      "crash_score": 26.8,
+      "crash_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Manter vigil\u00e2ncia \u2014 sinais emergentes",
+      "signal_valid": false,
+      "component_scores": {
+        "liquidity": 60.2,
+        "leverage": 0.0,
+        "whale": 26.9,
+        "compression": 0.0,
+        "funding_oi": 0.0,
+        "cascade": 42.5
+      },
+      "top_signals": [
+        "Orderbook fino \u2014 liquidez desaparecendo",
+        "Colapso do suporte de compra"
+      ],
+      "funding_rate": 5e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": -1.03,
+      "estimated_drawdown": 4.0,
+      "cascade_target": 0.0007,
+      "volume_24h": 1512833.0,
+      "scanned_at": "2026-04-05T00:29:58Z"
+    },
+    {
+      "symbol": "UBUSDT",
+      "price": 0.02143,
+      "price_change_pct": -10.97,
+      "crash_score": 26.7,
+      "crash_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Manter vigil\u00e2ncia \u2014 sinais emergentes",
+      "signal_valid": false,
+      "component_scores": {
+        "liquidity": 64.1,
+        "leverage": 0.0,
+        "whale": 26.5,
+        "compression": 0.0,
+        "funding_oi": 0.0,
+        "cascade": 35.9
+      },
+      "top_signals": [
+        "Orderbook fino \u2014 liquidez desaparecendo",
+        "Colapso do suporte de compra",
+        "CVD negativo (-0.40) \u2014 press\u00e3o vendedora oculta",
+        "Lower highs detectados \u2192 breakout esperado para baixo"
+      ],
+      "funding_rate": 5e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 0.49,
+      "estimated_drawdown": 4.0,
+      "cascade_target": 0.0206,
+      "volume_24h": 624565.0,
+      "scanned_at": "2026-04-05T00:29:58Z"
+    },
+    {
+      "symbol": "BABYUSDT",
+      "price": 0.01271,
+      "price_change_pct": -10.68,
+      "crash_score": 26.7,
+      "crash_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Manter vigil\u00e2ncia \u2014 sinais emergentes",
+      "signal_valid": false,
+      "component_scores": {
+        "liquidity": 60.0,
+        "leverage": 0.0,
+        "whale": 25.7,
+        "compression": 5.1,
+        "funding_oi": 0.0,
+        "cascade": 38.4
+      },
+      "top_signals": [
+        "Orderbook fino \u2014 liquidez desaparecendo",
+        "Colapso do suporte de compra",
+        "CVD negativo (-0.57) \u2014 press\u00e3o vendedora oculta",
+        "Compress\u00e3o de volatilidade (0 velas) \u2014 breakout iminente",
+        "Lower highs detectados \u2192 breakout esperado para baixo"
+      ],
+      "funding_rate": -0.000262,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 0.0,
+      "estimated_drawdown": 4.0,
+      "cascade_target": 0.0122,
+      "volume_24h": 244735.0,
+      "scanned_at": "2026-04-05T00:29:58Z"
+    },
+    {
+      "symbol": "BANANAS31USDT",
+      "price": 0.011965,
+      "price_change_pct": -7.48,
+      "crash_score": 26.7,
+      "crash_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Manter vigil\u00e2ncia \u2014 sinais emergentes",
+      "signal_valid": false,
+      "component_scores": {
+        "liquidity": 62.1,
+        "leverage": 0.0,
+        "whale": 0.0,
+        "compression": 27.1,
+        "funding_oi": 0.0,
+        "cascade": 47.1
+      },
+      "top_signals": [
+        "Orderbook fino \u2014 liquidez desaparecendo",
+        "Colapso do suporte de compra",
+        "Compress\u00e3o de volatilidade (5 velas) \u2014 breakout iminente",
+        "Lower highs detectados \u2192 breakout esperado para baixo"
+      ],
+      "funding_rate": 5e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": -0.18,
+      "estimated_drawdown": 4.0,
+      "cascade_target": 0.0115,
+      "volume_24h": 467925.0,
+      "scanned_at": "2026-04-05T00:29:58Z"
+    }
+  ]
+}

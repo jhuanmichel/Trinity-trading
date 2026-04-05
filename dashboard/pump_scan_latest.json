@@ -1,0 +1,323 @@
+{
+  "scan_ts": "2026-04-05T00:30:40Z",
+  "scan_duration_s": 53.2,
+  "coins_scanned": 12,
+  "candidates": [
+    {
+      "symbol": "XAGUSDT",
+      "price": 72.98,
+      "price_change_pct": 0.0,
+      "pump_score": 24.3,
+      "pump_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Acumula\u00e7\u00e3o silenciosa \u2014 observar pr\u00f3ximas 15min",
+      "signal_valid": false,
+      "component_scores": {
+        "whale": 60.1,
+        "squeeze": 0.0,
+        "gravity": 10.0,
+        "breakout": 15.0,
+        "smart_money": 25.1
+      },
+      "top_signals": [
+        "Whale acumulando: $0.0M em ordens de compra",
+        "Absorption detectada \u2014 m\u00e3o forte absorvendo vendas"
+      ],
+      "funding_rate": 0.0,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 0.0,
+      "pump_target": 73.3449,
+      "volume_24h": 17458994.0,
+      "scanned_at": "2026-04-05T00:30:40Z"
+    },
+    {
+      "symbol": "SUIUSDT",
+      "price": 0.8699,
+      "price_change_pct": -0.23,
+      "pump_score": 18.5,
+      "pump_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Acumula\u00e7\u00e3o silenciosa \u2014 observar pr\u00f3ximas 15min",
+      "signal_valid": false,
+      "component_scores": {
+        "whale": 11.7,
+        "squeeze": 0.0,
+        "gravity": 21.3,
+        "breakout": 15.0,
+        "smart_money": 45.4
+      },
+      "top_signals": [
+        "Absorption detectada \u2014 m\u00e3o forte absorvendo vendas",
+        "Higher lows (3 consecutivos) \u2014 estrutura bullish formando"
+      ],
+      "funding_rate": -9.7e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 0.06,
+      "pump_target": 0.87425,
+      "volume_24h": 11261209.0,
+      "scanned_at": "2026-04-05T00:30:40Z"
+    },
+    {
+      "symbol": "SOLUSDT",
+      "price": 80.7,
+      "price_change_pct": 0.61,
+      "pump_score": 15.1,
+      "pump_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Acumula\u00e7\u00e3o silenciosa \u2014 observar pr\u00f3ximas 15min",
+      "signal_valid": false,
+      "component_scores": {
+        "whale": 14.6,
+        "squeeze": 0.0,
+        "gravity": 10.0,
+        "breakout": 45.0,
+        "smart_money": 13.7
+      },
+      "top_signals": [
+        "Compress\u00e3o ativa (38 velas) \u2014 breakout de alta iminente",
+        "Hidden buying: CVD 0.522 com pre\u00e7o comprimido"
+      ],
+      "funding_rate": 7.3e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": -0.0,
+      "pump_target": 81.1035,
+      "volume_24h": 241285680.0,
+      "scanned_at": "2026-04-05T00:30:40Z"
+    },
+    {
+      "symbol": "FARTCOINUSDT",
+      "price": 0.16545,
+      "price_change_pct": 1.18,
+      "pump_score": 14.3,
+      "pump_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Acumula\u00e7\u00e3o silenciosa \u2014 observar pr\u00f3ximas 15min",
+      "signal_valid": false,
+      "component_scores": {
+        "whale": 16.0,
+        "squeeze": 0.0,
+        "gravity": 24.3,
+        "breakout": 6.8,
+        "smart_money": 22.2
+      },
+      "top_signals": [
+        "Compress\u00e3o ativa (21 velas) \u2014 breakout de alta iminente",
+        "Higher lows (3 consecutivos) \u2014 estrutura bullish formando"
+      ],
+      "funding_rate": 5e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": -0.21,
+      "pump_target": 0.166277,
+      "volume_24h": 13761580.0,
+      "scanned_at": "2026-04-05T00:30:40Z"
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "price": 0.09184,
+      "price_change_pct": 0.56,
+      "pump_score": 12.6,
+      "pump_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Acumula\u00e7\u00e3o silenciosa \u2014 observar pr\u00f3ximas 15min",
+      "signal_valid": false,
+      "component_scores": {
+        "whale": 11.0,
+        "squeeze": 0.0,
+        "gravity": 21.0,
+        "breakout": 15.0,
+        "smart_money": 17.1
+      },
+      "top_signals": [
+        "Absorption detectada \u2014 m\u00e3o forte absorvendo vendas"
+      ],
+      "funding_rate": 0.0001,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 0.08,
+      "pump_target": 0.092299,
+      "volume_24h": 69298687.0,
+      "scanned_at": "2026-04-05T00:30:40Z"
+    },
+    {
+      "symbol": "PEPEUSDT",
+      "price": 3.399e-06,
+      "price_change_pct": 0.12,
+      "pump_score": 12.4,
+      "pump_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Acumula\u00e7\u00e3o silenciosa \u2014 observar pr\u00f3ximas 15min",
+      "signal_valid": false,
+      "component_scores": {
+        "whale": 0.6,
+        "squeeze": 0.0,
+        "gravity": 25.0,
+        "breakout": 45.0,
+        "smart_money": 2.3
+      },
+      "top_signals": [
+        "Compress\u00e3o ativa (48 velas) \u2014 breakout de alta iminente"
+      ],
+      "funding_rate": 0.0001,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": -0.08,
+      "pump_target": 3e-06,
+      "volume_24h": 22410029.0,
+      "scanned_at": "2026-04-05T00:30:40Z"
+    },
+    {
+      "symbol": "BNBUSDT",
+      "price": 592.95,
+      "price_change_pct": 0.88,
+      "pump_score": 12.2,
+      "pump_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Acumula\u00e7\u00e3o silenciosa \u2014 observar pr\u00f3ximas 15min",
+      "signal_valid": false,
+      "component_scores": {
+        "whale": 15.0,
+        "squeeze": 0.0,
+        "gravity": 0.0,
+        "breakout": 24.9,
+        "smart_money": 23.7
+      },
+      "top_signals": [
+        "Whale acumulando: $0.0M em ordens de compra",
+        "Volume crescendo 1.4x durante compress\u00e3o \u2014 acumula\u00e7\u00e3o",
+        "Absorption detectada \u2014 m\u00e3o forte absorvendo vendas"
+      ],
+      "funding_rate": 2.1e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 0.06,
+      "pump_target": 592.95,
+      "volume_24h": 17259511.0,
+      "scanned_at": "2026-04-05T00:30:40Z"
+    },
+    {
+      "symbol": "XAUTUSDT",
+      "price": 4637.5,
+      "price_change_pct": 0.07,
+      "pump_score": 11.4,
+      "pump_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Acumula\u00e7\u00e3o silenciosa \u2014 observar pr\u00f3ximas 15min",
+      "signal_valid": false,
+      "component_scores": {
+        "whale": 34.1,
+        "squeeze": 0.0,
+        "gravity": 0.0,
+        "breakout": 15.0,
+        "smart_money": 3.2
+      },
+      "top_signals": [],
+      "funding_rate": 0.0,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 0.02,
+      "pump_target": 4637.5,
+      "volume_24h": 14898625.0,
+      "scanned_at": "2026-04-05T00:30:40Z"
+    },
+    {
+      "symbol": "XRPUSDT",
+      "price": 1.3134,
+      "price_change_pct": -0.3,
+      "pump_score": 11.2,
+      "pump_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Acumula\u00e7\u00e3o silenciosa \u2014 observar pr\u00f3ximas 15min",
+      "signal_valid": false,
+      "component_scores": {
+        "whale": 11.4,
+        "squeeze": 0.0,
+        "gravity": 14.1,
+        "breakout": 2.2,
+        "smart_money": 25.8
+      },
+      "top_signals": [
+        "Absorption detectada \u2014 m\u00e3o forte absorvendo vendas"
+      ],
+      "funding_rate": -0.000127,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 0.06,
+      "pump_target": 1.3134,
+      "volume_24h": 39669330.0,
+      "scanned_at": "2026-04-05T00:30:40Z"
+    },
+    {
+      "symbol": "ADAUSDT",
+      "price": 0.2478,
+      "price_change_pct": 0.98,
+      "pump_score": 10.1,
+      "pump_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Acumula\u00e7\u00e3o silenciosa \u2014 observar pr\u00f3ximas 15min",
+      "signal_valid": false,
+      "component_scores": {
+        "whale": 2.0,
+        "squeeze": 0.0,
+        "gravity": 24.2,
+        "breakout": 15.0,
+        "smart_money": 12.4
+      },
+      "top_signals": [
+        "Hidden buying: CVD 0.458 com pre\u00e7o comprimido"
+      ],
+      "funding_rate": 7.2e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": -0.03,
+      "pump_target": 0.249039,
+      "volume_24h": 20864463.0,
+      "scanned_at": "2026-04-05T00:30:40Z"
+    },
+    {
+      "symbol": "AIOTUSDT",
+      "price": 0.02838,
+      "price_change_pct": -18.64,
+      "pump_score": 9.9,
+      "pump_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Acumula\u00e7\u00e3o silenciosa \u2014 observar pr\u00f3ximas 15min",
+      "signal_valid": false,
+      "component_scores": {
+        "whale": 2.1,
+        "squeeze": 0.0,
+        "gravity": 25.0,
+        "breakout": 0.0,
+        "smart_money": 21.9
+      },
+      "top_signals": [
+        "Higher lows (3 consecutivos) \u2014 estrutura bullish formando"
+      ],
+      "funding_rate": 5e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 0.46,
+      "pump_target": 0.028664,
+      "volume_24h": 29023555.0,
+      "scanned_at": "2026-04-05T00:30:40Z"
+    },
+    {
+      "symbol": "XAUUSDT",
+      "price": 4674.66,
+      "price_change_pct": 0.01,
+      "pump_score": 9.1,
+      "pump_probability": "LOW",
+      "urgency": "WATCH",
+      "recommended_action": "Acumula\u00e7\u00e3o silenciosa \u2014 observar pr\u00f3ximas 15min",
+      "signal_valid": false,
+      "component_scores": {
+        "whale": 8.9,
+        "squeeze": 0.0,
+        "gravity": 0.0,
+        "breakout": 15.0,
+        "smart_money": 23.3
+      },
+      "top_signals": [
+        "Absorption detectada \u2014 m\u00e3o forte absorvendo vendas"
+      ],
+      "funding_rate": -6.8e-05,
+      "long_short_ratio": 1.0,
+      "oi_change_pct": 0.01,
+      "pump_target": 4674.66,
+      "volume_24h": 14193692.0,
+      "scanned_at": "2026-04-05T00:30:40Z"
+    }
+  ]
+}
