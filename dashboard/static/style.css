@@ -966,11 +966,15 @@ body {
 }
 
 .sparkline-container {
-  min-height: 76px;
+  height: 240px;
+  min-height: 240px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 4px;
 }
 
 .spark-loading {
-  height: 76px;
+  height: 240px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -978,13 +982,9 @@ body {
   color: var(--text-dim);
 }
 
-.spark-labels {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 5px;
-  font-size: 10px;
-  font-family: var(--mono);
-  color: var(--text-dim);
+/* TV chart overrides — remove blue focus outline on canvas */
+.sparkline-container canvas {
+  outline: none !important;
 }
 
 /* ── LIQUIDITY ZONES ─────────────────────────────────────────────────────── */

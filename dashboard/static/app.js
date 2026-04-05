@@ -10,6 +10,21 @@ let _liqLevels    = [];   // liquidation heatmap levels
 let _liqApiError  = null; // última mensagem de erro da API de liquidações
 let _liqImgUrl    = null; // URL da screenshot Apify (fallback quando sem dados estruturados)
 
+// TradingView Lightweight Charts — estado global
+let _tvChart        = null;
+let _tvCandleSeries = null;
+let _tvVolSeries    = null;
+let _tvChartCont    = null;   // referência ao container DOM atual
+let _tvPriceLines   = [];     // referências às price lines ativas
+let _chartLevels    = {};     // {entry, stop, tp1, tp2, tp3} do card BTC
+
+// Responsive resize — atualiza largura do chart quando janela muda
+window.addEventListener('resize', () => {
+  if (!_tvChart) return;
+  const el = document.getElementById('sparklineChart');
+  if (el) _tvChart.applyOptions({ width: el.clientWidth });
+});
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function scoreColor(s) {
@@ -164,61 +179,144 @@ function liquidityZones(btc) {
   </div>`;
 }
 
-// ── Sparkline ─────────────────────────────────────────────────────────────
+// ── TradingView Lightweight Charts ────────────────────────────────────────
 
-function renderSparklineSVG(candles) {
-  if (!candles || candles.length < 2) {
-    return '<div class="spark-loading">Carregando gráfico...</div>';
+function initTVChart(el) {
+  // Destrói chart anterior se existir
+  if (_tvChart) {
+    try { _tvChart.remove(); } catch (_) {}
   }
-  const w = 400, h = 76, px = 4, py = 6;
-  const closes = candles.map(c => c.c);
-  const highs  = candles.map(c => c.h);
-  const lows   = candles.map(c => c.l);
-  const minP   = Math.min(...lows);
-  const maxP   = Math.max(...highs);
-  const range  = maxP - minP || 1;
-  const xS = i => px + (i / (candles.length - 1)) * (w - px * 2);
-  const yS = p => py + (h - py * 2) - ((p - minP) / range) * (h - py * 2);
+  _tvChart = null; _tvCandleSeries = null; _tvVolSeries = null; _tvPriceLines = [];
 
-  const pathD = closes.map((c, i) => `${i === 0 ? 'M' : 'L'}${xS(i).toFixed(1)},${yS(c).toFixed(1)}`).join(' ');
-  const fillD = `${pathD} L${xS(candles.length-1).toFixed(1)},${h} L${px},${h} Z`;
+  const chart = LightweightCharts.createChart(el, {
+    width:  el.clientWidth || 400,
+    height: 240,
+    layout: {
+      background: { type: 'solid', color: '#0B0F14' },
+      textColor:  '#8B98A5',
+      fontSize:   10,
+      fontFamily: "JetBrains Mono, monospace",
+    },
+    grid: {
+      vertLines: { color: 'rgba(26, 34, 45, 0.8)' },
+      horzLines: { color: 'rgba(26, 34, 45, 0.6)' },
+    },
+    crosshair: {
+      mode: 1,   // Normal
+      vertLine: { color: 'rgba(139,152,165,0.35)', labelBackgroundColor: '#161C25' },
+      horzLine: { color: 'rgba(139,152,165,0.35)', labelBackgroundColor: '#161C25' },
+    },
+    rightPriceScale: {
+      borderColor: '#1A222D',
+      textColor:   '#8B98A5',
+      scaleMargins: { top: 0.08, bottom: 0.22 },
+    },
+    timeScale: {
+      borderColor:     '#1A222D',
+      timeVisible:     true,
+      secondsVisible:  false,
+      rightOffset:     6,
+    },
+    handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true },
+    handleScale:  { mouseWheel: true, pinch: true },
+  });
 
-  const isUp = closes[closes.length-1] >= closes[0];
-  const col  = isUp ? 'var(--green)' : 'var(--red)';
-  const lastX = xS(candles.length-1).toFixed(1);
-  const lastY = yS(closes[closes.length-1]).toFixed(1);
+  // Candlestick series
+  const candleSeries = chart.addCandlestickSeries({
+    upColor:         '#00FFB2',
+    downColor:       '#FF4D4F',
+    borderUpColor:   '#00FFB2',
+    borderDownColor: '#FF4D4F',
+    wickUpColor:     'rgba(0, 255, 178, 0.65)',
+    wickDownColor:   'rgba(255, 77, 79, 0.65)',
+  });
 
-  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:${h}px;display:block">
-    <defs>
-      <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${col}" stop-opacity="0.18"/>
-        <stop offset="100%" stop-color="${col}" stop-opacity="0"/>
-      </linearGradient>
-    </defs>
-    <path d="${fillD}" fill="url(#sg)"/>
-    <path d="${pathD}" fill="none" stroke="${col}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
-    <circle cx="${lastX}" cy="${lastY}" r="2.5" fill="${col}"/>
-  </svg>
-  <div class="spark-labels">
-    <span class="spark-low">$${Math.round(minP).toLocaleString('en-US')}</span>
-    <span class="spark-high">$${Math.round(maxP).toLocaleString('en-US')}</span>
-  </div>`;
+  // Volume histogram — ocupa os 20% inferiores
+  const volSeries = chart.addHistogramSeries({
+    priceFormat:  { type: 'volume' },
+    priceScaleId: 'vol',
+    lastValueVisible: false,
+    priceLineVisible: false,
+  });
+  chart.priceScale('vol').applyOptions({
+    scaleMargins: { top: 0.80, bottom: 0 },
+  });
+
+  _tvChart        = chart;
+  _tvCandleSeries = candleSeries;
+  _tvVolSeries    = volSeries;
+  _tvChartCont    = el;
 }
 
-async function updateSparkline() {
+async function updateTVChart() {
   const el = document.getElementById('sparklineChart');
   if (!el) return;
+
+  // Se o container DOM mudou (card re-renderizou), reinicializa o chart
+  if (_tvChartCont !== el) initTVChart(el);
+
   try {
-    const candles = await fetch(`/api/candles?interval=${_sparkTf}&limit=60`).then(r => r.json());
-    if (!Array.isArray(candles)) return;
-    el.innerHTML = renderSparklineSVG(candles);
-  } catch(_) {}
+    const candles = await fetch(`/api/candles?interval=${_sparkTf}&limit=150`).then(r => r.json());
+    if (!Array.isArray(candles) || candles.length < 2) return;
+
+    // Formata dados para Lightweight Charts (tempo em segundos)
+    const candleData = candles.map(c => ({
+      time:  Math.floor(c.t / 1000),
+      open:  c.o,
+      high:  c.h,
+      low:   c.l,
+      close: c.c,
+    }));
+    const volData = candles.map(c => ({
+      time:  Math.floor(c.t / 1000),
+      value: c.v,
+      color: c.c >= c.o ? 'rgba(0,255,178,0.18)' : 'rgba(255,77,79,0.18)',
+    }));
+
+    _tvCandleSeries.setData(candleData);
+    _tvVolSeries.setData(volData);
+
+    // Remove price lines anteriores e adiciona novas (Entry/Stop/TP)
+    _tvPriceLines.forEach(pl => {
+      try { _tvCandleSeries.removePriceLine(pl); } catch (_) {}
+    });
+    _tvPriceLines = [];
+
+    const LEVELS = [
+      { key: 'tp3',   label: 'TP3',   color: 'rgba(0,255,178,0.45)' },
+      { key: 'tp2',   label: 'TP2',   color: 'rgba(0,255,178,0.65)' },
+      { key: 'tp1',   label: 'TP1',   color: 'rgba(0,255,178,0.90)' },
+      { key: 'entry', label: 'Entry', color: '#F0B429' },
+      { key: 'stop',  label: 'Stop',  color: 'rgba(255,77,79,0.90)' },
+    ];
+    for (const cfg of LEVELS) {
+      const price = _chartLevels[cfg.key];
+      if (price && price > 0) {
+        _tvPriceLines.push(_tvCandleSeries.createPriceLine({
+          price,
+          color:            cfg.color,
+          lineWidth:        1,
+          lineStyle:        2,   // Dashed
+          axisLabelVisible: true,
+          title:            cfg.label,
+        }));
+      }
+    }
+
+    _tvChart.timeScale().fitContent();
+
+  } catch (e) {
+    console.warn('[Trinity] TV chart error:', e);
+  }
 }
+
+// Alias para compatibilidade com chamadas existentes
+const updateSparkline = updateTVChart;
 
 function onSparkTf(tf) {
   _sparkTf = tf;
   document.querySelectorAll('.spark-tf-btn').forEach(b => b.classList.toggle('active', b.dataset.tf === tf));
-  updateSparkline();
+  updateTVChart();
 }
 
 // ── Section 1: Radar ──────────────────────────────────────────────────────
@@ -353,6 +451,15 @@ function renderBTCCard(data) {
   const dirCls   = btc.direction?.includes('LONG') ? 'dir-long' : btc.direction?.includes('SHORT') ? 'dir-short' : '';
   const stale    = isSignalStale(btc.entry, btc.price, data.last_updated);
   const ageH     = Math.floor(dataAgeSeconds(data.last_updated) / 3600);
+
+  // Atualiza níveis para price lines no chart TradingView
+  _chartLevels = (stale || !btc.entry) ? {} : {
+    entry: btc.entry || null,
+    stop:  btc.stop  || null,
+    tp1:   btc.tp1   || null,
+    tp2:   btc.tp2   || null,
+    tp3:   btc.tp3   || null,
+  };
   const staleBanner = stale ? `
     <div style="background:rgba(220,50,50,0.15);border:1px solid rgba(220,50,50,0.4);border-radius:6px;
                 padding:7px 12px;margin:0 0 10px 0;font-size:11px;color:rgba(255,100,100,0.9);display:flex;
