@@ -5,8 +5,15 @@ Envia sinais formatados e profissionais para o seu chat.
 import asyncio
 import requests
 import json
+import time
 from datetime import datetime
 from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, SYMBOL, TIMEFRAME, SCORE_THRESHOLD, INST_INTERVAL_MINUTES
+
+# ── Cooldown para mensagens de status/resumo (evita spam sem sinal) ───────────
+_last_status_ts:  float = 0.0
+_last_summary_ts: float = 0.0
+STATUS_COOLDOWN_H  = 4   # status "sem sinal" no máximo a cada 4h
+SUMMARY_COOLDOWN_H = 6   # "Atualização do Agente" no máximo a cada 6h
 
 
 def send_message(text: str) -> bool:
@@ -122,7 +129,14 @@ def send_signal(price: float, score_data: dict, ai_analysis: dict, analyses: dic
 
 
 def send_summary(price: float, score_data: dict) -> bool:
-    """Envia resumo periódico mesmo sem sinal (para monitoramento)."""
+    """Envia resumo periódico mesmo sem sinal (para monitoramento).
+    Respeitado cooldown de SUMMARY_COOLDOWN_H horas para evitar spam."""
+    global _last_summary_ts
+    now_ts = time.time()
+    if (now_ts - _last_summary_ts) < SUMMARY_COOLDOWN_H * 3600:
+        return False  # ainda no cooldown — silencia
+    _last_summary_ts = now_ts
+
     now = datetime.now().strftime("%d/%m %H:%M")
     msg = f"""
 📊 <b>Atualização do Agente</b> — {now}
@@ -752,8 +766,17 @@ def send_status_update(
 ) -> None:
     """
     Envia atualização periódica de status ao Telegram mesmo sem sinal de trade.
-    Garante que o usuário receba feedback a cada ciclo de análise.
+    Respeitado cooldown de STATUS_COOLDOWN_H horas, exceto se houver rare neural setup ativo.
     """
+    global _last_status_ts
+    now_ts    = time.time()
+    nd        = neural_data or {}
+    has_rare  = nd.get("rare_neural_setup", False)
+    in_cooldown = (now_ts - _last_status_ts) < STATUS_COOLDOWN_H * 3600
+    if in_cooldown and not has_rare:
+        return  # silencia dentro do cooldown (sem rare setup)
+    _last_status_ts = now_ts
+
     try:
         now = datetime.now().strftime("%d/%m %H:%M")
 
