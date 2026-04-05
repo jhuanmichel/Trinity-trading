@@ -16,6 +16,7 @@ BASE_DIR         = Path(__file__).parent.parent
 STATE_FILE       = BASE_DIR / "dashboard" / "current_state.json"
 CRASH_SCAN_FILE  = BASE_DIR / "dashboard" / "crash_scan_latest.json"
 PUMP_SCAN_FILE   = BASE_DIR / "dashboard" / "pump_scan_latest.json"
+BACKTEST_FILE    = BASE_DIR / "dashboard" / "backtest_results.json"
 LOGS_DIR         = BASE_DIR / "logs"
 STATIC_DIR       = BASE_DIR / "dashboard" / "static"
 
@@ -220,6 +221,43 @@ def get_status():
     if STATE_FILE.exists():
         return JSONResponse(content=json.loads(STATE_FILE.read_text()))
     return JSONResponse(content={"status": "no_data"})
+
+
+@app.get("/api/backtest-results")
+def get_backtest_results():
+    """Resultados do backtest walk-forward — métricas, equity curve e trades."""
+    if BACKTEST_FILE.exists():
+        return JSONResponse(content=json.loads(BACKTEST_FILE.read_text()))
+    return JSONResponse(content={"status": "no_data", "trades": [], "metrics": {}, "equity_curve": []})
+
+
+_backtest_running = False
+
+
+async def _run_backtest_task():
+    """Executa backtest em background e salva resultados."""
+    global _backtest_running
+    _backtest_running = True
+    try:
+        import sys as _sys
+        _sys.path.insert(0, str(BASE_DIR))
+        from backtester.run_backtest import run as _bt_run
+        await asyncio.to_thread(_bt_run)
+    except Exception as _e:
+        import logging as _log
+        _log.getLogger(__name__).error(f"Backtest task falhou: {_e}")
+    finally:
+        _backtest_running = False
+
+
+@app.get("/api/run-backtest")
+async def trigger_backtest():
+    """Dispara backtest assíncrono — retorna 202 se iniciou, 409 se já em execução."""
+    global _backtest_running
+    if _backtest_running:
+        return JSONResponse(content={"status": "already_running"}, status_code=409)
+    asyncio.create_task(_run_backtest_task())
+    return JSONResponse(content={"status": "started"}, status_code=202)
 
 
 @app.get("/api/price")

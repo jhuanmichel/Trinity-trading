@@ -89,7 +89,52 @@
       </div>
     </section>
 
-    <!-- ── SECTION 4: CRASH + PUMP RADAR (lado a lado) ──────────────────────── -->
+    <!-- ── SECTION 4: BACKTEST PERFORMANCE ─────────────────────────────────── -->
+    <section class="section" id="backtestSection">
+      <div class="section-header">
+        <h2 class="section-title">BACKTEST PERFORMANCE</h2>
+        <span class="section-divider"></span>
+        <span class="section-sub" id="btSubtitle">180 dias · BTC/USDT · SMC Engine · 1% risco/trade</span>
+      </div>
+
+      <!-- Métricas — 8 cards -->
+      <div class="bt-metrics-grid" id="btMetrics">
+        <div class="bt-metric-card skeleton-card"></div>
+        <div class="bt-metric-card skeleton-card"></div>
+        <div class="bt-metric-card skeleton-card"></div>
+        <div class="bt-metric-card skeleton-card"></div>
+        <div class="bt-metric-card skeleton-card"></div>
+        <div class="bt-metric-card skeleton-card"></div>
+        <div class="bt-metric-card skeleton-card"></div>
+        <div class="bt-metric-card skeleton-card"></div>
+      </div>
+
+      <!-- Equity Curve -->
+      <div class="bt-chart-wrap" id="btChartWrap"></div>
+
+      <!-- Tabela de Trades -->
+      <div class="table-wrapper" style="margin-top:16px">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Dir</th>
+              <th>Score</th>
+              <th>Entry</th>
+              <th>Saída</th>
+              <th>R</th>
+              <th>P&amp;L%</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="btBody">
+            <tr><td colspan="8" class="table-empty">Carregando backtest...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── SECTION 5: CRASH + PUMP RADAR (lado a lado) ──────────────────────── -->
     <section class="section radar-dual-section" id="radarSection">
 
       <!-- CRASH RADAR -->

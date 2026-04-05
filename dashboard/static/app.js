@@ -1204,6 +1204,179 @@ async function updatePumpRadar() {
   }
 }
 
+// ── Backtest Performance ─────────────────────────────────────────────────────
+
+let _btChart = null;
+let _btChartCont = null;
+
+function _initBtChart(el) {
+  if (_btChart) { try { _btChart.remove(); } catch (_) {} }
+  _btChart = null;
+
+  const chart = LightweightCharts.createChart(el, {
+    width:  el.clientWidth || 600,
+    height: 200,
+    layout: {
+      background: { type: 'solid', color: '#0B0F14' },
+      textColor: '#8B98A5',
+      fontSize: 10,
+      fontFamily: "JetBrains Mono, monospace",
+    },
+    grid: {
+      vertLines: { color: 'rgba(26,34,45,0.8)' },
+      horzLines: { color: 'rgba(26,34,45,0.6)' },
+    },
+    crosshair: {
+      mode: 1,
+      vertLine: { color: 'rgba(139,152,165,0.35)', labelBackgroundColor: '#161C25' },
+      horzLine: { color: 'rgba(139,152,165,0.35)', labelBackgroundColor: '#161C25' },
+    },
+    rightPriceScale: { borderColor: '#1A222D', textColor: '#8B98A5' },
+    timeScale: { borderColor: '#1A222D', timeVisible: false, rightOffset: 4 },
+    handleScroll: true,
+    handleScale:  true,
+  });
+
+  const areaSeries = chart.addAreaSeries({
+    lineColor:  '#00FFB2',
+    topColor:   'rgba(0,255,178,0.20)',
+    bottomColor:'rgba(0,255,178,0.00)',
+    lineWidth: 2,
+    priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+  });
+
+  _btChart     = chart;
+  _btChartCont = el;
+  return areaSeries;
+}
+
+function renderBtEquityCurve(equityCurve) {
+  const el = document.getElementById('btChartWrap');
+  if (!el || !equityCurve || equityCurve.length < 2) return;
+
+  const areaSeries = (_btChartCont !== el) ? _initBtChart(el) : (() => {
+    // Reusa chart existente — recria series
+    if (_btChart) { try { _btChart.remove(); } catch (_) {} }
+    return _initBtChart(el);
+  })();
+
+  // Converte datas para epoch segundos (YYYY-MM-DD → timestamp)
+  const data = equityCurve.map(p => ({
+    time:  Math.floor(new Date(p.date + 'T12:00:00Z').getTime() / 1000),
+    value: p.equity,
+  })).sort((a, b) => a.time - b.time);
+
+  // Remove duplicatas de mesmo dia (mantém último)
+  const deduped = [];
+  const seen = new Set();
+  for (const pt of data) {
+    if (!seen.has(pt.time)) { seen.add(pt.time); deduped.push(pt); }
+  }
+
+  areaSeries.setData(deduped);
+  if (_btChart) _btChart.timeScale().fitContent();
+}
+
+function renderBtMetrics(metrics) {
+  const el = document.getElementById('btMetrics');
+  if (!el || !metrics) return;
+
+  const wr   = metrics.win_rate_pct   ?? 0;
+  const sh   = metrics.sharpe_ratio   ?? 0;
+  const exp  = metrics.expectancy_r   ?? 0;
+  const dd   = metrics.max_drawdown_pct ?? 0;
+  const pf   = metrics.profit_factor  ?? 0;
+  const ret  = metrics.total_return_pct ?? 0;
+  const aw   = metrics.avg_win_r      ?? 0;
+  const al   = metrics.avg_loss_r     ?? 0;
+  const tot  = metrics.total_trades   ?? 0;
+  const wins = metrics.wins           ?? 0;
+  const loss = metrics.losses         ?? 0;
+
+  function card(label, value, sub, cls = 'bt-neutral') {
+    return `<div class="bt-metric-card ${cls}">
+      <div class="bt-metric-label">${label}</div>
+      <div class="bt-metric-value">${value}</div>
+      <div class="bt-metric-sub">${sub}</div>
+    </div>`;
+  }
+
+  el.innerHTML = [
+    card('Win Rate',    `${wr.toFixed(1)}%`,       `${wins}W / ${loss}L`,         wr >= 50 ? 'bt-positive' : 'bt-negative'),
+    card('Sharpe',      sh.toFixed(2),              sh >= 1 ? 'Sólido' : sh >= 0.5 ? 'Razoável' : 'Fraco',  sh >= 1 ? 'bt-positive' : sh >= 0.5 ? 'bt-neutral' : 'bt-negative'),
+    card('Expectância', `${exp >= 0 ? '+' : ''}${exp.toFixed(3)}R`, 'por trade',  exp > 0 ? 'bt-positive' : 'bt-negative'),
+    card('Max DD',      `${dd.toFixed(1)}%`,        'drawdown máx.',               dd > -5 ? 'bt-positive' : dd > -15 ? 'bt-neutral' : 'bt-negative'),
+    card('Trades',      tot,                        `${metrics.period_days ?? 180} dias`, 'bt-neutral'),
+    card('Profit F.',   pf.toFixed(2),              pf >= 1.5 ? 'Excelente' : pf >= 1 ? 'Positivo' : 'Negativo', pf >= 1.5 ? 'bt-positive' : pf >= 1 ? 'bt-neutral' : 'bt-negative'),
+    card('Avg Win',     `+${aw.toFixed(2)}R`,       'por trade ganho',             'bt-positive'),
+    card('Retorno',     `${ret >= 0 ? '+' : ''}${ret.toFixed(1)}%`, `capital: $${(metrics.final_capital ?? 0).toLocaleString('pt-BR', {maximumFractionDigits:0})}`, ret > 0 ? 'bt-positive' : 'bt-negative'),
+  ].join('');
+}
+
+function renderBtTrades(trades) {
+  const tbody = document.getElementById('btBody');
+  if (!tbody) return;
+  if (!trades || trades.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="table-empty">Nenhum trade no período</td></tr>';
+    return;
+  }
+
+  const rows = [...trades].reverse().slice(0, 100).map(t => {
+    const isLong = t.direction === 'LONG';
+    const dirCls = isLong ? 'c-bull' : 'c-bear';
+    const resCls = t.result === 'WIN' ? 'bt-win' : t.result === 'LOSS' ? 'bt-loss' : 'bt-timeout';
+    const pnlSign = t.pnl_r >= 0 ? '+' : '';
+    const statusMap = { TP3: '🟢 TP3', TP2: '🟡 TP2', TP1: '🟠 TP1', STOP: '🔴 STOP', TIMEOUT: '⏱ TIMEOUT' };
+    const dt = new Date(t.timestamp);
+    const dateStr = `${dt.getUTCDate().toString().padStart(2,'0')}/${(dt.getUTCMonth()+1).toString().padStart(2,'0')}`;
+
+    return `<tr>
+      <td style="color:var(--text-dim);font-size:10px">${dateStr}</td>
+      <td class="${dirCls}" style="font-weight:700">${t.direction}</td>
+      <td style="font-size:11px">${(t.smc_score||0).toFixed(1)}</td>
+      <td style="font-size:11px;font-family:'JetBrains Mono',monospace">${(t.entry||0).toLocaleString('en-US',{maximumFractionDigits:1})}</td>
+      <td style="font-size:11px;font-family:'JetBrains Mono',monospace">${(t.exit_price||0).toLocaleString('en-US',{maximumFractionDigits:1})}</td>
+      <td class="${resCls}" style="font-family:'JetBrains Mono',monospace">${pnlSign}${(t.pnl_r||0).toFixed(2)}R</td>
+      <td class="${resCls}" style="font-family:'JetBrains Mono',monospace">${pnlSign}${(t.pnl_pct||0).toFixed(2)}%</td>
+      <td class="${resCls}">${statusMap[t.exit_reason] || t.exit_reason}</td>
+    </tr>`;
+  });
+
+  tbody.innerHTML = rows.join('');
+}
+
+async function updateBacktestResults() {
+  try {
+    const data = await fetch('/api/backtest-results').then(r => r.json());
+
+    if (data.status === 'no_data' || !data.metrics || !data.metrics.total_trades) {
+      document.getElementById('btMetrics').innerHTML =
+        '<div class="bt-metric-card bt-neutral" style="grid-column:1/-1;text-align:center">' +
+        '<div class="bt-metric-label">STATUS</div>' +
+        '<div class="bt-metric-value" style="font-size:14px">Backtest não executado</div>' +
+        '<div class="bt-metric-sub">Execute: python -m backtester.run_backtest</div>' +
+        '</div>';
+      return;
+    }
+
+    const m = data.metrics;
+    renderBtMetrics({ ...m, period_days: data.config?.period_days });
+    renderBtEquityCurve(data.equity_curve || []);
+    renderBtTrades(data.trades || []);
+
+    const subtitle = document.getElementById('btSubtitle');
+    if (subtitle && data.config) {
+      const gen = data.generated_at ? new Date(data.generated_at) : null;
+      const genStr = gen ? gen.toLocaleDateString('pt-BR') : '';
+      subtitle.textContent =
+        `${data.config.period_days} dias · BTC/USDT · SMC Engine · ` +
+        `${data.config.risk_per_trade_pct}% risco/trade · gerado ${genStr}`;
+    }
+  } catch (e) {
+    console.warn('[Trinity] Backtest fetch error:', e);
+  }
+}
+
 // Init
 refresh();
 priceTick();
@@ -1211,12 +1384,14 @@ updateLiqHeatmap();
 updateLiqScreenshot();                          // busca URL da screenshot Apify
 updateCrashRadar();                             // Crash Radar — primeiro carregamento
 updatePumpRadar();                              // Pump Radar — primeiro carregamento
-setInterval(refresh,             REFRESH_MS);
-setInterval(priceTick,           PRICE_MS);
-setInterval(clockTick,           1000);
-setInterval(updateSparkline,     30_000);
-setInterval(updateLiqHeatmap,    300_000);      // 5min — respeita rate limit Coinglass
-setInterval(updateLiqScreenshot, 300_000);      // 5min — sincroniza com ciclo do servidor
-setInterval(updateCrashRadar,    CRASH_REFRESH_MS); // 30s — sincroniza com ciclo do scanner
-setInterval(updatePumpRadar,     PUMP_REFRESH_MS);  // 30s — sincroniza com ciclo do scanner
+updateBacktestResults();                        // Backtest Performance — primeiro carregamento
+setInterval(refresh,                REFRESH_MS);
+setInterval(priceTick,              PRICE_MS);
+setInterval(clockTick,              1000);
+setInterval(updateSparkline,        30_000);
+setInterval(updateLiqHeatmap,       300_000);      // 5min — respeita rate limit Coinglass
+setInterval(updateLiqScreenshot,    300_000);      // 5min — sincroniza com ciclo do servidor
+setInterval(updateCrashRadar,       CRASH_REFRESH_MS); // 30s — sincroniza com ciclo do scanner
+setInterval(updatePumpRadar,        PUMP_REFRESH_MS);  // 30s — sincroniza com ciclo do scanner
+setInterval(updateBacktestResults,  120_000);      // 2min — atualiza métricas de backtest
 clockTick();

@@ -1610,3 +1610,95 @@ body {
 }
 .pump-fab-icon { font-size: 18px; line-height: 1; }
 .pump-fab-label { font-family: 'Inter', sans-serif; }
+
+/* ── Backtest Performance Section ──────────────────────────────────────────── */
+.bt-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+@media (max-width: 900px) {
+  .bt-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .bt-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.bt-metric-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 72px;
+}
+.bt-metric-card.skeleton-card {
+  min-height: 72px;
+}
+.bt-metric-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.bt-metric-value {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  line-height: 1.1;
+}
+.bt-metric-sub {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+}
+.bt-metric-card.bt-positive .bt-metric-value { color: var(--bull); }
+.bt-metric-card.bt-negative .bt-metric-value { color: var(--bear); }
+.bt-metric-card.bt-neutral  .bt-metric-value { color: var(--text); }
+
+/* Equity curve container */
+.bt-chart-wrap {
+  height: 200px;
+  min-height: 200px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.bt-chart-wrap canvas {
+  outline: none !important;
+}
+
+/* Trade result badges */
+.bt-win  { color: var(--bull); font-weight: 700; }
+.bt-loss { color: var(--bear); font-weight: 700; }
+.bt-timeout { color: var(--text-dim); }
+
+/* Indicador de status do backtest */
+.bt-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 8px;
+}
+.bt-status-badge.ready {
+  background: rgba(0,255,178,0.10);
+  color: var(--bull);
+  border: 1px solid rgba(0,255,178,0.25);
+}
+.bt-status-badge.no-data {
+  background: rgba(139,152,165,0.10);
+  color: var(--text-muted);
+  border: 1px solid rgba(139,152,165,0.20);
+}
