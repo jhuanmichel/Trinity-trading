@@ -1,23 +1,26 @@
 """
-altcoin_market_scanner.py — Scanner MEXC Futures (Cap. 19)
+altcoin_market_scanner.py — Scanner MEXC Futures + Enrichment (Cap. 19)
 
-Escaneia altcoins em MEXC Linear Perpetuals filtrando candidatos de crash.
-Migrado de Bybit V5 → MEXC Futures (Bybit/Binance bloqueados no Render/AWS).
+Pipeline de dados por coin:
+  1. MEXC Futures /ticker      → preço, volume, funding single-exchange
+  2. MEXC Futures /openInterest → OI em contratos
+  3. MEXC Futures /kline        → 48 candles 15m
+  4. MEXC Futures /deals        → 100 trades recentes
+  5. MEXC Futures /depth        → orderbook (pode retornar 403 → vazio)
+  6. CoinGlass L/S ratio        → long/short ratio real (cache 5min)
+  7. CoinGlass funding multi-ex → média de funding em N exchanges (cache 5min)
+  8. MEXC Spot volume           → volume spot 24h para ratio spot/perp
 
-MEXC Futures endpoints (públicos, sem API key):
-  Base: https://contract.mexc.com/api/v1/contract
-  - GET /ticker                     → todos os tickers
-  - GET /ticker?symbol=BTC_USDT     → ticker único
-  - GET /kline/{symbol}?interval=Min15&start=&end=
-  - GET /openInterest?symbol=BTC_USDT
-  - GET /deals?symbol=BTC_USDT&limit=100
-  - GET /depth?symbol=BTC_USDT&limit=50  (pode retornar 403, defaulta para vazio)
-
-Formato de símbolo MEXC: BTC_USDT (underscore) — convertido para BTCUSDT na saída.
+MEXC Futures: https://contract.mexc.com/api/v1/contract
+MEXC Spot:    https://api.mexc.com/api/v3
+CoinGlass v3: https://open-api-v3.coinglass.com/api
 """
 import logging
+import os
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 from typing import List, Optional
 
 import requests
@@ -26,10 +29,15 @@ log = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 MEXC_CONTRACT        = "https://contract.mexc.com/api/v1/contract"
+MEXC_SPOT            = "https://api.mexc.com/api/v3"
+CG_BASE              = "https://open-api-v3.coinglass.com/api"
+
 UNIVERSE_CACHE_TTL   = 300
 HOT_SCAN_TOP_N       = 50
 REQUEST_TIMEOUT      = 10
 MAX_WORKERS          = 10
+ENRICH_CACHE_TTL     = 300   # 5min — mesmo TTL do universo
+
 EXCLUDE_SYMBOLS      = {
     "BTCUSDT", "ETHUSDT",
     "DEFIUSDT", "ALTUSDT",
@@ -39,11 +47,24 @@ MIN_VOLUME_24H_USD   = 10_000_000
 MIN_PRICE_CHANGE_PCT = 2.5
 
 _universe_cache: dict = {"data": [], "ts": 0.0}
+_ls_cache:       dict = {}   # {symbol: {"v": float, "ts": float}}
+_fund_cache:     dict = {}   # {symbol: {"v": float|None, "ts": float}}
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; TradingBot/1.0)",
     "Accept": "application/json",
 }
+
+# Lazy-load CoinGlass API key (evita import no topo que pode falhar em alguns ambientes)
+def _cg_key() -> str:
+    try:
+        _base = Path(__file__).parent.parent.parent.parent
+        if str(_base) not in sys.path:
+            sys.path.insert(0, str(_base))
+        from config import COINGLASS_API_KEY  # type: ignore
+        return COINGLASS_API_KEY or ""
+    except Exception:
+        return os.getenv("COINGLASS_API_KEY", "")
 
 
 # ── Helpers de símbolo ────────────────────────────────────────────────────────
@@ -58,6 +79,11 @@ def _to_mexc(symbol: str) -> str:
 def _from_mexc(symbol: str) -> str:
     """BTC_USDT → BTCUSDT"""
     return symbol.replace("_", "")
+
+
+def _to_cg(symbol: str) -> str:
+    """SOLUSDT → SOL (CoinGlass usa coin base)"""
+    return symbol.replace("USDT", "").replace("_", "")
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -84,36 +110,50 @@ def fetch_coin_data(symbol: str) -> Optional[dict]:
     """Busca dados completos de um símbolo para análise de crash."""
     try:
         mexc_sym = _to_mexc(symbol)
-        ticker   = _get_ticker(mexc_sym)
-        funding  = float(ticker.get("fundingRate", 0)) if ticker else 0.0
-        oi       = _get_open_interest(mexc_sym)
-        ob       = _get_orderbook(mexc_sym)
-        klines   = _get_klines(mexc_sym)
-        trades   = _get_recent_trades(mexc_sym)
+
+        # ── Dados MEXC Futures ──────────────────────────────────────────────
+        ticker  = _get_ticker(mexc_sym)
+        oi      = _get_open_interest(mexc_sym)
+        ob      = _get_orderbook(mexc_sym)
+        klines  = _get_klines(mexc_sym)
+        trades  = _get_recent_trades(mexc_sym)
 
         if not ticker:
             return None
 
-        price     = float(ticker.get("lastPrice", 0))
-        oi_usd    = float(oi) * price if oi else 0.0
-        oi_change = _estimate_oi_change(symbol, oi_usd)
+        funding_single = float(ticker.get("fundingRate", 0))
+        price          = float(ticker.get("lastPrice", 0))
+        oi_usd         = float(oi) * price if oi else 0.0
+        oi_change      = _estimate_oi_change(symbol, oi_usd)
+        vol_futures    = float(ticker.get("turnover24", 0) or ticker.get("volume24", 0) or 0)
 
-        vol_24h = float(ticker.get("turnover24", 0) or ticker.get("volume24", 0) or 0)
+        # ── Enriquecimento multi-fonte ──────────────────────────────────────
+        key        = _cg_key()
+        ls_ratio   = _get_ls_ratio_cg(symbol, key)
+        fund_multi = _get_funding_multi_cg(symbol, key)
+        spot_vol   = _get_spot_volume_mexc(symbol)
+
+        funding_final = fund_multi if fund_multi is not None else funding_single
+        spot_futures  = round(vol_futures / spot_vol, 2) if spot_vol > 0 else 1.0
 
         return {
-            "symbol":           symbol,
-            "price":            price,
-            "price_change_pct": float(ticker.get("riseFallRate", 0)) * 100,
-            "volume_24h":       vol_24h,
-            "high_24h":         float(ticker.get("highPrice24", price)),
-            "low_24h":          float(ticker.get("lowPrice24", price)),
-            "funding_rate":     funding,
-            "open_interest":    oi_usd,
-            "oi_change_pct":    oi_change,
-            "long_short_ratio": 1.0,   # não disponível publicamente no MEXC
-            "orderbook":        ob,
-            "klines_15m":       klines,
-            "recent_trades":    trades,
+            "symbol":             symbol,
+            "price":              price,
+            "price_change_pct":   float(ticker.get("riseFallRate", 0)) * 100,
+            "volume_24h":         vol_futures,
+            "high_24h":           float(ticker.get("highPrice24", price)),
+            "low_24h":            float(ticker.get("lowPrice24", price)),
+            "funding_rate":       funding_final,    # multi-exchange se disponível
+            "open_interest":      oi_usd,
+            "oi_change_pct":      oi_change,
+            "long_short_ratio":   ls_ratio,         # real (CoinGlass) ou 1.0
+            "orderbook":          ob,
+            "klines_15m":         klines,
+            "recent_trades":      trades,
+            # campos extras
+            "spot_volume_24h":    spot_vol,
+            "spot_futures_ratio": spot_futures,     # >3 = pump especulativo; <1 = spot lidera
+            "funding_single_ex":  funding_single,   # funding só MEXC (referência)
         }
     except Exception as e:
         log.warning(f"[Scanner] Erro ao buscar dados de {symbol}: {e}")
@@ -132,7 +172,117 @@ def fetch_batch(symbols: List[str], max_workers: int = MAX_WORKERS) -> List[dict
     return results
 
 
-# ── Internal helpers ──────────────────────────────────────────────────────────
+# ── Enriquecimento multi-fonte ────────────────────────────────────────────────
+
+def _get_ls_ratio_cg(symbol: str, key: str) -> float:
+    """
+    Long/Short ratio via CoinGlass (cache 5min).
+    Retorna 1.0 se chave ausente ou falha.
+    """
+    now = time.time()
+    cached = _ls_cache.get(symbol)
+    if cached and (now - cached["ts"]) < ENRICH_CACHE_TTL:
+        return cached["v"]
+
+    if not key:
+        return 1.0
+
+    coin = _to_cg(symbol)
+    try:
+        r = requests.get(
+            f"{CG_BASE}/futures/longShort/aggregatedAccountsRatio",
+            params={"symbol": coin, "timeframe": "5m", "limit": 1},
+            headers={"CG-API-KEY": key},
+            timeout=8,
+        )
+        if r.status_code == 429:
+            log.debug(f"[Scanner] CoinGlass rate limit (L/S {symbol})")
+            return _ls_cache.get(symbol, {}).get("v", 1.0)
+        if r.status_code != 200:
+            return 1.0
+
+        data = r.json().get("data", [])
+        item = (data[0] if isinstance(data, list) and data else
+                data   if isinstance(data, dict) else None)
+        if item:
+            long_pct  = float(item.get("longAccount",  item.get("longRatio",  0.5)))
+            short_pct = float(item.get("shortAccount", item.get("shortRatio", 0.5)))
+            if short_pct > 0:
+                ratio = round(long_pct / short_pct, 4)
+                _ls_cache[symbol] = {"v": ratio, "ts": now}
+                return ratio
+    except Exception as e:
+        log.debug(f"[Scanner] CoinGlass L/S error {symbol}: {e}")
+
+    return 1.0
+
+
+def _get_funding_multi_cg(symbol: str, key: str) -> Optional[float]:
+    """
+    Funding rate médio cross-exchange via CoinGlass (cache 5min).
+    Retorna None se chave ausente ou falha → fallback para funding MEXC.
+    """
+    now = time.time()
+    cached = _fund_cache.get(symbol)
+    if cached and (now - cached["ts"]) < ENRICH_CACHE_TTL:
+        return cached["v"]
+
+    if not key:
+        return None
+
+    coin = _to_cg(symbol)
+    try:
+        r = requests.get(
+            f"{CG_BASE}/futures/fundingRate/oeRates",
+            params={"symbol": coin},
+            headers={"CG-API-KEY": key},
+            timeout=8,
+        )
+        if r.status_code == 429:
+            log.debug(f"[Scanner] CoinGlass rate limit (funding {symbol})")
+            return _fund_cache.get(symbol, {}).get("v")
+        if r.status_code != 200:
+            return None
+
+        data = r.json().get("data", [])
+        if isinstance(data, list) and data:
+            rates = [
+                float(item.get("fundingRate", item.get("rate", 0)))
+                for item in data
+                if isinstance(item, dict) and (
+                    "fundingRate" in item or "rate" in item
+                )
+            ]
+            if rates:
+                avg = sum(rates) / len(rates)
+                _fund_cache[symbol] = {"v": avg, "ts": now}
+                return avg
+    except Exception as e:
+        log.debug(f"[Scanner] CoinGlass funding error {symbol}: {e}")
+
+    return None
+
+
+def _get_spot_volume_mexc(symbol: str) -> float:
+    """
+    Volume spot 24h em USD via MEXC Spot (sem key, sempre acessível no Render).
+    Usado para calcular spot_futures_ratio.
+    """
+    try:
+        r = requests.get(
+            f"{MEXC_SPOT}/ticker/24hr",
+            params={"symbol": symbol},
+            headers=_HEADERS,
+            timeout=5,
+        )
+        r.raise_for_status()
+        data = r.json()
+        return float(data.get("quoteVolume", 0))
+    except Exception:
+        return 0.0
+
+
+# ── MEXC Futures helpers ──────────────────────────────────────────────────────
 
 def _fetch_universe() -> List[dict]:
     try:
@@ -142,7 +292,7 @@ def _fetch_universe() -> List[dict]:
             timeout=REQUEST_TIMEOUT,
         )
         r.raise_for_status()
-        raw = r.json()
+        raw     = r.json()
         tickers = raw.get("data", raw) if isinstance(raw, dict) else raw
         if not isinstance(tickers, list):
             log.error(f"[Scanner] Formato inesperado do ticker MEXC: {type(tickers)}")
@@ -196,7 +346,7 @@ def _get_ticker(mexc_symbol: str) -> dict:
             timeout=REQUEST_TIMEOUT,
         )
         r.raise_for_status()
-        raw = r.json()
+        raw  = r.json()
         data = raw.get("data", raw) if isinstance(raw, dict) else raw
         if isinstance(data, list):
             return data[0] if data else {}
@@ -217,7 +367,7 @@ def _get_open_interest(mexc_symbol: str) -> float:
             timeout=REQUEST_TIMEOUT,
         )
         r.raise_for_status()
-        raw = r.json()
+        raw  = r.json()
         data = raw.get("data", {}) if isinstance(raw, dict) else {}
         return float(data.get("openInterest", 0) if isinstance(data, dict) else 0)
     except Exception:
@@ -225,7 +375,6 @@ def _get_open_interest(mexc_symbol: str) -> float:
 
 
 def _get_orderbook(mexc_symbol: str) -> dict:
-    """Orderbook MEXC Futures — pode retornar 403, defaulta para vazio."""
     try:
         r = requests.get(
             f"{MEXC_CONTRACT}/depth",
@@ -246,14 +395,9 @@ def _get_orderbook(mexc_symbol: str) -> dict:
 
 
 def _get_klines(mexc_symbol: str, interval: str = "Min15", limit: int = 48) -> list:
-    """
-    MEXC klines — formato de arrays paralelas:
-    {"data": {"time": [...], "open": [...], "high": [...], "low": [...], "close": [...], "vol": [...]}}
-    Converte para [[ts, o, h, l, c, v], ...]
-    """
     try:
         end   = int(time.time())
-        start = end - limit * 15 * 60   # 15min * limit períodos
+        start = end - limit * 15 * 60
         r = requests.get(
             f"{MEXC_CONTRACT}/kline/{mexc_symbol}",
             params={"interval": interval, "start": start, "end": end},
@@ -297,7 +441,7 @@ def _get_recent_trades(mexc_symbol: str, limit: int = 100) -> list:
             {
                 "p": t.get("p", t.get("price", 0)),
                 "q": t.get("v", t.get("vol", t.get("size", 0))),
-                "m": t.get("T", t.get("side", 2)) == 2,  # MEXC: T=1 buy, T=2 sell
+                "m": t.get("T", t.get("side", 2)) == 2,
             }
             for t in lst
         ]
