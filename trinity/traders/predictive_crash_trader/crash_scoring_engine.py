@@ -172,7 +172,7 @@ def score_crash(
 
     expected_move_pct   = round(min(35.0, expected_move_pct), 1)
     move_classification = _classify_expected_move(expected_move_pct)
-    tradeable           = expected_move_pct >= 8.0
+    tradeable           = expected_move_pct >= 6.0
 
     # ── Opportunity Score ─────────────────────────────────────────────────
     move_score     = min(100.0, expected_move_pct * 4.0)   # 25% → 100
@@ -259,7 +259,7 @@ def _classify_expected_move(pct: float) -> str:
     if pct >= 25: return "EXTREME"
     if pct >= 18: return "STRONG"
     if pct >= 12: return "TRADEABLE"
-    if pct >=  8: return "WEAK"
+    if pct >=  6: return "WEAK"
     return "MICRO"
 
 

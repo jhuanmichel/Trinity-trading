@@ -902,8 +902,8 @@ function renderCrashRadar(data) {
 
   if (!data || !data.candidates || data.candidates.length === 0) {
     const ts0 = data?.scan_ts ? new Date(data.scan_ts).toLocaleTimeString('pt-BR') : '—';
-    if (grid)  grid.innerHTML  = '<div class="cr-empty">Nenhuma oportunidade institucional detectada — aguardando movimentos ≥8%...</div>';
-    if (meta)  meta.innerHTML  = `<span class="c-muted">Último scan: <b>${ts0}</b> · ${data?.coins_scanned || 0} moedas monitoradas · nenhum setup ≥8% detectado</span>`;
+    if (grid)  grid.innerHTML  = '<div class="cr-empty">Nenhuma oportunidade institucional detectada — aguardando movimentos ≥6%...</div>';
+    if (meta)  meta.innerHTML  = `<span class="c-muted">Último scan: <b>${ts0}</b> · ${data?.coins_scanned || 0} moedas monitoradas · nenhum setup ≥6% detectado</span>`;
     if (badge) { badge.textContent = 'MONITORANDO'; badge.className = 'crash-live-badge'; }
     return;
   }
