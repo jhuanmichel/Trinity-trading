@@ -85,6 +85,14 @@ class CrashCandidate:
     expected_move_pct:   float     # movimento esperado em %
     move_classification: str       # MICRO/WEAK/TRADEABLE/STRONG/EXTREME
     opportunity_score:   float     # score composto 0-100
+    # Trinity Signal Engine fields
+    entry:               float     # preço de entrada (market short)
+    stop:                float     # stop loss acima da entrada
+    tp1:                 float     # take profit 1 (35% do movimento)
+    tp2:                 float     # take profit 2 (65% do movimento)
+    tp3:                 float     # take profit 3 (100% do movimento)
+    probability_pct:     float     # probabilidade estimada de sucesso %
+    dna_pattern:         str       # padrão DNA institucional detectado
 
 
 # ── Orquestrador ──────────────────────────────────────────────────────────────
@@ -205,11 +213,17 @@ class PredictiveCrashTrader:
             liq_result, lev_result, whale_result, vol_result, cas_result, coin_data
         )
 
-        crash_score = score_result["crash_score"]
+        price           = coin_data.get("price", 0)
+        crash_score     = score_result["crash_score"]
+        expected_move   = score_result.get("expected_move_pct", 0.0)
+        opp_score       = score_result.get("opportunity_score", 0.0)
+        dna_pattern     = score_result.get("dna_pattern", "")
+        probability_pct = _calc_probability(opp_score, dna_pattern)
+        entry, stop, tp1, tp2, tp3 = _calc_crash_levels(price, expected_move)
 
         return CrashCandidate(
             symbol              = symbol,
-            price               = coin_data.get("price", 0),
+            price               = price,
             price_change_pct    = coin_data.get("price_change_pct", 0),
             crash_score         = crash_score,
             crash_probability   = score_result["crash_probability"],
@@ -225,9 +239,16 @@ class PredictiveCrashTrader:
             cascade_target      = cas_result.get("cascade_target", 0),
             volume_24h          = coin_data.get("volume_24h", 0),
             scanned_at          = scan_ts,
-            expected_move_pct   = score_result.get("expected_move_pct", 0.0),
+            expected_move_pct   = expected_move,
             move_classification = score_result.get("move_classification", "MICRO"),
-            opportunity_score   = score_result.get("opportunity_score", 0.0),
+            opportunity_score   = opp_score,
+            entry               = entry,
+            stop                = stop,
+            tp1                 = tp1,
+            tp2                 = tp2,
+            tp3                 = tp3,
+            probability_pct     = probability_pct,
+            dna_pattern         = dna_pattern,
         )
 
     async def start_loop(self):
@@ -257,6 +278,64 @@ def run_crash_scan() -> dict:
     if _instance is None:
         _instance = PredictiveCrashTrader()
     return _instance.run_scan()
+
+
+# ── Trinity Signal Helpers ────────────────────────────────────────────────────
+
+def _calc_crash_levels(price: float, expected_move_pct: float):
+    """
+    Calcula ENTRY/STOP/TP1/TP2/TP3 para short (crash).
+
+    Stop:  1.5% acima (ou 20% do movimento esperado se maior)
+    TP1:   35% do movimento esperado
+    TP2:   65% do movimento esperado
+    TP3:  100% do movimento esperado (alvo total)
+    """
+    if price <= 0 or expected_move_pct <= 0:
+        return price, price, price, price, price
+    stop_pct = max(1.5, expected_move_pct * 0.20)
+    entry = price
+    stop  = price * (1 + stop_pct / 100)
+    tp1   = price * (1 - expected_move_pct * 0.35 / 100)
+    tp2   = price * (1 - expected_move_pct * 0.65 / 100)
+    tp3   = price * (1 - expected_move_pct / 100)
+    return entry, stop, tp1, tp2, tp3
+
+
+def _calc_probability(opportunity_score: float, dna_pattern: str) -> float:
+    """
+    Estima probabilidade de sucesso do sinal.
+
+    Baseado no opportunity_score e presença de padrão DNA institucional.
+    """
+    if opportunity_score >= 90:
+        prob = 85.0
+    elif opportunity_score >= 80:
+        prob = 74.0
+    elif opportunity_score >= 70:
+        prob = 63.0
+    else:
+        prob = 52.0
+    if dna_pattern:
+        prob += 7.0
+    return min(92.0, prob)
+
+
+def _fmt_p(p: float) -> str:
+    """Formata preço com precisão adequada."""
+    if p <= 0:   return "—"
+    if p < 1:    return f"${p:,.5f}"
+    if p < 10:   return f"${p:,.4f}"
+    if p < 100:  return f"${p:,.3f}"
+    return f"${p:,.2f}"
+
+
+def _pct_diff(level: float, ref: float, direction: str = "down") -> str:
+    """Retorna string de variação % entre level e ref."""
+    if ref <= 0: return ""
+    pct = abs(level - ref) / ref * 100
+    sign = "-" if direction == "down" else "+"
+    return f"({sign}{pct:.1f}%)"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -314,25 +393,35 @@ async def _send_telegram_alerts(candidates: list):
 
 def _send_crash_telegram(c: dict):
     """
-    Formata e envia alerta de crash para o Telegram.
+    Formata e envia alerta Trinity Signal de crash para o Telegram.
 
     Formato:
-    🚨 CRASH RADAR — PREDIÇÃO ANTECIPADA
+    🚨 TRINITY SIGNAL — CRASH INSTITUCIONAL
 
-    🪙 SOLUSDT  |  -4.2%  |  $145.80
-    ⚠️ DANGER  → crash_score: 78/100
+    🔴 STRONG CRASH — STOP HUNT SPIRAL + WHALE DISTRIBUTION
+    🪙 SOLUSDT | -3.2% | $145.80
 
-    📊 Componentes:
-      Liquidez:    82 | Alavancagem: 71
-      Whale Dump:  65 | Compressão:  58
-      Funding/OI:  79 | Cascata:     74
+    🏆 Trinity Score: 84/100
+    📉 Expected Move: -12.3%
+    🎯 Probabilidade: 74%
+
+    📋 RAZÕES INSTITUCIONAIS:
+    💧 Liquidity: 86/100
+    🐋 Whale:     79/100
+    ⚡ Funding:   +340%/yr
+    📈 OI:        +18.0%
 
     🔑 Sinais:
-    • OI spike +12% — armadilha de longs
-    • Funding 320% a.a. — mercado sobrecarregado
-    • Cascata projetada: -8.5% se stops ativados
+    • OI spike +18% — armadilha de longs
+    • Whale distribuindo — CVD negativo
 
-    🎯 Alvo de cascata: $133.50 (-8.2%)
+    📌 NÍVEIS DE TRADE:
+      Entry: $145.80
+      Stop:  $148.72  (+2.0%)
+      TP1:   $140.68  (-3.5%)
+      TP2:   $137.86  (-5.4%)
+      TP3:   $127.60  (-12.5%)
+
     💡 SHORT imediato — cascata iminente
     """
     try:
@@ -341,44 +430,71 @@ def _send_crash_telegram(c: dict):
         from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
         import requests as _req
 
-        symbol     = c.get("symbol", "?")
-        price      = c.get("price", 0)
-        pct_change = c.get("price_change_pct", 0)
-        opp_score  = c.get("opportunity_score", 0)
-        move_pct   = c.get("expected_move_pct", 0)
-        move_cls   = c.get("move_classification", "WEAK")
-        action     = c.get("recommended_action", "—")
-        comp       = c.get("component_scores", {})
-        signals    = c.get("top_signals", [])
-        dd         = c.get("estimated_drawdown", 0)
-        target     = c.get("cascade_target", 0)
-        funding    = c.get("funding_rate", 0)
-        ls_ratio   = c.get("long_short_ratio", 1.0)
+        symbol      = c.get("symbol", "?")
+        price       = c.get("price", 0)
+        pct_change  = c.get("price_change_pct", 0)
+        opp_score   = c.get("opportunity_score", 0)
+        move_pct    = c.get("expected_move_pct", 0)
+        move_cls    = c.get("move_classification", "WEAK")
+        action      = c.get("recommended_action", "—")
+        comp        = c.get("component_scores", {})
+        signals     = c.get("top_signals", [])
+        funding     = c.get("funding_rate", 0)
+        ls_ratio    = c.get("long_short_ratio", 1.0)
+        oi_change   = c.get("oi_change_pct", 0)
+        dna_pattern = c.get("dna_pattern", "")
+        prob_pct    = c.get("probability_pct", 0)
+        entry       = c.get("entry", price)
+        stop        = c.get("stop", 0)
+        tp1         = c.get("tp1", 0)
+        tp2         = c.get("tp2", 0)
+        tp3         = c.get("tp3", 0)
 
-        cls_emoji = {"EXTREME": "🔴", "STRONG": "🟠", "TRADEABLE": "🟡", "WEAK": "⚪"}.get(move_cls, "⚡")
+        cls_emoji = {
+            "EXTREME":   "🔴",
+            "STRONG":    "🟠",
+            "TRADEABLE": "🟡",
+            "WEAK":      "⚪",
+        }.get(move_cls, "⚡")
 
-        pct_str   = f"+{pct_change:.1f}%" if pct_change >= 0 else f"{pct_change:.1f}%"
-        price_str = f"${price:,.4f}" if price < 10 else f"${price:,.2f}"
+        pct_str     = f"+{pct_change:.1f}%" if pct_change >= 0 else f"{pct_change:.1f}%"
+        funding_ann = funding * 3 * 365 * 100       # % anualizado (3 períodos/dia)
+        funding_str = f"{funding_ann:+.0f}%/yr"
+        oi_str      = f"{oi_change:+.1f}%"
+
+        # Setup line: include DNA pattern if detected
+        setup_line = f"{cls_emoji} *{move_cls} CRASH*"
+        if dna_pattern:
+            setup_line += f" — {dna_pattern}"
 
         signals_text = "\n".join(f"• {s}" for s in signals[:3]) if signals else "• Múltiplos sinais alinhados"
 
-        target_str = ""
-        if target and dd:
-            t_price    = f"${target:,.4f}" if target < 10 else f"${target:,.2f}"
-            target_str = f"\n🎯 Alvo cascata: {t_price}  (-{dd:.1f}%)"
+        # Levels block
+        entry_str = _fmt_p(entry)
+        stop_str  = f"{_fmt_p(stop)}  {_pct_diff(stop,  entry, 'up')}"
+        tp1_str   = f"{_fmt_p(tp1)}  {_pct_diff(tp1,   entry, 'down')}"
+        tp2_str   = f"{_fmt_p(tp2)}  {_pct_diff(tp2,   entry, 'down')}"
+        tp3_str   = f"{_fmt_p(tp3)}  {_pct_diff(tp3,   entry, 'down')}"
 
         msg = (
-            f"🚨 *CRASH RADAR — OPORTUNIDADE INSTITUCIONAL*\n\n"
-            f"{cls_emoji} *{move_cls} OPPORTUNITY* — DOWN ↓\n"
-            f"🪙 *{symbol}*  |  {pct_str}  |  {price_str}\n\n"
-            f"📉 *Movimento esperado: -{move_pct:.1f}%*\n"
-            f"⚡ Opportunity Score: *{opp_score:.0f}/100*\n\n"
-            f"📊 *Componentes:*\n"
-            f"  Liquidez: `{comp.get('liquidity', 0):.0f}` | Alavancagem: `{comp.get('leverage', 0):.0f}`\n"
-            f"  Whale: `{comp.get('whale', 0):.0f}` | Compressão: `{comp.get('compression', 0):.0f}`\n\n"
-            f"🔑 *Sinais:*\n{signals_text}"
-            f"{target_str}\n\n"
-            f"📈 L/S: `{ls_ratio:.2f}x`  |  Funding: `{funding*100:.4f}%`\n"
+            f"🚨 *TRINITY SIGNAL — CRASH INSTITUCIONAL*\n\n"
+            f"{setup_line}\n"
+            f"🪙 *{symbol}*  |  {pct_str}  |  {_fmt_p(price)}\n\n"
+            f"🏆 Trinity Score: *{opp_score:.0f}/100*\n"
+            f"📉 Expected Move: *-{move_pct:.1f}%*\n"
+            f"🎯 Probabilidade: *{prob_pct:.0f}%*\n\n"
+            f"📋 *RAZÕES INSTITUCIONAIS:*\n"
+            f"💧 Liquidity: `{comp.get('liquidity', 0):.0f}/100`\n"
+            f"🐋 Whale:     `{comp.get('whale', 0):.0f}/100`\n"
+            f"⚡ Funding:   `{funding_str}`\n"
+            f"📈 OI:        `{oi_str}`\n\n"
+            f"🔑 *Sinais:*\n{signals_text}\n\n"
+            f"📌 *NÍVEIS DE TRADE:*\n"
+            f"`Entry: {entry_str}`\n"
+            f"`Stop:  {stop_str}`\n"
+            f"`TP1:   {tp1_str}`\n"
+            f"`TP2:   {tp2_str}`\n"
+            f"`TP3:   {tp3_str}`\n\n"
             f"💡 _{action}_"
         )
 

@@ -83,6 +83,14 @@ class PumpCandidate:
     expected_move_pct:   float     # movimento esperado em %
     move_classification: str       # MICRO/WEAK/TRADEABLE/STRONG/EXTREME
     opportunity_score:   float     # score composto 0-100
+    # Trinity Signal Engine fields
+    entry:               float     # preço de entrada (market long)
+    stop:                float     # stop loss abaixo da entrada
+    tp1:                 float     # take profit 1 (35% do movimento)
+    tp2:                 float     # take profit 2 (65% do movimento)
+    tp3:                 float     # take profit 3 (100% do movimento)
+    probability_pct:     float     # probabilidade estimada de sucesso %
+    dna_pattern:         str       # padrão DNA institucional detectado
 
 
 # ── Orquestrador ──────────────────────────────────────────────────────────────
@@ -190,11 +198,17 @@ class PredictivePumpTrader:
             breakout_result, sm_result, coin_data,
         )
 
-        pump_score = score_result["pump_score"]
+        price           = coin_data.get("price", 0)
+        pump_score      = score_result["pump_score"]
+        expected_move   = score_result.get("expected_move_pct", 0.0)
+        opp_score       = score_result.get("opportunity_score", 0.0)
+        dna_pattern     = score_result.get("dna_pattern", "")
+        probability_pct = _calc_probability(opp_score, dna_pattern)
+        entry, stop, tp1, tp2, tp3 = _calc_pump_levels(price, expected_move)
 
         return PumpCandidate(
             symbol              = symbol,
-            price               = coin_data.get("price", 0),
+            price               = price,
             price_change_pct    = coin_data.get("price_change_pct", 0),
             pump_score          = pump_score,
             pump_probability    = score_result["pump_probability"],
@@ -209,9 +223,16 @@ class PredictivePumpTrader:
             pump_target         = score_result.get("pump_target", 0),
             volume_24h          = coin_data.get("volume_24h", 0),
             scanned_at          = scan_ts,
-            expected_move_pct   = score_result.get("expected_move_pct", 0.0),
+            expected_move_pct   = expected_move,
             move_classification = score_result.get("move_classification", "MICRO"),
-            opportunity_score   = score_result.get("opportunity_score", 0.0),
+            opportunity_score   = opp_score,
+            entry               = entry,
+            stop                = stop,
+            tp1                 = tp1,
+            tp2                 = tp2,
+            tp3                 = tp3,
+            probability_pct     = probability_pct,
+            dna_pattern         = dna_pattern,
         )
 
     async def start_loop(self):
@@ -238,6 +259,64 @@ def run_pump_scan() -> dict:
     if _instance is None:
         _instance = PredictivePumpTrader()
     return _instance.run_scan()
+
+
+# ── Trinity Signal Helpers ────────────────────────────────────────────────────
+
+def _calc_pump_levels(price: float, expected_move_pct: float):
+    """
+    Calcula ENTRY/STOP/TP1/TP2/TP3 para long (pump).
+
+    Stop:  1.5% abaixo (ou 20% do movimento esperado se maior)
+    TP1:   35% do movimento esperado
+    TP2:   65% do movimento esperado
+    TP3:  100% do movimento esperado (alvo total)
+    """
+    if price <= 0 or expected_move_pct <= 0:
+        return price, price, price, price, price
+    stop_pct = max(1.5, expected_move_pct * 0.20)
+    entry = price
+    stop  = price * (1 - stop_pct / 100)
+    tp1   = price * (1 + expected_move_pct * 0.35 / 100)
+    tp2   = price * (1 + expected_move_pct * 0.65 / 100)
+    tp3   = price * (1 + expected_move_pct / 100)
+    return entry, stop, tp1, tp2, tp3
+
+
+def _calc_probability(opportunity_score: float, dna_pattern: str) -> float:
+    """
+    Estima probabilidade de sucesso do sinal.
+
+    Baseado no opportunity_score e presença de padrão DNA institucional.
+    """
+    if opportunity_score >= 90:
+        prob = 85.0
+    elif opportunity_score >= 80:
+        prob = 74.0
+    elif opportunity_score >= 70:
+        prob = 63.0
+    else:
+        prob = 52.0
+    if dna_pattern:
+        prob += 7.0
+    return min(92.0, prob)
+
+
+def _fmt_p(p: float) -> str:
+    """Formata preço com precisão adequada."""
+    if p <= 0:   return "—"
+    if p < 1:    return f"${p:,.5f}"
+    if p < 10:   return f"${p:,.4f}"
+    if p < 100:  return f"${p:,.3f}"
+    return f"${p:,.2f}"
+
+
+def _pct_diff(level: float, ref: float, direction: str = "up") -> str:
+    """Retorna string de variação % entre level e ref."""
+    if ref <= 0: return ""
+    pct = abs(level - ref) / ref * 100
+    sign = "+" if direction == "up" else "-"
+    return f"({sign}{pct:.1f}%)"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -290,25 +369,36 @@ async def _send_telegram_alerts(candidates: list):
 
 def _send_pump_telegram(c: dict):
     """
-    Formata e envia alerta de pump para o Telegram.
+    Formata e envia alerta Trinity Signal de pump para o Telegram.
 
     Formato:
-    🚀 PUMP RADAR — PREDIÇÃO ANTECIPADA
+    🚀 TRINITY SIGNAL — PUMP INSTITUCIONAL
 
-    🪙 SOLUSDT  |  -2.1%  |  $145.80
-    ⚡ READY  → pump_score: 76/100
+    ⚡ STRONG PUMP — SHORT SQUEEZE IGNITION + COMPRESSION LAUNCH
+    🪙 SOLUSDT | +1.2% | $145.80
 
-    📊 Componentes:
-      Whale:       82 | Squeeze:    71
-      Gravidade:   65 | Breakout:   58
-      Smart Money: 79
+    🏆 Trinity Score: 82/100
+    📈 Expected Move: +11.5%
+    🎯 Probabilidade: 72%
+
+    📋 RAZÕES INSTITUCIONAIS:
+    🐋 Whale:    81/100
+    💧 Squeeze:  76/100
+    ⚡ Funding:  -180%/yr
+    📈 OI:       +15.0%
 
     🔑 Sinais:
-    • Shorts presos: L/S 0.65x | Funding -120% a.a.
-    • Bid wall forte — suporte sólido como rampa
-    • Compressão ativa (8 velas) — breakout iminente
+    • Shorts presos: L/S 0.62x | Funding extremo
+    • Bid wall forte — rampa de liquidez ativa
+    • Compressão ativa (9 velas) — breakout iminente
 
-    🎯 Alvo: $153.20 (+5.1%)
+    📌 NÍVEIS DE TRADE:
+      Entry: $145.80
+      Stop:  $141.51  (-2.9%)
+      TP1:   $151.67  (+4.0%)
+      TP2:   $155.57  (+6.7%)
+      TP3:   $162.67  (+11.6%)
+
     💡 LONG imediato — pump iniciando
     """
     try:
@@ -317,44 +407,71 @@ def _send_pump_telegram(c: dict):
         from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
         import requests as _req
 
-        symbol     = c.get("symbol", "?")
-        price      = c.get("price", 0)
-        pct_change = c.get("price_change_pct", 0)
-        opp_score  = c.get("opportunity_score", 0)
-        move_pct   = c.get("expected_move_pct", 0)
-        move_cls   = c.get("move_classification", "WEAK")
-        action     = c.get("recommended_action", "—")
-        comp       = c.get("component_scores", {})
-        signals    = c.get("top_signals", [])
-        target     = c.get("pump_target", 0)
-        funding    = c.get("funding_rate", 0)
-        ls_ratio   = c.get("long_short_ratio", 1.0)
+        symbol      = c.get("symbol", "?")
+        price       = c.get("price", 0)
+        pct_change  = c.get("price_change_pct", 0)
+        opp_score   = c.get("opportunity_score", 0)
+        move_pct    = c.get("expected_move_pct", 0)
+        move_cls    = c.get("move_classification", "WEAK")
+        action      = c.get("recommended_action", "—")
+        comp        = c.get("component_scores", {})
+        signals     = c.get("top_signals", [])
+        funding     = c.get("funding_rate", 0)
+        ls_ratio    = c.get("long_short_ratio", 1.0)
+        oi_change   = c.get("oi_change_pct", 0)
+        dna_pattern = c.get("dna_pattern", "")
+        prob_pct    = c.get("probability_pct", 0)
+        entry       = c.get("entry", price)
+        stop        = c.get("stop", 0)
+        tp1         = c.get("tp1", 0)
+        tp2         = c.get("tp2", 0)
+        tp3         = c.get("tp3", 0)
 
-        cls_emoji = {"EXTREME": "🚀", "STRONG": "⚡", "TRADEABLE": "📡", "WEAK": "👁"}.get(move_cls, "⚡")
+        cls_emoji = {
+            "EXTREME":   "🚀",
+            "STRONG":    "⚡",
+            "TRADEABLE": "📡",
+            "WEAK":      "👁",
+        }.get(move_cls, "⚡")
 
-        pct_str   = f"+{pct_change:.1f}%" if pct_change >= 0 else f"{pct_change:.1f}%"
-        price_str = f"${price:,.4f}" if price < 10 else f"${price:,.2f}"
+        pct_str     = f"+{pct_change:.1f}%" if pct_change >= 0 else f"{pct_change:.1f}%"
+        funding_ann = funding * 3 * 365 * 100       # % anualizado (3 períodos/dia)
+        funding_str = f"{funding_ann:+.0f}%/yr"
+        oi_str      = f"{oi_change:+.1f}%"
+
+        # Setup line: include DNA pattern if detected
+        setup_line = f"{cls_emoji} *{move_cls} PUMP*"
+        if dna_pattern:
+            setup_line += f" — {dna_pattern}"
 
         signals_text = "\n".join(f"• {s}" for s in signals[:3]) if signals else "• Múltiplos sinais alinhados"
 
-        target_str = ""
-        if target and price:
-            upside    = (target - price) / price * 100
-            t_price   = f"${target:,.4f}" if target < 10 else f"${target:,.2f}"
-            target_str = f"\n🎯 Alvo liquidez: {t_price}  (+{upside:.1f}%)"
+        # Levels block
+        entry_str = _fmt_p(entry)
+        stop_str  = f"{_fmt_p(stop)}  {_pct_diff(stop,  entry, 'down')}"
+        tp1_str   = f"{_fmt_p(tp1)}  {_pct_diff(tp1,   entry, 'up')}"
+        tp2_str   = f"{_fmt_p(tp2)}  {_pct_diff(tp2,   entry, 'up')}"
+        tp3_str   = f"{_fmt_p(tp3)}  {_pct_diff(tp3,   entry, 'up')}"
 
         msg = (
-            f"🚀 *PUMP RADAR — OPORTUNIDADE INSTITUCIONAL*\n\n"
-            f"{cls_emoji} *{move_cls} OPPORTUNITY* — UP ↑\n"
-            f"🪙 *{symbol}*  |  {pct_str}  |  {price_str}\n\n"
-            f"📈 *Movimento esperado: +{move_pct:.1f}%*\n"
-            f"⚡ Opportunity Score: *{opp_score:.0f}/100*\n\n"
-            f"📊 *Componentes:*\n"
-            f"  Whale: `{comp.get('whale', 0):.0f}` | Squeeze: `{comp.get('squeeze', 0):.0f}`\n"
-            f"  Gravity: `{comp.get('gravity', 0):.0f}` | Breakout: `{comp.get('breakout', 0):.0f}`\n\n"
-            f"🔑 *Sinais:*\n{signals_text}"
-            f"{target_str}\n\n"
-            f"📈 L/S: `{ls_ratio:.2f}x`  |  Funding: `{funding*100:.4f}%`\n"
+            f"🚀 *TRINITY SIGNAL — PUMP INSTITUCIONAL*\n\n"
+            f"{setup_line}\n"
+            f"🪙 *{symbol}*  |  {pct_str}  |  {_fmt_p(price)}\n\n"
+            f"🏆 Trinity Score: *{opp_score:.0f}/100*\n"
+            f"📈 Expected Move: *+{move_pct:.1f}%*\n"
+            f"🎯 Probabilidade: *{prob_pct:.0f}%*\n\n"
+            f"📋 *RAZÕES INSTITUCIONAIS:*\n"
+            f"🐋 Whale:    `{comp.get('whale', 0):.0f}/100`\n"
+            f"💧 Squeeze:  `{comp.get('squeeze', 0):.0f}/100`\n"
+            f"⚡ Funding:  `{funding_str}`\n"
+            f"📈 OI:       `{oi_str}`\n\n"
+            f"🔑 *Sinais:*\n{signals_text}\n\n"
+            f"📌 *NÍVEIS DE TRADE:*\n"
+            f"`Entry: {entry_str}`\n"
+            f"`Stop:  {stop_str}`\n"
+            f"`TP1:   {tp1_str}`\n"
+            f"`TP2:   {tp2_str}`\n"
+            f"`TP3:   {tp3_str}`\n\n"
             f"💡 _{action}_"
         )
 
