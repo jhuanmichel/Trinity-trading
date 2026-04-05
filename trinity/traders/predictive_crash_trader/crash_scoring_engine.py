@@ -1,16 +1,9 @@
 """
-crash_scoring_engine.py — Motor de Score de Crash (Cap. 19)
+crash_scoring_engine.py — Motor de Score de Crash (Cap. 19) — v2 Institutional
 
-Combina todos os detectores com pesos institucionais:
+Combina todos os detectores com pesos institucionais + Expected Move Model.
 
-  Liquidity Collapse     → peso 0.25  (colapso de orderbook = sinal mais direto)
-  Leverage Pressure      → peso 0.20  (OI spike + funding extremo)
-  Whale Dump             → peso 0.20  (pressão institucional de venda)
-  Volatility Compression → peso 0.15  (breakout iminente de compressão)
-  Funding + OI Div.      → peso 0.20  (funding alto + OI subindo = armadilha)
-
-Nota: Funding+OI Divergence usa os campos do leverage_pressure_detector.
-      O peso de 0.20 é aplicado separadamente sobre oi_price_divergence + funding_extreme.
+Filtro institucional: só retorna oportunidades com expected_move >= 8%
 
 crash_score [0-100]:
   0  - 40  → LOW    (mercado saudável, sem sinais)
@@ -18,23 +11,28 @@ crash_score [0-100]:
   60 - 80  → HIGH   (múltiplos sinais alinhados, precaução)
   80 - 100 → EXTREME (crash iminente, ação imediata)
 
+Expected Move Classification:
+  MICRO     → < 8%   (filtrado — micro movimento)
+  WEAK      → 8-12%  (movimento mínimo tradeable)
+  TRADEABLE → 12-18% (oportunidade real)
+  STRONG    → 18-25% (oportunidade forte)
+  EXTREME   → 25%+   (evento de liquidação em cascata)
+
+Opportunity Score = Expected_Move×0.35 + Volatility×0.25 + Liquidity×0.20 + Squeeze×0.20
+
 Saída:
   {
-    "crash_score":        0-100,
-    "crash_probability":  "LOW" | "MEDIUM" | "HIGH" | "EXTREME",
-    "urgency":            "WATCH" | "ALERT" | "DANGER" | "CRITICAL",
-    "recommended_action": str,
-    "signal_valid":       bool,
-    "component_scores": {
-      "liquidity":     float,
-      "leverage":      float,
-      "whale":         float,
-      "compression":   float,
-      "funding_oi":    float,
-      "cascade":       float,
-    },
-    "weights": dict,
-    "top_signals": list[str],  # principais sinais detectados
+    "crash_score":          0-100,
+    "crash_probability":    "LOW" | "MEDIUM" | "HIGH" | "EXTREME",
+    "urgency":              "WATCH" | "ALERT" | "DANGER" | "CRITICAL",
+    "recommended_action":   str,
+    "signal_valid":         bool,
+    "component_scores":     dict,
+    "top_signals":          list[str],
+    "expected_move_pct":    float,   # movimento esperado em %
+    "move_classification":  str,     # MICRO/WEAK/TRADEABLE/STRONG/EXTREME
+    "tradeable":            bool,    # expected_move >= 8%
+    "opportunity_score":    float,   # score composto 0-100
   }
 """
 import logging
@@ -83,6 +81,7 @@ def score_crash(
     whale_result:        dict,
     compression_result:  dict,
     cascade_result:      dict,
+    coin_data:           dict = None,
 ) -> dict:
     """
     Combina todos os detectores em um score de crash unificado.
@@ -144,21 +143,72 @@ def score_crash(
         whale_result, compression_result, cascade_result,
     )
 
+    # ── Expected Move Model ───────────────────────────────────────────────
+    _cd       = coin_data or {}
+    price     = float(_cd.get("price", 0))
+    high_24h  = float(_cd.get("high_24h", price * 1.05))
+    low_24h   = float(_cd.get("low_24h",  price * 0.95))
+    ls_ratio  = float(_cd.get("long_short_ratio", 1.0))
+
+    daily_range_pct = ((high_24h - low_24h) / price * 100) if price > 0 else 10.0
+
+    # Base: cascade estimated_drawdown (já em %)
+    base_dd = float(cascade_result.get("estimated_drawdown", 0))
+
+    # Multiplicador de volatilidade pelo range diário
+    if   daily_range_pct > 20: vol_mult = 1.6
+    elif daily_range_pct > 12: vol_mult = 1.3
+    elif daily_range_pct >  7: vol_mult = 1.1
+    else:                      vol_mult = 1.0
+
+    # Amplificador por excesso de longs alavancados
+    lev_amp = 1.0 + max(0.0, (ls_ratio - 1.5) * 0.25)
+
+    expected_move_pct = base_dd * vol_mult * lev_amp
+
+    # Floor: se cascata fraca mas mercado volátil, usa range diário como base
+    if base_dd < 4.0 and daily_range_pct > 8.0:
+        expected_move_pct = max(expected_move_pct, daily_range_pct * 0.55)
+
+    expected_move_pct   = round(min(35.0, expected_move_pct), 1)
+    move_classification = _classify_expected_move(expected_move_pct)
+    tradeable           = expected_move_pct >= 8.0
+
+    # ── Opportunity Score ─────────────────────────────────────────────────
+    move_score     = min(100.0, expected_move_pct * 4.0)   # 25% → 100
+    vol_score_opp  = float(compression_result.get("breakout_probability", 0))
+    liq_score_opp  = float(liquidity_result.get("severity", 0))
+    sqz_score_opp  = float(leverage_result.get("cascade_probability", 0))
+
+    opportunity_score = (
+        move_score    * 0.35 +
+        vol_score_opp * 0.25 +
+        liq_score_opp * 0.20 +
+        sqz_score_opp * 0.20
+    )
+    if not tradeable:
+        opportunity_score = 0.0
+    opportunity_score = round(min(100.0, opportunity_score), 1)
+
     log.debug(
         f"[CrashScore] score={crash_score:.1f} ({crash_probability}) "
-        f"valid={signal_valid} components_>50={components_above_50} "
-        f"top={top_signals[:2]}"
+        f"opp={opportunity_score:.1f} move={expected_move_pct:.1f}% ({move_classification}) "
+        f"valid={signal_valid}"
     )
 
     return {
-        "crash_score":        round(crash_score, 1),
-        "crash_probability":  crash_probability,
-        "urgency":            urgency,
-        "recommended_action": recommended_action,
-        "signal_valid":       signal_valid,
-        "component_scores":   component_scores,
-        "weights":            WEIGHTS,
-        "top_signals":        top_signals,
+        "crash_score":         round(crash_score, 1),
+        "crash_probability":   crash_probability,
+        "urgency":             urgency,
+        "recommended_action":  recommended_action,
+        "signal_valid":        signal_valid,
+        "component_scores":    component_scores,
+        "weights":             WEIGHTS,
+        "top_signals":         top_signals,
+        "expected_move_pct":   expected_move_pct,
+        "move_classification": move_classification,
+        "tradeable":           tradeable,
+        "opportunity_score":   opportunity_score,
     }
 
 
@@ -202,6 +252,15 @@ def _classify_score(score: float) -> str:
         if score >= threshold:
             return label
     return "LOW"
+
+
+def _classify_expected_move(pct: float) -> str:
+    """Classifica o expected move em MICRO/WEAK/TRADEABLE/STRONG/EXTREME."""
+    if pct >= 25: return "EXTREME"
+    if pct >= 18: return "STRONG"
+    if pct >= 12: return "TRADEABLE"
+    if pct >=  8: return "WEAK"
+    return "MICRO"
 
 
 def _extract_top_signals(

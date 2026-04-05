@@ -1,13 +1,9 @@
 """
-pump_scoring_engine.py — Motor de Score de Pump (Cap. 20)
+pump_scoring_engine.py — Motor de Score de Pump (Cap. 20) — v2 Institutional
 
-Combina todos os detectores com pesos institucionais:
+Combina todos os detectores com pesos institucionais + Expected Move Model.
 
-  Whale Accumulation     → peso 0.25  (acumulação institucional = sinal mais direto)
-  Short Squeeze          → peso 0.20  (shorts presos = combustível para pump)
-  Liquidity Gravity      → peso 0.20  (clusters de liquidez atraindo preço para cima)
-  Breakout Pressure      → peso 0.15  (compressão + volume acumulando)
-  Smart Money Accum.     → peso 0.20  (higher lows + absorption + CVD)
+Filtro institucional: só retorna oportunidades com expected_move >= 8%
 
 pump_score [0-100]:
   0  - 40  → LOW    (sem sinais de pump)
@@ -15,23 +11,29 @@ pump_score [0-100]:
   60 - 80  → HIGH   (setup de pump se formando)
   80 - 100 → EXTREME (pump iminente)
 
+Expected Move Classification:
+  MICRO     → < 8%   (filtrado — micro movimento)
+  WEAK      → 8-12%  (movimento mínimo tradeable)
+  TRADEABLE → 12-18% (oportunidade real)
+  STRONG    → 18-25% (oportunidade forte)
+  EXTREME   → 25%+   (short squeeze explosivo)
+
+Opportunity Score = Expected_Move×0.35 + Volatility×0.25 + Liquidity×0.20 + Squeeze×0.20
+
 Saída:
   {
-    "pump_score":         0-100,
-    "pump_probability":   "LOW" | "MEDIUM" | "HIGH" | "EXTREME",
-    "urgency":            "WATCH" | "ALERT" | "READY" | "LAUNCH",
-    "recommended_action": str,
-    "signal_valid":       bool,
-    "component_scores": {
-      "whale":       float,
-      "squeeze":     float,
-      "gravity":     float,
-      "breakout":    float,
-      "smart_money": float,
-    },
-    "weights":        dict,
-    "top_signals":    list[str],
-    "pump_target":    float,   # preço alvo estimado (gravidade de liquidez)
+    "pump_score":           0-100,
+    "pump_probability":     "LOW" | "MEDIUM" | "HIGH" | "EXTREME",
+    "urgency":              "WATCH" | "ALERT" | "READY" | "LAUNCH",
+    "recommended_action":   str,
+    "signal_valid":         bool,
+    "component_scores":     dict,
+    "top_signals":          list[str],
+    "pump_target":          float,
+    "expected_move_pct":    float,   # movimento esperado em %
+    "move_classification":  str,     # MICRO/WEAK/TRADEABLE/STRONG/EXTREME
+    "tradeable":            bool,    # expected_move >= 8%
+    "opportunity_score":    float,   # score composto 0-100
   }
 """
 import logging
@@ -75,11 +77,12 @@ MIN_COMPONENTS   = 2
 
 
 def score_pump(
-    whale_result:     dict,
-    squeeze_result:   dict,
-    gravity_result:   dict,
-    breakout_result:  dict,
+    whale_result:      dict,
+    squeeze_result:    dict,
+    gravity_result:    dict,
+    breakout_result:   dict,
     smartmoney_result: dict,
+    coin_data:         dict = None,
 ) -> dict:
     """
     Combina todos os detectores em um score de pump unificado.
@@ -142,22 +145,78 @@ def score_pump(
         breakout_result, smartmoney_result,
     )
 
+    # ── Expected Move Model (Pump) ────────────────────────────────────────
+    _cd          = coin_data or {}
+    price        = float(_cd.get("price", 0))
+    high_24h     = float(_cd.get("high_24h", price * 1.05))
+    low_24h      = float(_cd.get("low_24h",  price * 0.95))
+    ls_ratio     = float(_cd.get("long_short_ratio", 1.0))
+    funding_rate = float(_cd.get("funding_rate", 0))
+
+    daily_range_pct = ((high_24h - low_24h) / price * 100) if price > 0 else 10.0
+
+    # Base: distância ao target de liquidez (ímã de shorts)
+    if pump_target > price > 0:
+        base_move = (pump_target - price) / price * 100
+    else:
+        base_move = 0.0
+
+    # Multiplicador de short squeeze: mercado short-heavy = maior magnitude
+    if   ls_ratio < 0.60: squeeze_mult = 3.0
+    elif ls_ratio < 0.75: squeeze_mult = 2.2
+    elif ls_ratio < 0.85: squeeze_mult = 1.6
+    elif ls_ratio < 0.95: squeeze_mult = 1.2
+    else:                 squeeze_mult = 1.0
+
+    # Funding negativo = shorts pagando caro = mais pressão pro squeeze
+    fund_ann = funding_rate * 3.0 * 365.0 * 100.0  # % ao ano
+    if   fund_ann < -100.0: squeeze_mult *= 1.30
+    elif fund_ann <  -50.0: squeeze_mult *= 1.15
+
+    # Floor: shorts pesados + mercado volátil = mínimo de 8%
+    if ls_ratio < 0.85 and daily_range_pct > 8.0:
+        base_move = max(base_move, daily_range_pct * 0.60)
+
+    expected_move_pct   = round(min(40.0, base_move * squeeze_mult), 1)
+    move_classification = _classify_expected_move(expected_move_pct)
+    tradeable           = expected_move_pct >= 8.0
+
+    # ── Opportunity Score ─────────────────────────────────────────────────
+    move_score     = min(100.0, expected_move_pct * 4.0)   # 25% → 100
+    vol_score_opp  = float(breakout_result.get("breakout_probability", 0))
+    liq_score_opp  = float(gravity_result.get("strength", 0))
+    sqz_score_opp  = float(squeeze_result.get("squeeze_probability", 0))
+
+    opportunity_score = (
+        move_score    * 0.35 +
+        vol_score_opp * 0.25 +
+        liq_score_opp * 0.20 +
+        sqz_score_opp * 0.20
+    )
+    if not tradeable:
+        opportunity_score = 0.0
+    opportunity_score = round(min(100.0, opportunity_score), 1)
+
     log.debug(
         f"[PumpScore] score={pump_score:.1f} ({pump_probability}) "
-        f"valid={signal_valid} comp_>50={components_above_50} "
-        f"top={top_signals[:2]}"
+        f"opp={opportunity_score:.1f} move={expected_move_pct:.1f}% ({move_classification}) "
+        f"valid={signal_valid}"
     )
 
     return {
-        "pump_score":         round(pump_score, 1),
-        "pump_probability":   pump_probability,
-        "urgency":            urgency,
-        "recommended_action": recommended_action,
-        "signal_valid":       signal_valid,
-        "component_scores":   component_scores,
-        "weights":            WEIGHTS,
-        "top_signals":        top_signals,
-        "pump_target":        pump_target,
+        "pump_score":          round(pump_score, 1),
+        "pump_probability":    pump_probability,
+        "urgency":             urgency,
+        "recommended_action":  recommended_action,
+        "signal_valid":        signal_valid,
+        "component_scores":    component_scores,
+        "weights":             WEIGHTS,
+        "top_signals":         top_signals,
+        "pump_target":         pump_target,
+        "expected_move_pct":   expected_move_pct,
+        "move_classification": move_classification,
+        "tradeable":           tradeable,
+        "opportunity_score":   opportunity_score,
     }
 
 
@@ -168,6 +227,15 @@ def _classify_score(score: float) -> str:
         if score >= threshold:
             return label
     return "LOW"
+
+
+def _classify_expected_move(pct: float) -> str:
+    """Classifica o expected move em MICRO/WEAK/TRADEABLE/STRONG/EXTREME."""
+    if pct >= 25: return "EXTREME"
+    if pct >= 18: return "STRONG"
+    if pct >= 12: return "TRADEABLE"
+    if pct >=  8: return "WEAK"
+    return "MICRO"
 
 
 def _extract_top_signals(

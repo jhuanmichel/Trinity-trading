@@ -45,9 +45,10 @@ log = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SCAN_INTERVAL_S    = 30
-TOP_RESULTS        = 15
-ALERT_THRESHOLD    = 60
-LAUNCH_THRESHOLD   = 85
+TOP_RESULTS        = 5         # top N oportunidades institucionais
+OPP_THRESHOLD      = 70        # opportunity_score mínimo para incluir
+ALERT_THRESHOLD    = 70        # opp_score mínimo para alerta Telegram
+LAUNCH_THRESHOLD   = 88        # opp_score para alerta urgente
 BASE_DIR           = Path(__file__).parent.parent.parent.parent
 SCAN_OUTPUT_FILE   = BASE_DIR / "dashboard" / "pump_scan_latest.json"
 
@@ -60,22 +61,26 @@ LAUNCH_COOLDOWN_S  = 150
 
 @dataclass
 class PumpCandidate:
-    symbol:             str
-    price:              float
-    price_change_pct:   float
-    pump_score:         float
-    pump_probability:   str       # LOW/MEDIUM/HIGH/EXTREME
-    urgency:            str       # WATCH/ALERT/READY/LAUNCH
-    recommended_action: str
-    signal_valid:       bool
-    component_scores:   dict      # {whale, squeeze, gravity, breakout, smart_money}
-    top_signals:        list
-    funding_rate:       float
-    long_short_ratio:   float
-    oi_change_pct:      float
-    pump_target:        float     # preço alvo estimado (gravidade de liquidez)
-    volume_24h:         float
-    scanned_at:         str
+    symbol:              str
+    price:               float
+    price_change_pct:    float
+    pump_score:          float
+    pump_probability:    str       # LOW/MEDIUM/HIGH/EXTREME
+    urgency:             str       # WATCH/ALERT/READY/LAUNCH
+    recommended_action:  str
+    signal_valid:        bool
+    component_scores:    dict      # {whale, squeeze, gravity, breakout, smart_money}
+    top_signals:         list
+    funding_rate:        float
+    long_short_ratio:    float
+    oi_change_pct:       float
+    pump_target:         float     # preço alvo estimado (gravidade de liquidez)
+    volume_24h:          float
+    scanned_at:          str
+    # Institutional Volatility Engine fields
+    expected_move_pct:   float     # movimento esperado em %
+    move_classification: str       # MICRO/WEAK/TRADEABLE/STRONG/EXTREME
+    opportunity_score:   float     # score composto 0-100
 
 
 # ── Orquestrador ──────────────────────────────────────────────────────────────
@@ -150,13 +155,15 @@ class PredictivePumpTrader:
             except Exception as e:
                 log.warning(f"[PumpTrader] Erro ao analisar {coin_data.get('symbol', '?')}: {e}")
 
-        results.sort(key=lambda c: c.pump_score, reverse=True)
-        top = results[:TOP_RESULTS]
+        results.sort(key=lambda c: c.opportunity_score, reverse=True)
+        qualified = [c for c in results if c.opportunity_score >= OPP_THRESHOLD]
+        top = qualified[:TOP_RESULTS]
 
         duration = round(time.time() - t0, 2)
         log.info(
             f"[PumpTrader] Scan concluído em {duration}s — "
-            f"top: {[(c.symbol, c.pump_score) for c in top[:3]]}"
+            f"{len(qualified)} oportunidades >= {OPP_THRESHOLD} | "
+            f"top: {[(c.symbol, round(c.opportunity_score), c.move_classification) for c in top[:3]]}"
         )
 
         return {
@@ -175,30 +182,34 @@ class PredictivePumpTrader:
         breakout_result = self._detect_breakout(coin_data)
         sm_result       = self._predict_pump(coin_data)
 
+        # Score final — passa coin_data para o Expected Move Model
         score_result = self._score_pump(
             whale_result, squeeze_result, gravity_result,
-            breakout_result, sm_result,
+            breakout_result, sm_result, coin_data,
         )
 
         pump_score = score_result["pump_score"]
 
         return PumpCandidate(
-            symbol             = symbol,
-            price              = coin_data.get("price", 0),
-            price_change_pct   = coin_data.get("price_change_pct", 0),
-            pump_score         = pump_score,
-            pump_probability   = score_result["pump_probability"],
-            urgency            = score_result["urgency"],
-            recommended_action = score_result["recommended_action"],
-            signal_valid       = score_result["signal_valid"],
-            component_scores   = score_result["component_scores"],
-            top_signals        = score_result["top_signals"],
-            funding_rate       = coin_data.get("funding_rate", 0),
-            long_short_ratio   = coin_data.get("long_short_ratio", 1.0),
-            oi_change_pct      = coin_data.get("oi_change_pct", 0),
-            pump_target        = score_result.get("pump_target", 0),
-            volume_24h         = coin_data.get("volume_24h", 0),
-            scanned_at         = scan_ts,
+            symbol              = symbol,
+            price               = coin_data.get("price", 0),
+            price_change_pct    = coin_data.get("price_change_pct", 0),
+            pump_score          = pump_score,
+            pump_probability    = score_result["pump_probability"],
+            urgency             = score_result["urgency"],
+            recommended_action  = score_result["recommended_action"],
+            signal_valid        = score_result["signal_valid"],
+            component_scores    = score_result["component_scores"],
+            top_signals         = score_result["top_signals"],
+            funding_rate        = coin_data.get("funding_rate", 0),
+            long_short_ratio    = coin_data.get("long_short_ratio", 1.0),
+            oi_change_pct       = coin_data.get("oi_change_pct", 0),
+            pump_target         = score_result.get("pump_target", 0),
+            volume_24h          = coin_data.get("volume_24h", 0),
+            scanned_at          = scan_ts,
+            expected_move_pct   = score_result.get("expected_move_pct", 0.0),
+            move_classification = score_result.get("move_classification", "MICRO"),
+            opportunity_score   = score_result.get("opportunity_score", 0.0),
         )
 
     async def start_loop(self):
@@ -242,8 +253,8 @@ async def _send_telegram_alerts(candidates: list):
     alerted = 0
 
     for c in candidates:
-        score  = c.get("pump_score", 0) if isinstance(c, dict) else c.pump_score
-        symbol = c.get("symbol", "")   if isinstance(c, dict) else c.symbol
+        score  = c.get("opportunity_score", 0) if isinstance(c, dict) else c.opportunity_score
+        symbol = c.get("symbol", "")           if isinstance(c, dict) else c.symbol
 
         if score < ALERT_THRESHOLD:
             break
@@ -296,8 +307,9 @@ def _send_pump_telegram(c: dict):
         symbol     = c.get("symbol", "?")
         price      = c.get("price", 0)
         pct_change = c.get("price_change_pct", 0)
-        score      = c.get("pump_score", 0)
-        urgency    = c.get("urgency", "WATCH")
+        opp_score  = c.get("opportunity_score", 0)
+        move_pct   = c.get("expected_move_pct", 0)
+        move_cls   = c.get("move_classification", "WEAK")
         action     = c.get("recommended_action", "—")
         comp       = c.get("component_scores", {})
         signals    = c.get("top_signals", [])
@@ -305,35 +317,31 @@ def _send_pump_telegram(c: dict):
         funding    = c.get("funding_rate", 0)
         ls_ratio   = c.get("long_short_ratio", 1.0)
 
-        urgency_emoji = {
-            "LAUNCH": "🚀",
-            "READY":  "⚡",
-            "ALERT":  "📡",
-            "WATCH":  "👁",
-        }.get(urgency, "⚡")
+        cls_emoji = {"EXTREME": "🚀", "STRONG": "⚡", "TRADEABLE": "📡", "WEAK": "👁"}.get(move_cls, "⚡")
 
         pct_str   = f"+{pct_change:.1f}%" if pct_change >= 0 else f"{pct_change:.1f}%"
         price_str = f"${price:,.4f}" if price < 10 else f"${price:,.2f}"
 
-        signals_text = "\n".join(f"• {s}" for s in signals[:4]) if signals else "• Múltiplos sinais alinhados"
+        signals_text = "\n".join(f"• {s}" for s in signals[:3]) if signals else "• Múltiplos sinais alinhados"
 
         target_str = ""
         if target and price:
-            upside = (target - price) / price * 100
-            t_price = f"${target:,.4f}" if target < 10 else f"${target:,.2f}"
-            target_str = f"\n🎯 Alvo: {t_price}  (+{upside:.1f}%)"
+            upside    = (target - price) / price * 100
+            t_price   = f"${target:,.4f}" if target < 10 else f"${target:,.2f}"
+            target_str = f"\n🎯 Alvo liquidez: {t_price}  (+{upside:.1f}%)"
 
         msg = (
-            f"🚀 *PUMP RADAR — PREDIÇÃO ANTECIPADA*\n\n"
-            f"🪙 *{symbol}*  |  {pct_str}  |  {price_str}\n"
-            f"{urgency_emoji} *{urgency}*  →  pump\\_score: *{score:.0f}/100*\n\n"
+            f"🚀 *PUMP RADAR — OPORTUNIDADE INSTITUCIONAL*\n\n"
+            f"{cls_emoji} *{move_cls} OPPORTUNITY* — UP ↑\n"
+            f"🪙 *{symbol}*  |  {pct_str}  |  {price_str}\n\n"
+            f"📈 *Movimento esperado: +{move_pct:.1f}%*\n"
+            f"⚡ Opportunity Score: *{opp_score:.0f}/100*\n\n"
             f"📊 *Componentes:*\n"
             f"  Whale: `{comp.get('whale', 0):.0f}` | Squeeze: `{comp.get('squeeze', 0):.0f}`\n"
-            f"  Gravidade: `{comp.get('gravity', 0):.0f}` | Breakout: `{comp.get('breakout', 0):.0f}`\n"
-            f"  Smart Money: `{comp.get('smart_money', 0):.0f}`\n\n"
+            f"  Gravity: `{comp.get('gravity', 0):.0f}` | Breakout: `{comp.get('breakout', 0):.0f}`\n\n"
             f"🔑 *Sinais:*\n{signals_text}"
             f"{target_str}\n\n"
-            f"📈 L/S ratio: `{ls_ratio:.2f}x`  |  Funding: `{funding*100:.4f}%`\n"
+            f"📈 L/S: `{ls_ratio:.2f}x`  |  Funding: `{funding*100:.4f}%`\n"
             f"💡 _{action}_"
         )
 

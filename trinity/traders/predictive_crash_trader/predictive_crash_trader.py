@@ -45,9 +45,10 @@ log = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SCAN_INTERVAL_S      = 30       # ciclo de scan em segundos
-TOP_RESULTS          = 15       # top N candidatos no output
-ALERT_THRESHOLD      = 60       # score mínimo para alerta Telegram
-CRITICAL_THRESHOLD   = 85       # score para alerta crítico repetido
+TOP_RESULTS          = 5        # top N oportunidades institucionais
+OPP_THRESHOLD        = 70       # opportunity_score mínimo para incluir
+ALERT_THRESHOLD      = 70       # opp_score mínimo para alerta Telegram
+CRITICAL_THRESHOLD   = 88       # opp_score para alerta crítico repetido
 BASE_DIR             = Path(__file__).parent.parent.parent.parent  # raiz do projeto
 SCAN_OUTPUT_FILE     = BASE_DIR / "dashboard" / "crash_scan_latest.json"
 
@@ -60,23 +61,27 @@ ALERT_COOLDOWN_S     = 300       # 5min entre alertas do mesmo símbolo
 
 @dataclass
 class CrashCandidate:
-    symbol:             str
-    price:              float
-    price_change_pct:   float
-    crash_score:        float
-    crash_probability:  str       # LOW/MEDIUM/HIGH/EXTREME
-    urgency:            str       # WATCH/ALERT/DANGER/CRITICAL
-    recommended_action: str
-    signal_valid:       bool
-    component_scores:   dict      # {liquidity, leverage, whale, compression, funding_oi, cascade}
-    top_signals:        list
-    funding_rate:       float
-    long_short_ratio:   float
-    oi_change_pct:      float
-    estimated_drawdown: float     # % drawdown esperado pela cascata
-    cascade_target:     float     # preço alvo se cascade
-    volume_24h:         float
-    scanned_at:         str       # ISO timestamp
+    symbol:              str
+    price:               float
+    price_change_pct:    float
+    crash_score:         float
+    crash_probability:   str       # LOW/MEDIUM/HIGH/EXTREME
+    urgency:             str       # WATCH/ALERT/DANGER/CRITICAL
+    recommended_action:  str
+    signal_valid:        bool
+    component_scores:    dict      # {liquidity, leverage, whale, compression, funding_oi, cascade}
+    top_signals:         list
+    funding_rate:        float
+    long_short_ratio:    float
+    oi_change_pct:       float
+    estimated_drawdown:  float     # % drawdown esperado pela cascata
+    cascade_target:      float     # preço alvo se cascade
+    volume_24h:          float
+    scanned_at:          str       # ISO timestamp
+    # Institutional Volatility Engine fields
+    expected_move_pct:   float     # movimento esperado em %
+    move_classification: str       # MICRO/WEAK/TRADEABLE/STRONG/EXTREME
+    opportunity_score:   float     # score composto 0-100
 
 
 # ── Orquestrador ──────────────────────────────────────────────────────────────
@@ -159,14 +164,16 @@ class PredictiveCrashTrader:
             except Exception as e:
                 log.warning(f"[CrashTrader] Erro ao analisar {coin_data.get('symbol', '?')}: {e}")
 
-        # 4. Ordena por crash_score desc
-        results.sort(key=lambda c: c.crash_score, reverse=True)
-        top = results[:TOP_RESULTS]
+        # 4. Ordena por opportunity_score desc, filtra por OPP_THRESHOLD
+        results.sort(key=lambda c: c.opportunity_score, reverse=True)
+        qualified = [c for c in results if c.opportunity_score >= OPP_THRESHOLD]
+        top = qualified[:TOP_RESULTS]
 
         duration = round(time.time() - t0, 2)
         log.info(
             f"[CrashTrader] Scan concluído em {duration}s — "
-            f"top: {[(c.symbol, c.crash_score) for c in top[:3]]}"
+            f"{len(qualified)} oportunidades >= {OPP_THRESHOLD} | "
+            f"top: {[(c.symbol, round(c.opportunity_score), c.move_classification) for c in top[:3]]}"
         )
 
         return {
@@ -190,31 +197,34 @@ class PredictiveCrashTrader:
         coin_data["_leverage_result"] = lev_result
         cas_result = self._predict_cascade(coin_data)
 
-        # Score final
+        # Score final — passa coin_data para o Expected Move Model
         score_result = self._score_crash(
-            liq_result, lev_result, whale_result, vol_result, cas_result
+            liq_result, lev_result, whale_result, vol_result, cas_result, coin_data
         )
 
         crash_score = score_result["crash_score"]
 
         return CrashCandidate(
-            symbol             = symbol,
-            price              = coin_data.get("price", 0),
-            price_change_pct   = coin_data.get("price_change_pct", 0),
-            crash_score        = crash_score,
-            crash_probability  = score_result["crash_probability"],
-            urgency            = score_result["urgency"],
-            recommended_action = score_result["recommended_action"],
-            signal_valid       = score_result["signal_valid"],
-            component_scores   = score_result["component_scores"],
-            top_signals        = score_result["top_signals"],
-            funding_rate       = coin_data.get("funding_rate", 0),
-            long_short_ratio   = coin_data.get("long_short_ratio", 1.0),
-            oi_change_pct      = coin_data.get("oi_change_pct", 0),
-            estimated_drawdown = cas_result.get("estimated_drawdown", 0),
-            cascade_target     = cas_result.get("cascade_target", 0),
-            volume_24h         = coin_data.get("volume_24h", 0),
-            scanned_at         = scan_ts,
+            symbol              = symbol,
+            price               = coin_data.get("price", 0),
+            price_change_pct    = coin_data.get("price_change_pct", 0),
+            crash_score         = crash_score,
+            crash_probability   = score_result["crash_probability"],
+            urgency             = score_result["urgency"],
+            recommended_action  = score_result["recommended_action"],
+            signal_valid        = score_result["signal_valid"],
+            component_scores    = score_result["component_scores"],
+            top_signals         = score_result["top_signals"],
+            funding_rate        = coin_data.get("funding_rate", 0),
+            long_short_ratio    = coin_data.get("long_short_ratio", 1.0),
+            oi_change_pct       = coin_data.get("oi_change_pct", 0),
+            estimated_drawdown  = cas_result.get("estimated_drawdown", 0),
+            cascade_target      = cas_result.get("cascade_target", 0),
+            volume_24h          = coin_data.get("volume_24h", 0),
+            scanned_at          = scan_ts,
+            expected_move_pct   = score_result.get("expected_move_pct", 0.0),
+            move_classification = score_result.get("move_classification", "MICRO"),
+            opportunity_score   = score_result.get("opportunity_score", 0.0),
         )
 
     async def start_loop(self):
@@ -266,11 +276,11 @@ async def _send_telegram_alerts(candidates: list):
     alerted = 0
 
     for c in candidates:
-        score  = c.get("crash_score", 0) if isinstance(c, dict) else c.crash_score
+        score  = c.get("opportunity_score", 0) if isinstance(c, dict) else c.opportunity_score
         symbol = c.get("symbol", "") if isinstance(c, dict) else c.symbol
 
         if score < ALERT_THRESHOLD:
-            break  # lista está ordenada — para quando score < threshold
+            break  # lista ordenada por opp_score — para quando abaixo do threshold
 
         last_alert = _alert_cooldown.get(symbol, 0)
         cooldown   = ALERT_COOLDOWN_S if score < CRITICAL_THRESHOLD else ALERT_COOLDOWN_S // 2
@@ -320,8 +330,9 @@ def _send_crash_telegram(c: dict):
         symbol     = c.get("symbol", "?")
         price      = c.get("price", 0)
         pct_change = c.get("price_change_pct", 0)
-        score      = c.get("crash_score", 0)
-        urgency    = c.get("urgency", "WATCH")
+        opp_score  = c.get("opportunity_score", 0)
+        move_pct   = c.get("expected_move_pct", 0)
+        move_cls   = c.get("move_classification", "WEAK")
         action     = c.get("recommended_action", "—")
         comp       = c.get("component_scores", {})
         signals    = c.get("top_signals", [])
@@ -330,34 +341,30 @@ def _send_crash_telegram(c: dict):
         funding    = c.get("funding_rate", 0)
         ls_ratio   = c.get("long_short_ratio", 1.0)
 
-        urgency_emoji = {
-            "CRITICAL": "🚨",
-            "DANGER":   "⚠️",
-            "ALERT":    "⚡",
-            "WATCH":    "👁",
-        }.get(urgency, "⚡")
+        cls_emoji = {"EXTREME": "🔴", "STRONG": "🟠", "TRADEABLE": "🟡", "WEAK": "⚪"}.get(move_cls, "⚡")
 
-        pct_str = f"+{pct_change:.1f}%" if pct_change >= 0 else f"{pct_change:.1f}%"
+        pct_str   = f"+{pct_change:.1f}%" if pct_change >= 0 else f"{pct_change:.1f}%"
         price_str = f"${price:,.4f}" if price < 10 else f"${price:,.2f}"
 
-        signals_text = "\n".join(f"• {s}" for s in signals[:4]) if signals else "• Múltiplos sinais alinhados"
+        signals_text = "\n".join(f"• {s}" for s in signals[:3]) if signals else "• Múltiplos sinais alinhados"
 
         target_str = ""
         if target and dd:
-            t_price = f"${target:,.4f}" if target < 10 else f"${target:,.2f}"
+            t_price    = f"${target:,.4f}" if target < 10 else f"${target:,.2f}"
             target_str = f"\n🎯 Alvo cascata: {t_price}  (-{dd:.1f}%)"
 
         msg = (
-            f"🚨 *CRASH RADAR — PREDIÇÃO ANTECIPADA*\n\n"
-            f"🪙 *{symbol}*  |  {pct_str}  |  {price_str}\n"
-            f"{urgency_emoji} *{urgency}*  →  crash\\_score: *{score:.0f}/100*\n\n"
+            f"🚨 *CRASH RADAR — OPORTUNIDADE INSTITUCIONAL*\n\n"
+            f"{cls_emoji} *{move_cls} OPPORTUNITY* — DOWN ↓\n"
+            f"🪙 *{symbol}*  |  {pct_str}  |  {price_str}\n\n"
+            f"📉 *Movimento esperado: -{move_pct:.1f}%*\n"
+            f"⚡ Opportunity Score: *{opp_score:.0f}/100*\n\n"
             f"📊 *Componentes:*\n"
             f"  Liquidez: `{comp.get('liquidity', 0):.0f}` | Alavancagem: `{comp.get('leverage', 0):.0f}`\n"
-            f"  Whale Dump: `{comp.get('whale', 0):.0f}` | Compressão: `{comp.get('compression', 0):.0f}`\n"
-            f"  Funding/OI: `{comp.get('funding_oi', 0):.0f}` | Cascata: `{comp.get('cascade', 0):.0f}`\n\n"
+            f"  Whale: `{comp.get('whale', 0):.0f}` | Compressão: `{comp.get('compression', 0):.0f}`\n\n"
             f"🔑 *Sinais:*\n{signals_text}"
             f"{target_str}\n\n"
-            f"📈 L/S ratio: `{ls_ratio:.2f}x`  |  Funding: `{funding*100:.4f}%`\n"
+            f"📈 L/S: `{ls_ratio:.2f}x`  |  Funding: `{funding*100:.4f}%`\n"
             f"💡 _{action}_"
         )
 

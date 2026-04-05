@@ -830,38 +830,64 @@ function renderComponentBar(label, value) {
 }
 
 function renderCrashCard(c) {
-  const urgColor = crashUrgencyColor(c.urgency);
-  const emoji    = crashUrgencyEmoji(c.urgency);
-  const pctStr   = c.price_change_pct >= 0
+  const moveCls  = c.move_classification || 'WEAK';
+  const oppScore = c.opportunity_score   || 0;
+  const movePct  = c.expected_move_pct   || c.estimated_drawdown || 0;
+
+  const clsColors = {
+    EXTREME:   '#ff1744',
+    STRONG:    '#ff6d00',
+    TRADEABLE: '#ffab00',
+    WEAK:      '#78909c',
+  };
+  const clsColor = clsColors[moveCls] || '#78909c';
+
+  const clsEmoji = { EXTREME: '🔴', STRONG: '🟠', TRADEABLE: '🟡', WEAK: '⚪' }[moveCls] || '⚡';
+
+  const pctStr = c.price_change_pct >= 0
     ? `<span class="c-green">+${c.price_change_pct.toFixed(1)}%</span>`
     : `<span class="c-red">${c.price_change_pct.toFixed(1)}%</span>`;
   const priceStr = c.price < 10
     ? `$${c.price.toFixed(4)}`
     : `$${c.price.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
-  const comp   = c.component_scores || {};
+
+  const comp     = c.component_scores || {};
+  const oppPct   = Math.min(100, Math.max(0, oppScore));
+  const oppColor = oppPct >= 85 ? '#ff1744' : oppPct >= 70 ? '#ff6d00' : '#ffab00';
+
   const compBars = [
     renderComponentBar('Liquidez',    comp.liquidity    || 0),
     renderComponentBar('Alavancagem', comp.leverage     || 0),
     renderComponentBar('Whale Dump',  comp.whale        || 0),
-    renderComponentBar('Compressão',  comp.compression  || 0),
     renderComponentBar('Funding/OI',  comp.funding_oi   || 0),
   ].join('');
+
   const signals = (c.top_signals || []).slice(0, 3)
     .map(s => `<div class="cr-signal-row">• ${s}</div>`).join('');
-  const ddStr = c.estimated_drawdown
-    ? `<span class="cr-dd">Cascata est.: -${c.estimated_drawdown.toFixed(1)}%</span>` : '';
 
-  return `<div class="crash-card" style="border-left:3px solid ${urgColor}">
+  return `<div class="crash-card" style="border-left:3px solid ${clsColor}">
     <div class="cr-header">
-      <div>
-        <span class="cr-symbol">${c.symbol.replace('USDT','')}</span><span class="cr-usdt">USDT</span>
-        <span class="cr-price">${priceStr}</span> ${pctStr}
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:10px;font-weight:700;color:${clsColor};text-transform:uppercase;letter-spacing:0.5px">${clsEmoji} ${moveCls} OPPORTUNITY</span>
+        <span style="font-size:10px;color:var(--text-muted)">DOWN ↓</span>
       </div>
-      <div class="cr-badge" style="background:${urgColor}22;color:${urgColor};border:1px solid ${urgColor}44">${emoji} ${c.urgency}</div>
+      <div class="cr-badge" style="background:${clsColor}22;color:${clsColor};border:1px solid ${clsColor}44">${movePct > 0 ? `-${movePct.toFixed(1)}%` : 'CRASH'}</div>
     </div>
-    <div class="cr-score-row">
-      <div>${fmtCrashScore(c.crash_score)}</div>
-      <div class="cr-meta"><div class="cr-prob" style="color:${urgColor}">${c.crash_probability}</div>${ddStr}</div>
+    <div style="margin:6px 0 4px">
+      <span class="cr-symbol">${c.symbol.replace('USDT','')}</span><span class="cr-usdt">USDT</span>
+      <span class="cr-price">${priceStr}</span> ${pctStr}
+    </div>
+    <div style="margin:8px 0;padding:8px;background:${clsColor}11;border-radius:6px">
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px">MOVIMENTO ESPERADO (SHORT)</div>
+      <div style="font-size:22px;font-weight:700;color:${clsColor}">-${movePct.toFixed(1)}%</div>
+    </div>
+    <div style="margin:6px 0">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:3px">
+        <span>OPPORTUNITY SCORE</span><span style="color:${oppColor};font-weight:700">${oppScore.toFixed(0)}/100</span>
+      </div>
+      <div style="background:var(--border);border-radius:3px;height:5px">
+        <div style="width:${oppPct}%;background:${oppColor};height:5px;border-radius:3px;transition:width 0.4s"></div>
+      </div>
     </div>
     <div class="cr-components">${compBars}</div>
     ${signals ? `<div class="cr-signals">${signals}</div>` : ''}
@@ -875,28 +901,33 @@ function renderCrashRadar(data) {
   const badge = document.getElementById('crashScanBadge');
 
   if (!data || !data.candidates || data.candidates.length === 0) {
-    if (grid)  grid.innerHTML  = '<div class="cr-empty">Scanner em execução — aguardando primeiro ciclo (±30s)...</div>';
-    if (badge) { badge.textContent = 'INICIANDO'; badge.className = 'crash-live-badge'; }
+    if (grid)  grid.innerHTML  = '<div class="cr-empty">Nenhuma oportunidade institucional detectada — aguardando movimentos ≥8%...</div>';
+    if (badge) { badge.textContent = 'MONITORANDO'; badge.className = 'crash-live-badge'; }
     return;
   }
 
   const ts       = data.scan_ts ? new Date(data.scan_ts).toLocaleTimeString('pt-BR') : '—';
   const duration = data.scan_duration_s ? `${data.scan_duration_s.toFixed(1)}s` : '—';
-  const critical = data.candidates.filter(c => c.crash_score >= 80).length;
-  const danger   = data.candidates.filter(c => c.crash_score >= 60 && c.crash_score < 80).length;
+  const extremes  = data.candidates.filter(c => (c.move_classification || '') === 'EXTREME').length;
+  const strongs   = data.candidates.filter(c => (c.move_classification || '') === 'STRONG').length;
+  const top       = data.candidates[0];
 
   if (meta) {
+    const topStr = top
+      ? `Top: <strong>${top.symbol.replace('USDT','')}</strong> opp <strong>${(top.opportunity_score||0).toFixed(0)}</strong> | move <strong>${(top.expected_move_pct||0).toFixed(1)}%</strong>`
+      : '';
     meta.innerHTML = `
       <span class="c-muted">Último scan: <b>${ts}</b> em ${duration}</span>
-      <span class="c-muted">${data.coins_scanned || 0} moedas</span>
-      ${critical ? `<span class="cr-count-badge cr-count-critical">🚨 ${critical} CRÍTICO</span>` : ''}
-      ${danger   ? `<span class="cr-count-badge cr-count-danger">⚠️ ${danger} DANGER</span>` : ''}
+      <span class="c-muted">${data.coins_scanned || 0} moedas · ${data.candidates.length} oportunidades</span>
+      ${extremes ? `<span class="cr-count-badge cr-count-critical">🔴 ${extremes} EXTREME</span>` : ''}
+      ${strongs  ? `<span class="cr-count-badge cr-count-danger">🟠 ${strongs} STRONG</span>`    : ''}
+      ${topStr   ? `<span class="c-muted">${topStr}</span>` : ''}
     `;
   }
 
   if (badge) {
-    if (critical)     { badge.textContent = 'CRÍTICO'; badge.className = 'crash-live-badge badge-critical'; }
-    else if (danger)  { badge.textContent = 'DANGER';  badge.className = 'crash-live-badge badge-danger';   }
+    if (extremes)     { badge.textContent = 'EXTREME'; badge.className = 'crash-live-badge badge-critical'; }
+    else if (strongs) { badge.textContent = 'STRONG';  badge.className = 'crash-live-badge badge-danger';   }
     else              { badge.textContent = 'ATIVO';   badge.className = 'crash-live-badge badge-active';   }
   }
 
@@ -960,38 +991,60 @@ function renderPumpComponentBar(label, value) {
 }
 
 function renderPumpCard(c) {
-  const urgColor = pumpUrgencyColor(c.urgency);
+  const moveCls  = c.move_classification || 'WEAK';
+  const oppScore = c.opportunity_score   || 0;
+  const movePct  = c.expected_move_pct   || 0;
+
+  const clsColors = {
+    EXTREME:   'var(--green)',
+    STRONG:    '#00C853',
+    TRADEABLE: '#ffab00',
+    WEAK:      '#78909c',
+  };
+  const clsColor = clsColors[moveCls] || '#78909c';
+  const clsEmoji = { EXTREME: '🚀', STRONG: '⚡', TRADEABLE: '📡', WEAK: '👁' }[moveCls] || '⚡';
+
   const pct      = c.price_change_pct >= 0 ? `+${c.price_change_pct.toFixed(1)}%` : `${c.price_change_pct.toFixed(1)}%`;
   const pctColor = c.price_change_pct >= 0 ? 'var(--green)' : 'var(--red)';
   const price    = c.price < 10 ? c.price.toFixed(4) : c.price.toFixed(2);
   const comp     = c.component_scores || {};
-  const signals  = (c.top_signals || []).slice(0, 3).map(s => `<div class="pr-signal-row">▸ ${s}</div>`).join('');
-  const targetStr = c.pump_target && c.pump_target > c.price
-    ? `<div class="pr-target">🎯 Alvo: $${c.pump_target < 10 ? c.pump_target.toFixed(4) : c.pump_target.toFixed(2)}</div>`
-    : '';
 
-  return `<div class="pump-card" style="border-left:3px solid ${urgColor}">
+  const oppPct   = Math.min(100, Math.max(0, oppScore));
+  const oppColor = oppPct >= 85 ? 'var(--green)' : oppPct >= 70 ? '#00C853' : '#ffab00';
+
+  const signals  = (c.top_signals || []).slice(0, 3).map(s => `<div class="pr-signal-row">▸ ${s}</div>`).join('');
+
+  return `<div class="pump-card" style="border-left:3px solid ${clsColor}">
     <div class="pr-header">
-      <span class="pr-symbol">${c.symbol.replace('USDT','')}</span>
-      <span class="pr-badge" style="background:${urgColor}20;color:${urgColor};border:1px solid ${urgColor}40">
-        ${pumpUrgencyEmoji(c.urgency)} ${c.urgency}
-      </span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:10px;font-weight:700;color:${clsColor};text-transform:uppercase;letter-spacing:0.5px">${clsEmoji} ${moveCls} OPPORTUNITY</span>
+        <span style="font-size:10px;color:var(--text-muted)">UP ↑</span>
+      </div>
+      <span style="font-size:11px;color:${pctColor}">${pct}</span>
     </div>
-    <div class="pr-score-row">
-      <span style="color:var(--text-muted);font-size:11px">PUMP SCORE</span>
-      <span style="font-size:22px;font-weight:700;color:${urgColor}">${fmtPumpScore(c.pump_score)}<span style="font-size:12px;color:var(--text-muted)">/100</span></span>
-      <span style="color:${pctColor};font-size:13px">${pct}</span>
-      <span style="color:var(--text-muted);font-size:12px">$${price}</span>
+    <div style="margin:4px 0 6px">
+      <span class="pr-symbol">${c.symbol.replace('USDT','')}</span>
+      <span style="font-size:12px;color:var(--text-muted);margin-left:4px">$${price}</span>
+    </div>
+    <div style="margin:8px 0;padding:8px;background:${clsColor}18;border-radius:6px">
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px">MOVIMENTO ESPERADO (LONG)</div>
+      <div style="font-size:22px;font-weight:700;color:${clsColor}">+${movePct.toFixed(1)}%</div>
+    </div>
+    <div style="margin:6px 0">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:3px">
+        <span>OPPORTUNITY SCORE</span><span style="color:${oppColor};font-weight:700">${oppScore.toFixed(0)}/100</span>
+      </div>
+      <div style="background:var(--border);border-radius:3px;height:5px">
+        <div style="width:${oppPct}%;background:${oppColor};height:5px;border-radius:3px;transition:width 0.4s"></div>
+      </div>
     </div>
     <div class="pr-comps">
-      ${renderPumpComponentBar('Whale',  comp.whale || 0)}
-      ${renderPumpComponentBar('Squeeze',comp.squeeze || 0)}
-      ${renderPumpComponentBar('Gravity',comp.gravity || 0)}
-      ${renderPumpComponentBar('Breakout',comp.breakout || 0)}
-      ${renderPumpComponentBar('SmartMoney',comp.smart_money || 0)}
+      ${renderPumpComponentBar('Whale',   comp.whale   || 0)}
+      ${renderPumpComponentBar('Squeeze', comp.squeeze || 0)}
+      ${renderPumpComponentBar('Gravity', comp.gravity || 0)}
+      ${renderPumpComponentBar('Breakout',comp.breakout|| 0)}
     </div>
     ${signals ? `<div class="pr-signals">${signals}</div>` : ''}
-    ${targetStr}
     <div class="pr-action">${c.recommended_action || ''}</div>
   </div>`;
 }
@@ -1001,19 +1054,19 @@ function renderPumpRadar(data) {
   const metaBar = document.getElementById('pumpMetaBar');
   const grid    = document.getElementById('pumpGrid');
 
-  const candidates = data.candidates || [];
-  const scanTs     = data.scan_ts ? new Date(data.scan_ts).toLocaleTimeString('pt-BR') : '--:--';
-  const count      = candidates.length;
-  const launchCount = candidates.filter(c => c.urgency === 'LAUNCH').length;
-  const readyCount  = candidates.filter(c => c.urgency === 'READY').length;
+  const candidates  = data.candidates || [];
+  const scanTs      = data.scan_ts ? new Date(data.scan_ts).toLocaleTimeString('pt-BR') : '--:--';
+  const count       = candidates.length;
+  const extremeCount = candidates.filter(c => (c.move_classification || '') === 'EXTREME').length;
+  const strongCount  = candidates.filter(c => (c.move_classification || '') === 'STRONG').length;
 
   if (badge) {
-    if (launchCount > 0) {
+    if (extremeCount > 0) {
       badge.className = 'pump-live-badge badge-launch';
-      badge.textContent = `🚀 ${launchCount} LAUNCH`;
-    } else if (readyCount > 0) {
+      badge.textContent = `🚀 ${extremeCount} EXTREME`;
+    } else if (strongCount > 0) {
       badge.className = 'pump-live-badge badge-ready';
-      badge.textContent = `⚡ ${readyCount} READY`;
+      badge.textContent = `⚡ ${strongCount} STRONG`;
     } else {
       badge.className = 'pump-live-badge badge-active';
       badge.textContent = count > 0 ? `LIVE · ${count}` : 'INICIANDO';
@@ -1023,10 +1076,9 @@ function renderPumpRadar(data) {
   if (metaBar) {
     const top = candidates[0];
     const topStr = top
-      ? `<span class="pr-count-badge ${launchCount > 0 ? 'crit' : 'norm'}">${count} candidatos</span>
-         &nbsp;Top: <strong>${top.symbol.replace('USDT','')}</strong> pump_score <strong>${top.pump_score.toFixed(0)}</strong>
-         · <span style="color:var(--text-muted)">scan ${data.scan_duration_s || 0}s</span>
-         · <span style="color:var(--text-muted)">atualizado ${scanTs}</span>`
+      ? `<span class="pr-count-badge ${extremeCount > 0 ? 'crit' : 'norm'}">${count} oportunidades</span>
+         &nbsp;Top: <strong>${top.symbol.replace('USDT','')}</strong> opp <strong>${(top.opportunity_score||0).toFixed(0)}</strong> | move <strong>+${(top.expected_move_pct||0).toFixed(1)}%</strong>
+         · <span style="color:var(--text-muted)">scan ${data.scan_duration_s || 0}s · ${scanTs}</span>`
       : `<span class="c-muted" style="font-size:11px">Scanner em execução... ${scanTs}</span>`;
     metaBar.innerHTML = topStr;
   }
