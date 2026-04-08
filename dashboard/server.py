@@ -465,5 +465,60 @@ def get_altcoin_scanner():
     return JSONResponse(content={"scan_ts": None, "candidates": [], "coins_scanned": 0})
 
 
-# Serve frontend
+# ── Aliases para o React frontend v3.0 ───────────────────────────────────────
+
+@app.get("/api/current-state")
+def get_current_state():
+    """Alias de /api/status para o React frontend."""
+    if STATE_FILE.exists():
+        return JSONResponse(content=json.loads(STATE_FILE.read_text()))
+    return JSONResponse(content={"status": "no_data"})
+
+
+@app.get("/api/signal-history")
+def get_signal_history(limit: int = 20):
+    """Alias de /api/signals para o React frontend."""
+    signals = []
+    files   = sorted(glob.glob(str(LOGS_DIR / "institutional_*.jsonl")), reverse=True)[:7]
+    for filepath in files:
+        try:
+            with open(filepath) as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        signals.append(json.loads(line))
+        except Exception:
+            pass
+    signals.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+    return JSONResponse(content=signals[:limit])
+
+
+@app.get("/api/crash-scan")
+def get_crash_scan():
+    """Alias de /api/crash-scanner para o React frontend."""
+    if CRASH_SCAN_FILE.exists():
+        try:
+            return JSONResponse(content=json.loads(CRASH_SCAN_FILE.read_text()))
+        except Exception:
+            pass
+    return JSONResponse(content={"scan_ts": None, "candidates": [], "coins_scanned": 0})
+
+
+@app.get("/api/pump-scan")
+def get_pump_scan():
+    """Alias de /api/pump-scanner para o React frontend."""
+    if PUMP_SCAN_FILE.exists():
+        try:
+            return JSONResponse(content=json.loads(PUMP_SCAN_FILE.read_text()))
+        except Exception:
+            pass
+    return JSONResponse(content={"scan_ts": None, "candidates": [], "coins_scanned": 0})
+
+
+# ── Serve React app v3.0 em /app/ ────────────────────────────────────────────
+REACT_APP_DIR = BASE_DIR / "dashboard" / "static" / "app"
+if REACT_APP_DIR.exists():
+    app.mount("/app", StaticFiles(directory=str(REACT_APP_DIR), html=True), name="react-app")
+
+# Serve frontend (legacy HTML) — deve vir POR ÚLTIMO
 app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
