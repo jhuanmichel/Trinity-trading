@@ -1815,3 +1815,251 @@ body {
   color: var(--text-dim);
 }
 .alt-level span { color: var(--text-muted); font-size: 8px; margin-right: 2px; }
+
+/* ── Gauge Animado ─────────────────────────────────────────────────────────── */
+.gauge-outer {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 4px;
+  position: relative;
+}
+
+/* Needle sweep animado via JS requestAnimationFrame (sem CSS transition
+   pois atributos SVG x2/y2 não aceitam transition CSS) */
+.gauge-needle {
+  will-change: transform;
+}
+
+/* Glow do needle — pulsa suavemente */
+.gauge-needle-glow {
+  animation: gauge-glow-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes gauge-glow-pulse {
+  0%, 100% { opacity: 0.35; }
+  50%       { opacity: 0.65; }
+}
+
+/* Pivot dot — pulsa como heartbeat */
+.gauge-pivot-dot {
+  animation: gauge-pivot-beat 2.5s ease-in-out infinite;
+  transform-origin: 100px 110px;
+}
+
+@keyframes gauge-pivot-beat {
+  0%, 100% { r: 3; opacity: 1; }
+  50%       { r: 4; opacity: 0.7; }
+}
+
+/* Borda externa do pivot */
+.gauge-pivot {
+  animation: gauge-pivot-ring 2.5s ease-in-out infinite;
+}
+
+@keyframes gauge-pivot-ring {
+  0%, 100% { stroke-opacity: 1; }
+  50%       { stroke-opacity: 0.4; }
+}
+
+/* ── Altcoin Toolbar (search + filtros) ─────────────────────────────────────── */
+.alt-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.alt-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border-md);
+  border-radius: 6px;
+  padding: 6px 10px;
+  flex: 1;
+  min-width: 200px;
+  max-width: 320px;
+  transition: border-color 0.15s;
+}
+.alt-search-wrap:focus-within { border-color: var(--bull); }
+
+.alt-search-icon { color: var(--text-dim); font-size: 15px; }
+
+.alt-search {
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  flex: 1;
+}
+.alt-search::placeholder { color: var(--text-dim); }
+
+.alt-search-clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.1s;
+}
+.alt-search-clear:hover { color: var(--text-muted); }
+
+.alt-filter-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.alt-filter-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.alt-filter-btn:hover { border-color: var(--border-md); color: var(--text); }
+.alt-filter-btn.active { background: rgba(0,255,178,0.1); border-color: var(--bull); color: var(--bull); }
+
+/* Inline tags */
+.alt-tags-row { display: flex; gap: 4px; flex-wrap: wrap; margin: 3px 0; }
+.alt-tag-bull  { background: rgba(0,255,178,0.1); color: var(--bull); border: 1px solid rgba(0,255,178,0.2); border-radius: 3px; font-size: 8px; font-weight: 700; padding: 1px 5px; }
+.alt-tag-bear  { background: rgba(255,75,75,0.1);  color: var(--bear); border: 1px solid rgba(255,75,75,0.2);  border-radius: 3px; font-size: 8px; font-weight: 700; padding: 1px 5px; }
+.alt-tag-choch { background: rgba(255,200,0,0.1);  color: var(--yellow); border: 1px solid rgba(255,200,0,0.2); border-radius: 3px; font-size: 8px; font-weight: 700; padding: 1px 5px; }
+.alt-tag-dim   { background: var(--surface2); color: var(--text-dim); border: 1px solid var(--border); border-radius: 3px; font-size: 8px; padding: 1px 5px; }
+
+.alt-struct { font-size: 9px; color: var(--text-dim); margin-left: 4px; }
+
+.alt-lv-lbl { font-size: 8px; color: var(--text-dim); margin-right: 2px; }
+.alt-lv-val { font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--text-muted); }
+.alt-lv-tp  { color: var(--bull); }
+.alt-lv-sl  { color: var(--bear); }
+
+.alt-empty-msg {
+  grid-column: 1/-1;
+  text-align: center;
+  color: var(--text-dim);
+  padding: 32px;
+  font-size: 12px;
+}
+
+/* ── Modal de detalhes da Altcoin ─────────────────────────────────────────── */
+.alt-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  animation: fade-in 0.15s ease;
+}
+
+@keyframes fade-in { from { opacity:0; } to { opacity:1; } }
+
+.alt-modal-box {
+  background: var(--surface);
+  border: 1px solid var(--border-md);
+  border-radius: 10px;
+  padding: 20px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+  animation: modal-slide-in 0.2s ease;
+}
+
+@keyframes modal-slide-in {
+  from { transform: translateY(12px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* Conteúdo do modal */
+.adm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 4px;
+}
+.adm-symbol {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text);
+}
+.adm-usdt { font-size: 13px; color: var(--text-dim); font-weight: 400; }
+.adm-price {
+  font-size: 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 2px;
+}
+.adm-dir {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: right;
+}
+.adm-close {
+  display: block;
+  margin-top: 8px;
+  margin-left: auto;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.adm-close:hover { color: var(--text); border-color: var(--border-md); }
+
+.adm-section-title {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin: 10px 0 6px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+
+.adm-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.adm-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 6px;
+  background: var(--surface2);
+  border-radius: 4px;
+}
+.adm-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.adm-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text);
+  font-weight: 600;
+}

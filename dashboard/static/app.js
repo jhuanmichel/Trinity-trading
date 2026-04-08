@@ -42,6 +42,50 @@ function scoreLabel(s) {
   return 'Short Favorável';
 }
 
+// ── Gauge animado ─────────────────────────────────────────────────────────────
+let _gaugeTargetScore = 50;
+let _gaugeCurScore    = 50;
+let _gaugeRafId       = null;
+
+function _gaugeNeedlePos(score) {
+  const cx = 100, cy = 110;
+  const ang = Math.PI * (1 - score / 100);
+  return {
+    x2: (cx + 62 * Math.cos(ang)).toFixed(2),
+    y2: (cy - 62 * Math.sin(ang)).toFixed(2),
+  };
+}
+
+function _gaugeAnimate() {
+  const diff = _gaugeTargetScore - _gaugeCurScore;
+  if (Math.abs(diff) < 0.05) {
+    _gaugeCurScore = _gaugeTargetScore;
+    _gaugeRafId = null;
+    return;
+  }
+  // Easing suave: move 8% da diferença por frame (~60fps → ~0.5s de sweep)
+  _gaugeCurScore += diff * 0.08;
+
+  const needle = document.getElementById('gauge-needle');
+  const glow   = document.getElementById('gauge-glow');
+  const txt    = document.getElementById('gauge-score-txt');
+  if (!needle) { _gaugeRafId = null; return; }
+
+  const { x2, y2 } = _gaugeNeedlePos(_gaugeCurScore);
+  needle.setAttribute('x2', x2);
+  needle.setAttribute('y2', y2);
+  if (glow)  { glow.setAttribute('x2', x2); glow.setAttribute('y2', y2); }
+  if (txt)   txt.textContent = Math.round(_gaugeCurScore);
+
+  _gaugeRafId = requestAnimationFrame(_gaugeAnimate);
+}
+
+function animateGaugeTo(targetScore) {
+  _gaugeTargetScore = Math.min(100, Math.max(0, targetScore));
+  if (_gaugeRafId) cancelAnimationFrame(_gaugeRafId);
+  _gaugeRafId = requestAnimationFrame(_gaugeAnimate);
+}
+
 function renderGauge(score) {
   const cx = 100, cy = 110, r = 80, sw = 14;
   function pt(deg) {
@@ -57,20 +101,71 @@ function renderGauge(score) {
   ];
   const paths = segs.map(([a1, a2, c]) => {
     const [x1,y1] = pt(a1), [x2,y2] = pt(a2);
-    return `<path d="M${x1},${y1}A${r},${r},0,0,1,${x2},${y2}" fill="none" stroke="${c}" stroke-width="${sw}" stroke-linecap="butt"/>`;
+    return `<path d="M${x1},${y1}A${r},${r},0,0,1,${x2},${y2}" fill="none" stroke="${c}" stroke-width="${sw}" stroke-linecap="butt" opacity="0.8"/>`;
   }).join('');
-  const ang  = Math.PI * (1 - score / 100);
-  const nx   = (cx + 62 * Math.cos(ang)).toFixed(1);
-  const ny   = (cy - 62 * Math.sin(ang)).toFixed(1);
-  const sc   = scoreColor(score);
-  return `<div style="text-align:center;padding:6px 0 0">
-    <svg viewBox="0 0 200 120" style="width:170px;height:auto;display:block;margin:0 auto">
-      <path d="M20,110A80,80,0,0,1,180,110" fill="none" stroke="#1a1a1a" stroke-width="${sw}"/>
+
+  // Needle começa sempre do centro (50) — animateGaugeTo move para o valor real
+  const startPos = _gaugeNeedlePos(50);
+  const sc = scoreColor(score);
+  const glowColor = score >= 60 ? '#0FA' : score <= 40 ? '#F55' : '#FC3';
+
+  // Chama animação depois do render
+  setTimeout(() => animateGaugeTo(score), 30);
+
+  return `<div class="gauge-outer">
+    <svg id="gauge-svg" viewBox="0 0 200 120" style="width:190px;height:auto;display:block;margin:0 auto;overflow:visible">
+      <defs>
+        <filter id="gauge-blur">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+        </filter>
+        <filter id="needle-glow">
+          <feGaussianBlur stdDeviation="2.5" result="blur"/>
+          <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+        </filter>
+      </defs>
+
+      <!-- Track bg -->
+      <path d="M20,110A80,80,0,0,1,180,110" fill="none" stroke="#111" stroke-width="${sw}"/>
+      <!-- Segmentos coloridos -->
       ${paths}
-      <line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
-      <circle cx="${cx}" cy="${cy}" r="5" fill="#111" stroke="#fff" stroke-width="1.5"/>
-      <text x="${cx}" y="82" text-anchor="middle" font-size="30" font-weight="700" fill="${sc}" font-family="Inter,sans-serif">${Math.round(score)}</text>
-      <text x="${cx}" y="99" text-anchor="middle" font-size="9" fill="#666" font-family="Inter,sans-serif" letter-spacing="2">${scoreLabel(score).toUpperCase()}</text>
+
+      <!-- Glow do needle (blur layer) -->
+      <line id="gauge-glow"
+        x1="${cx}" y1="${cy}"
+        x2="${startPos.x2}" y2="${startPos.y2}"
+        stroke="${glowColor}" stroke-width="6" stroke-linecap="round"
+        opacity="0.35" filter="url(#needle-glow)"
+        class="gauge-needle-glow"/>
+
+      <!-- Needle principal -->
+      <line id="gauge-needle"
+        x1="${cx}" y1="${cy}"
+        x2="${startPos.x2}" y2="${startPos.y2}"
+        stroke="#fff" stroke-width="2.5" stroke-linecap="round"
+        class="gauge-needle"/>
+
+      <!-- Pivot com pulse -->
+      <circle cx="${cx}" cy="${cy}" r="6" fill="#0a0a0f" stroke="${glowColor}" stroke-width="1.5" class="gauge-pivot"/>
+      <circle cx="${cx}" cy="${cy}" r="3" fill="${glowColor}" class="gauge-pivot-dot"/>
+
+      <!-- Score -->
+      <text id="gauge-score-txt" x="${cx}" y="80"
+        text-anchor="middle" font-size="30" font-weight="700"
+        fill="${sc}" font-family="'IBM Plex Mono',monospace"
+        style="filter:drop-shadow(0 0 8px ${sc})">
+        50
+      </text>
+      <!-- Label -->
+      <text x="${cx}" y="98"
+        text-anchor="middle" font-size="8.5" fill="#555"
+        font-family="monospace" letter-spacing="2">
+        ${scoreLabel(score).toUpperCase()}
+      </text>
+
+      <!-- Marcadores min/max -->
+      <text x="14" y="118" fill="#333" font-size="8" font-family="monospace">0</text>
+      <text x="186" y="118" text-anchor="end" fill="#333" font-size="8" font-family="monospace">100</text>
     </svg>
   </div>`;
 }
@@ -1413,10 +1508,14 @@ function _fmtAltPrice(p) {
   return p.toFixed(5);
 }
 
+// ── Estado altcoin ────────────────────────────────────────────────────────────
+let _allAltCandidates = [];  // todos os candidatos do último scan
+let _altFilter        = 'all'; // 'all' | 'LONG' | 'SHORT'
+
 function renderAltCard(c) {
   const isLong  = c.direction === 'LONG';
   const isShort = c.direction === 'SHORT';
-  const dirCls  = isLong ? 'alt-long' : isShort ? 'alt-short' : 'alt-neutro';
+  const dirCls      = isLong ? 'alt-long' : isShort ? 'alt-short' : 'alt-neutro';
   const dirBadgeCls = isLong ? 'alt-dir-long' : isShort ? 'alt-dir-short' : 'alt-dir-neutro';
   const dirLabel    = isLong ? '▲ LONG' : isShort ? '▼ SHORT' : '— NEUTRO';
 
@@ -1426,27 +1525,34 @@ function renderAltCard(c) {
   const chgCls  = chg >= 0 ? 'up' : 'dn';
   const chgSign = chg >= 0 ? '+' : '';
 
+  const tags = [];
+  if (c.bos_bull)   tags.push('<span class="alt-tag-bull">BOS↑</span>');
+  if (c.bos_bear)   tags.push('<span class="alt-tag-bear">BOS↓</span>');
+  if (c.choch)      tags.push('<span class="alt-tag-choch">CHoCH</span>');
+  if (c.ob_count)   tags.push(`<span class="alt-tag-dim">OB×${c.ob_count}</span>`);
+  if (c.fvg_count)  tags.push(`<span class="alt-tag-dim">FVG×${c.fvg_count}</span>`);
+  const tagsHtml = tags.length ? `<div class="alt-tags-row">${tags.join('')}</div>` : '';
+
   const lvls = [];
-  if (c.entry) lvls.push(`<span>E</span>${_fmtAltPrice(c.entry)}`);
-  if (c.stop)  lvls.push(`<span>SL</span>${_fmtAltPrice(c.stop)}`);
-  if (c.tp1)   lvls.push(`<span>TP1</span>${_fmtAltPrice(c.tp1)}`);
-  if (c.tp2)   lvls.push(`<span>TP2</span>${_fmtAltPrice(c.tp2)}`);
+  if (c.entry) lvls.push(`<span class="alt-lv-lbl">E</span><span class="alt-lv-val">$${_fmtAltPrice(c.entry)}</span>`);
+  if (c.tp1)   lvls.push(`<span class="alt-lv-lbl">TP1</span><span class="alt-lv-val alt-lv-tp">$${_fmtAltPrice(c.tp1)}</span>`);
+  if (c.stop)  lvls.push(`<span class="alt-lv-lbl">SL</span><span class="alt-lv-val alt-lv-sl">$${_fmtAltPrice(c.stop)}</span>`);
   const lvlsHtml = lvls.length
     ? `<div class="alt-levels">${lvls.map(l => `<div class="alt-level">${l}</div>`).join('')}</div>`
     : '';
 
-  const tags = [];
-  if (c.bos_bull) tags.push('<span style="color:var(--bull);font-size:9px">BOS↑</span>');
-  if (c.bos_bear) tags.push('<span style="color:var(--bear);font-size:9px">BOS↓</span>');
-  if (c.choch)    tags.push('<span style="color:var(--yellow);font-size:9px">CHoCH</span>');
-  const tagsHtml = tags.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${tags.join('')}</div>` : '';
+  // Estrutura
+  const struct = c.structure ? `<span class="alt-struct">${c.structure}</span>` : '';
 
-  return `<div class="alt-card ${dirCls}">
+  return `<div class="alt-card ${dirCls}" onclick="openAltModal('${c.symbol}')" title="Ver detalhes de ${c.symbol}">
     <div class="alt-card-top">
-      <span class="alt-symbol">${c.symbol}</span>
+      <div style="display:flex;align-items:baseline;gap:3px">
+        <span class="alt-symbol">${c.symbol}</span>
+        ${struct}
+      </div>
       <span class="alt-dir-badge ${dirBadgeCls}">${dirLabel}</span>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0">
       <span class="alt-price">$${_fmtAltPrice(c.price)}</span>
       <span class="alt-change ${chgCls}">${chgSign}${chg.toFixed(2)}%</span>
     </div>
@@ -1461,6 +1567,134 @@ function renderAltCard(c) {
   </div>`;
 }
 
+// ── Search + filtro ───────────────────────────────────────────────────────────
+
+function filterAltGrid(query) {
+  const clr = document.getElementById('altSearchClear');
+  if (clr) clr.style.display = query ? 'block' : 'none';
+  _renderFilteredAlt(query);
+}
+
+function clearAltSearch() {
+  const inp = document.getElementById('altSearchInput');
+  if (inp) { inp.value = ''; inp.focus(); }
+  const clr = document.getElementById('altSearchClear');
+  if (clr) clr.style.display = 'none';
+  _renderFilteredAlt('');
+}
+
+function setAltFilter(filter, btn) {
+  _altFilter = filter;
+  document.querySelectorAll('.alt-filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const query = document.getElementById('altSearchInput')?.value || '';
+  _renderFilteredAlt(query);
+}
+
+function _renderFilteredAlt(query) {
+  const grid = document.getElementById('altGrid');
+  if (!grid) return;
+  const q = (query || '').toUpperCase().trim();
+
+  let filtered = _allAltCandidates;
+
+  // Filtro de direção
+  if (_altFilter !== 'all') {
+    filtered = filtered.filter(c => c.direction === _altFilter);
+  }
+
+  // Filtro de texto (symbol)
+  if (q) {
+    filtered = filtered.filter(c =>
+      (c.symbol || '').toUpperCase().includes(q) ||
+      (c.pair   || '').toUpperCase().includes(q)
+    );
+  }
+
+  if (!filtered.length) {
+    grid.innerHTML = `<div class="alt-empty-msg">Nenhuma coin encontrada para "${q || _altFilter}"</div>`;
+    return;
+  }
+  grid.innerHTML = filtered.map(renderAltCard).join('');
+}
+
+// ── Modal de detalhes ─────────────────────────────────────────────────────────
+
+function openAltModal(symbol) {
+  const coin = _allAltCandidates.find(c => c.symbol === symbol);
+  if (!coin) return;
+
+  const modal = document.getElementById('altDetailModal');
+  const box   = document.getElementById('altModalBox');
+  if (!modal || !box) return;
+
+  const score    = coin.smc_score || 50;
+  const sc       = scoreColor(score);
+  const isLong   = coin.direction === 'LONG';
+  const isShort  = coin.direction === 'SHORT';
+  const dirColor = isLong ? 'var(--bull)' : isShort ? 'var(--bear)' : 'var(--text-muted)';
+  const chg      = coin.change_24h || 0;
+  const chgSign  = chg >= 0 ? '+' : '';
+
+  const metricRow = (label, value, color = '') =>
+    `<div class="adm-row">
+       <span class="adm-label">${label}</span>
+       <span class="adm-value" style="${color ? `color:${color}` : ''}">${value || '—'}</span>
+     </div>`;
+
+  box.innerHTML = `
+    <div class="adm-header">
+      <div>
+        <div class="adm-symbol">${coin.symbol}<span class="adm-usdt">/USDT</span></div>
+        <div class="adm-price">$${_fmtAltPrice(coin.price)}
+          <span style="color:${chg>=0?'var(--bull)':'var(--bear)'};font-size:12px;margin-left:6px">${chgSign}${chg.toFixed(2)}%</span>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div class="adm-dir" style="color:${dirColor}">${coin.direction}</div>
+        <div style="font-size:11px;color:var(--text-muted)">${coin.structure || ''}</div>
+        <button class="adm-close" onclick="closeAltModal()">✕</button>
+      </div>
+    </div>
+
+    <!-- Gauge mini -->
+    <div style="text-align:center;margin:12px 0 8px">
+      ${renderGauge(score)}
+    </div>
+
+    <!-- SMC Layers -->
+    <div class="adm-section-title">SMC ANALYSIS</div>
+    <div class="adm-grid">
+      ${metricRow('Score', `<b style="color:${sc}">${score.toFixed(1)}</b>`)}
+      ${metricRow('Bias', coin.bias || '—')}
+      ${metricRow('BOS Bull', coin.bos_bull ? '✓' : '—', coin.bos_bull ? 'var(--bull)' : '')}
+      ${metricRow('BOS Bear', coin.bos_bear ? '✓' : '—', coin.bos_bear ? 'var(--bear)' : '')}
+      ${metricRow('CHoCH', coin.choch ? '✓ detectado' : '—', coin.choch ? 'var(--yellow)' : '')}
+      ${metricRow('Order Blocks', coin.ob_count || 0)}
+      ${metricRow('FVGs', coin.fvg_count || 0)}
+      ${metricRow('Convicção', `${(coin.conviction || 0).toFixed(1)} pts`)}
+    </div>
+
+    <!-- Níveis -->
+    ${(coin.entry || coin.stop || coin.tp1 || coin.tp2) ? `
+    <div class="adm-section-title" style="margin-top:10px">NÍVEIS DO SINAL</div>
+    <div class="adm-grid">
+      ${coin.entry ? metricRow('Entry',  `$${_fmtAltPrice(coin.entry)}`,  'var(--yellow)') : ''}
+      ${coin.stop  ? metricRow('Stop',   `$${_fmtAltPrice(coin.stop)}`,   'var(--bear)')   : ''}
+      ${coin.tp1   ? metricRow('TP 1',   `$${_fmtAltPrice(coin.tp1)}`,    'var(--bull)')   : ''}
+      ${coin.tp2   ? metricRow('TP 2',   `$${_fmtAltPrice(coin.tp2)}`,    'var(--bull)')   : ''}
+    </div>` : ''}
+  `;
+
+  modal.style.display = 'flex';
+  setTimeout(() => animateGaugeTo(score), 50);
+}
+
+function closeAltModal(event) {
+  if (event && event.target !== document.getElementById('altDetailModal')) return;
+  document.getElementById('altDetailModal').style.display = 'none';
+}
+
 async function updateAltcoinRadar() {
   try {
     const data = await fetch('/api/altcoin-scanner').then(r => r.json());
@@ -1468,18 +1702,20 @@ async function updateAltcoinRadar() {
     const grid  = document.getElementById('altGrid');
     if (!grid) return;
 
-    const candidates = data.candidates || [];
-    if (!candidates.length) {
+    _allAltCandidates = data.candidates || [];
+
+    if (!_allAltCandidates.length) {
       grid.innerHTML = '<div class="alt-card" style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:24px">Aguardando primeiro scan...</div>';
       return;
     }
 
     if (badge) {
-      badge.textContent = `${data.coins_scanned || candidates.length} COINS`;
+      badge.textContent = `${data.coins_scanned || _allAltCandidates.length} COINS`;
       badge.classList.add('live');
     }
 
-    grid.innerHTML = candidates.map(renderAltCard).join('');
+    const query = document.getElementById('altSearchInput')?.value || '';
+    _renderFilteredAlt(query);
   } catch (e) {
     console.warn('[Trinity] Altcoin radar error:', e);
   }

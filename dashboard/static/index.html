@@ -68,11 +68,33 @@
         <span class="section-sub">Top oportunidades SMC — scan a cada 5 min</span>
         <span class="alt-scan-badge" id="altScanBadge">AGUARDANDO</span>
       </div>
+
+      <!-- Search + filtros -->
+      <div class="alt-toolbar">
+        <div class="alt-search-wrap">
+          <span class="alt-search-icon">⌕</span>
+          <input id="altSearchInput" class="alt-search" type="text"
+            placeholder="Buscar coin... (ETH, SOL, BNB...)"
+            oninput="filterAltGrid(this.value)" autocomplete="off"/>
+          <button class="alt-search-clear" id="altSearchClear" onclick="clearAltSearch()" style="display:none">✕</button>
+        </div>
+        <div class="alt-filter-btns">
+          <button class="alt-filter-btn active" data-filter="all"   onclick="setAltFilter('all',this)">TODOS</button>
+          <button class="alt-filter-btn"         data-filter="LONG"  onclick="setAltFilter('LONG',this)">LONG</button>
+          <button class="alt-filter-btn"         data-filter="SHORT" onclick="setAltFilter('SHORT',this)">SHORT</button>
+        </div>
+      </div>
+
       <div class="alt-grid" id="altGrid">
         <div class="alt-card skeleton-card" style="min-height:130px"></div>
         <div class="alt-card skeleton-card" style="min-height:130px"></div>
         <div class="alt-card skeleton-card" style="min-height:130px"></div>
         <div class="alt-card skeleton-card" style="min-height:130px"></div>
+      </div>
+
+      <!-- Modal de detalhes da coin selecionada -->
+      <div id="altDetailModal" class="alt-modal" style="display:none" onclick="closeAltModal(event)">
+        <div class="alt-modal-box" id="altModalBox"></div>
       </div>
     </section>
 

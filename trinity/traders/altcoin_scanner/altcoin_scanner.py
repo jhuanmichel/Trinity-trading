@@ -75,11 +75,12 @@ def _fetch_klines(symbol: str, interval: str = "15m", limit: int = 200) -> Optio
         if not raw or not isinstance(raw, list):
             return None
 
-        df = pd.DataFrame(raw, columns=[
-            "timestamp", "open", "high", "low", "close", "volume",
-            "close_time", "quote_volume", "trades", "taker_buy_base",
-            "taker_buy_quote", "ignore",
-        ])
+        # MEXC retorna 8 colunas (sem trades/taker fields)
+        n_cols = len(raw[0])
+        base_cols = ["timestamp", "open", "high", "low", "close", "volume",
+                     "close_time", "quote_volume", "trades", "taker_buy_base",
+                     "taker_buy_quote", "ignore"]
+        df = pd.DataFrame(raw, columns=base_cols[:n_cols])
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
         df.set_index("timestamp", inplace=True)
         for col in ["open", "high", "low", "close", "volume"]:
@@ -113,15 +114,26 @@ def _quick_smc(df: pd.DataFrame, symbol: str) -> Optional[dict]:
         elif score <= 40 and bias == "BEARISH": direction = "SHORT"
         else:                                    direction = "NEUTRO"
 
-        # Sinal completo (entry/stop/TP)
-        sig = engine.analyze().get("signal", {})
-        entry = sig.get("entry") if sig.get("valid") else None
-        stop  = sig.get("stop")  if sig.get("valid") else None
-        tp1   = sig.get("tp1")   if sig.get("valid") else None
-        tp2   = sig.get("tp2")   if sig.get("valid") else None
-
         # Preço atual
         price = float(df["close"].iloc[-1])
+
+        # Sinal básico via ATR (sem MTF/CCXT — usa só candles REST)
+        try:
+            atr = float((df["high"] - df["low"]).rolling(14).mean().iloc[-1])
+            if direction == "LONG":
+                entry = round(price * 1.001, 6)
+                stop  = round(price - atr * 1.5, 6)
+                tp1   = round(price + atr * 2.0, 6)
+                tp2   = round(price + atr * 4.0, 6)
+            elif direction == "SHORT":
+                entry = round(price * 0.999, 6)
+                stop  = round(price + atr * 1.5, 6)
+                tp1   = round(price - atr * 2.0, 6)
+                tp2   = round(price - atr * 4.0, 6)
+            else:
+                entry = stop = tp1 = tp2 = None
+        except Exception:
+            entry = stop = tp1 = tp2 = None
 
         # Variação 24h estimada (última vs 96 candles atrás em 15m)
         if len(df) >= 96:
@@ -142,8 +154,8 @@ def _quick_smc(df: pd.DataFrame, symbol: str) -> Optional[dict]:
             "bos_bull":   ms.get("bos_bull", False),
             "bos_bear":   ms.get("bos_bear", False),
             "choch":      ms.get("choch", False),
-            "ob_count":   len([o for o in ob if o.get("valid", False)]),
-            "fvg_count":  len(fvg.get("bull_fvgs", [])) + len(fvg.get("bear_fvgs", [])),
+            "ob_count":   len(ob.get("bullish_ob") or []) + len(ob.get("bearish_ob") or []) if isinstance(ob, dict) else len([o for o in ob if o.get("valid", False)]),
+            "fvg_count":  (fvg.get("total_bull") or 0) + (fvg.get("total_bear") or 0) if isinstance(fvg, dict) else len(fvg.get("bull_fvgs", [])) + len(fvg.get("bear_fvgs", [])),
             "entry":      entry,
             "stop":       stop,
             "tp1":        tp1,
