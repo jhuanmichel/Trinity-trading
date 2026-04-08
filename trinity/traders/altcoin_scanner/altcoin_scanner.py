@@ -52,6 +52,7 @@ SCAN_SYMBOLS = [
     "FTMUSDT",   # Fantom
     "WLDUSDT",   # Worldcoin
     "GRTUSDT",   # The Graph
+    "ZECUSDT",   # Zcash
 ]
 
 TOP_RESULTS    = 8     # top N no resultado
