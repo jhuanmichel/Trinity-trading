@@ -1702,3 +1702,116 @@ body {
   color: var(--text-muted);
   border: 1px solid rgba(139,152,165,0.20);
 }
+
+/* ── ALTCOIN RADAR ───────────────────────────────────────────────────────── */
+.alt-scan-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  margin-left: 10px;
+  background: rgba(139,152,165,0.10);
+  color: var(--text-muted);
+  border: 1px solid rgba(139,152,165,0.20);
+}
+.alt-scan-badge.live {
+  background: rgba(0,255,178,0.10);
+  color: var(--bull);
+  border: 1px solid rgba(0,255,178,0.25);
+}
+
+.alt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.alt-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.2s;
+}
+.alt-card:hover { border-color: var(--border-hover); }
+.alt-card.alt-long  { border-left: 3px solid var(--bull); }
+.alt-card.alt-short { border-left: 3px solid var(--bear); }
+.alt-card.alt-neutro { border-left: 3px solid var(--border); }
+
+.alt-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.alt-symbol {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.5px;
+}
+.alt-price {
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-dim);
+}
+.alt-change {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.alt-change.up { color: var(--bull); }
+.alt-change.dn { color: var(--bear); }
+
+.alt-score-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.alt-score-bar-wrap {
+  flex: 1;
+  height: 4px;
+  background: var(--surface2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.alt-score-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s;
+}
+.alt-score-num {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  min-width: 32px;
+  text-align: right;
+}
+
+.alt-dir-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 2px 7px;
+  border-radius: 3px;
+}
+.alt-dir-long  { background: rgba(0,255,178,0.12); color: var(--bull); border: 1px solid rgba(0,255,178,0.25); }
+.alt-dir-short { background: rgba(255,75,75,0.12);  color: var(--bear); border: 1px solid rgba(255,75,75,0.25); }
+.alt-dir-neutro { background: rgba(139,152,165,0.10); color: var(--text-muted); border: 1px solid var(--border); }
+
+.alt-levels {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.alt-level {
+  font-size: 9px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-dim);
+}
+.alt-level span { color: var(--text-muted); font-size: 8px; margin-right: 2px; }

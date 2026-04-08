@@ -17,6 +17,7 @@ STATE_FILE       = BASE_DIR / "dashboard" / "current_state.json"
 CRASH_SCAN_FILE  = BASE_DIR / "dashboard" / "crash_scan_latest.json"
 PUMP_SCAN_FILE   = BASE_DIR / "dashboard" / "pump_scan_latest.json"
 BACKTEST_FILE    = BASE_DIR / "dashboard" / "backtest_results.json"
+ALTCOIN_SCAN_FILE = BASE_DIR / "dashboard" / "altcoin_scan_latest.json"
 LOGS_DIR         = BASE_DIR / "logs"
 STATIC_DIR       = BASE_DIR / "dashboard" / "static"
 
@@ -149,6 +150,8 @@ async def startup_event():
     asyncio.create_task(_crash_scan_loop())
     # Pump Radar — loop background (offset 10s para não competir com crash scan)
     asyncio.create_task(_pump_scan_loop())
+    # Altcoin Scanner SMC — loop background a cada 5 min
+    asyncio.create_task(_altcoin_scan_loop())
 
 
 async def _run_analysis_bg(force: bool = False):
@@ -424,6 +427,39 @@ def get_crash_scanner():
     if CRASH_SCAN_FILE.exists():
         try:
             return JSONResponse(content=json.loads(CRASH_SCAN_FILE.read_text()))
+        except Exception:
+            pass
+    return JSONResponse(content={"scan_ts": None, "candidates": [], "coins_scanned": 0})
+
+
+async def _altcoin_scan_loop():
+    """Roda o altcoin scanner a cada 5 min em background."""
+    import logging as _log
+    _alog = _log.getLogger("altcoin_scanner")
+    await asyncio.sleep(45)  # offset: começa 45s após startup
+    while True:
+        try:
+            import sys as _sys
+            _sys.path.insert(0, str(BASE_DIR))
+            from trinity.traders.altcoin_scanner.altcoin_scanner import run_altcoin_scan
+            result = await asyncio.to_thread(run_altcoin_scan)
+            try:
+                ALTCOIN_SCAN_FILE.write_text(
+                    __import__("json").dumps(result, indent=2, default=str)
+                )
+            except Exception as _we:
+                _alog.warning(f"Altcoin scan write error: {_we}")
+        except Exception as _e:
+            _alog.error(f"Altcoin scan loop error: {_e}")
+        await asyncio.sleep(300)  # 5 minutos
+
+
+@app.get("/api/altcoin-scanner")
+def get_altcoin_scanner():
+    """Último resultado do Altcoin Scanner SMC."""
+    if ALTCOIN_SCAN_FILE.exists():
+        try:
+            return JSONResponse(content=json.loads(ALTCOIN_SCAN_FILE.read_text()))
         except Exception:
             pass
     return JSONResponse(content={"scan_ts": None, "candidates": [], "coins_scanned": 0})

@@ -42,6 +42,39 @@ function scoreLabel(s) {
   return 'Short Favorável';
 }
 
+function renderGauge(score) {
+  const cx = 100, cy = 110, r = 80, sw = 14;
+  function pt(deg) {
+    const rad = deg * Math.PI / 180;
+    return [(cx + r * Math.cos(rad)).toFixed(1), (cy - r * Math.sin(rad)).toFixed(1)];
+  }
+  const segs = [
+    [180, 144, '#F55'],
+    [144, 108, '#F93'],
+    [108,  72, '#FC3'],
+    [ 72,  36, '#AF4'],
+    [ 36,   0, '#0FA'],
+  ];
+  const paths = segs.map(([a1, a2, c]) => {
+    const [x1,y1] = pt(a1), [x2,y2] = pt(a2);
+    return `<path d="M${x1},${y1}A${r},${r},0,0,1,${x2},${y2}" fill="none" stroke="${c}" stroke-width="${sw}" stroke-linecap="butt"/>`;
+  }).join('');
+  const ang  = Math.PI * (1 - score / 100);
+  const nx   = (cx + 62 * Math.cos(ang)).toFixed(1);
+  const ny   = (cy - 62 * Math.sin(ang)).toFixed(1);
+  const sc   = scoreColor(score);
+  return `<div style="text-align:center;padding:6px 0 0">
+    <svg viewBox="0 0 200 120" style="width:170px;height:auto;display:block;margin:0 auto">
+      <path d="M20,110A80,80,0,0,1,180,110" fill="none" stroke="#1a1a1a" stroke-width="${sw}"/>
+      ${paths}
+      <line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="${cx}" cy="${cy}" r="5" fill="#111" stroke="#fff" stroke-width="1.5"/>
+      <text x="${cx}" y="82" text-anchor="middle" font-size="30" font-weight="700" fill="${sc}" font-family="Inter,sans-serif">${Math.round(score)}</text>
+      <text x="${cx}" y="99" text-anchor="middle" font-size="9" fill="#666" font-family="Inter,sans-serif" letter-spacing="2">${scoreLabel(score).toUpperCase()}</text>
+    </svg>
+  </div>`;
+}
+
 function marketRegime(score, direction) {
   if (score >= 65 || direction === 'LONG')  return { label: 'Bull Market', cls: 'regime-bull', icon: '🟢' };
   if (score <= 35 || direction === 'SHORT') return { label: 'Bear Market', cls: 'regime-bear', icon: '🔴' };
@@ -619,16 +652,10 @@ function renderSmcPanel(smc) {
     <div class="layers-header">SMART MONEY CONCEPTS
       <span class="smc-badge ${valid ? 'smc-valid' : 'smc-wait'}">${valid ? '✅ VÁLIDO' : '⏳ AGUARDANDO'}</span>
     </div>
-    <div class="smc-top-row">
-      <div>
-        <span class="score-number" style="color:${sc};font-size:28px">${score.toFixed(0)}</span>
-        <span class="score-pct" style="color:${sc}">%</span>
-        <span style="font-size:10px;color:${sc};margin-left:4px;font-weight:600">${scoreLabel(score)}</span>
-      </div>
-      <div style="text-align:right">
-        <div class="smc-dir ${dirCls}" style="font-size:13px;font-weight:700">${dir}</div>
-        <div class="c-muted" style="font-size:10px">${align} · ${conf}</div>
-      </div>
+    ${renderGauge(score)}
+    <div class="smc-top-row" style="margin-top:6px">
+      <div class="smc-dir ${dirCls}" style="font-size:13px;font-weight:700">${dir}</div>
+      <div class="c-muted" style="font-size:10px">${align} · ${conf}</div>
     </div>
     <div class="smc-tf-grid">${tfRows}</div>
     ${(smcEntry || smcStop) ? `<div class="card-levels" style="margin-top:8px">
@@ -1377,6 +1404,87 @@ async function updateBacktestResults() {
   }
 }
 
+// ── Altcoin Radar ─────────────────────────────────────────────────────────────
+
+function _fmtAltPrice(p) {
+  if (!p) return '—';
+  if (p >= 1000) return p.toLocaleString('en-US', {maximumFractionDigits: 0});
+  if (p >= 1)    return p.toLocaleString('en-US', {maximumFractionDigits: 3});
+  return p.toFixed(5);
+}
+
+function renderAltCard(c) {
+  const isLong  = c.direction === 'LONG';
+  const isShort = c.direction === 'SHORT';
+  const dirCls  = isLong ? 'alt-long' : isShort ? 'alt-short' : 'alt-neutro';
+  const dirBadgeCls = isLong ? 'alt-dir-long' : isShort ? 'alt-dir-short' : 'alt-dir-neutro';
+  const dirLabel    = isLong ? '▲ LONG' : isShort ? '▼ SHORT' : '— NEUTRO';
+
+  const score   = c.smc_score || 50;
+  const sc      = scoreColor(score);
+  const chg     = c.change_24h || 0;
+  const chgCls  = chg >= 0 ? 'up' : 'dn';
+  const chgSign = chg >= 0 ? '+' : '';
+
+  const lvls = [];
+  if (c.entry) lvls.push(`<span>E</span>${_fmtAltPrice(c.entry)}`);
+  if (c.stop)  lvls.push(`<span>SL</span>${_fmtAltPrice(c.stop)}`);
+  if (c.tp1)   lvls.push(`<span>TP1</span>${_fmtAltPrice(c.tp1)}`);
+  if (c.tp2)   lvls.push(`<span>TP2</span>${_fmtAltPrice(c.tp2)}`);
+  const lvlsHtml = lvls.length
+    ? `<div class="alt-levels">${lvls.map(l => `<div class="alt-level">${l}</div>`).join('')}</div>`
+    : '';
+
+  const tags = [];
+  if (c.bos_bull) tags.push('<span style="color:var(--bull);font-size:9px">BOS↑</span>');
+  if (c.bos_bear) tags.push('<span style="color:var(--bear);font-size:9px">BOS↓</span>');
+  if (c.choch)    tags.push('<span style="color:var(--yellow);font-size:9px">CHoCH</span>');
+  const tagsHtml = tags.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${tags.join('')}</div>` : '';
+
+  return `<div class="alt-card ${dirCls}">
+    <div class="alt-card-top">
+      <span class="alt-symbol">${c.symbol}</span>
+      <span class="alt-dir-badge ${dirBadgeCls}">${dirLabel}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span class="alt-price">$${_fmtAltPrice(c.price)}</span>
+      <span class="alt-change ${chgCls}">${chgSign}${chg.toFixed(2)}%</span>
+    </div>
+    <div class="alt-score-row">
+      <div class="alt-score-bar-wrap">
+        <div class="alt-score-bar" style="width:${score}%;background:${sc}"></div>
+      </div>
+      <span class="alt-score-num" style="color:${sc}">${score.toFixed(0)}</span>
+    </div>
+    ${tagsHtml}
+    ${lvlsHtml}
+  </div>`;
+}
+
+async function updateAltcoinRadar() {
+  try {
+    const data = await fetch('/api/altcoin-scanner').then(r => r.json());
+    const badge = document.getElementById('altScanBadge');
+    const grid  = document.getElementById('altGrid');
+    if (!grid) return;
+
+    const candidates = data.candidates || [];
+    if (!candidates.length) {
+      grid.innerHTML = '<div class="alt-card" style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:24px">Aguardando primeiro scan...</div>';
+      return;
+    }
+
+    if (badge) {
+      badge.textContent = `${data.coins_scanned || candidates.length} COINS`;
+      badge.classList.add('live');
+    }
+
+    grid.innerHTML = candidates.map(renderAltCard).join('');
+  } catch (e) {
+    console.warn('[Trinity] Altcoin radar error:', e);
+  }
+}
+
 // Init
 refresh();
 priceTick();
@@ -1385,6 +1493,7 @@ updateLiqScreenshot();                          // busca URL da screenshot Apify
 updateCrashRadar();                             // Crash Radar — primeiro carregamento
 updatePumpRadar();                              // Pump Radar — primeiro carregamento
 updateBacktestResults();                        // Backtest Performance — primeiro carregamento
+updateAltcoinRadar();                           // Altcoin Radar — primeiro carregamento
 setInterval(refresh,                REFRESH_MS);
 setInterval(priceTick,              PRICE_MS);
 setInterval(clockTick,              1000);
@@ -1394,4 +1503,5 @@ setInterval(updateLiqScreenshot,    300_000);      // 5min — sincroniza com ci
 setInterval(updateCrashRadar,       CRASH_REFRESH_MS); // 30s — sincroniza com ciclo do scanner
 setInterval(updatePumpRadar,        PUMP_REFRESH_MS);  // 30s — sincroniza com ciclo do scanner
 setInterval(updateBacktestResults,  120_000);      // 2min — atualiza métricas de backtest
+setInterval(updateAltcoinRadar,     300_000);      // 5min — sincroniza com ciclo do scanner
 clockTick();
