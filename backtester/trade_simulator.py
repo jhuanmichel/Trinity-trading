@@ -158,15 +158,22 @@ def _net_pnl_r(partial_exits: list[PartialExit]) -> float:
 
 
 def run_walkforward(
-    dfs:          dict,
-    symbol:       str   = "BTC/USDT:USDT",
-    step_bars:    int   = 16,    # 16 × 15m = 4h
-    lookback:     int   = 300,   # janela de análise
-    max_forward:  int   = 96,    # máximo 96 × 15m = 24h para atingir exit
-    threshold:    float = 55.0,  # score mínimo para entrar
+    dfs:             dict,
+    symbol:          str   = "BTC/USDT:USDT",
+    step_bars:       int   = 16,    # 16 × 15m = 4h
+    lookback:        int   = 300,   # janela de análise
+    max_forward:     int   = 96,    # máximo 96 × 15m = 24h para atingir exit
+    threshold:       float = 60.0,  # convicção mínima (LONG: score >= threshold; SHORT: score <= 100-threshold)
+    min_confluences: int   = 5,     # mínimo de camadas alinhadas (de 8)
 ) -> list[Trade]:
     """
     Percorre os candles 15m com passo step_bars, gera sinais e simula exits.
+
+    Filtros de qualidade:
+      - LONG:  smc_score >= threshold  (ex: >= 60)
+      - SHORT: smc_score <= 100-threshold (ex: <= 40)
+      - confluences >= min_confluences
+      - stop coerente com direção
     """
     from backtester.signal_generator import generate_signal_at
 
@@ -181,7 +188,10 @@ def run_walkforward(
     last_trade_idx = -1   # Evita trades sobrepostos
 
     indices = range(lookback, n - max_forward, step_bars)
-    log.info(f"[run_walkforward] {len(indices)} passos · {len(df_15m)} candles 15m")
+    log.info(
+        f"[run_walkforward] {len(indices)} passos · {len(df_15m)} candles 15m "
+        f"| threshold={threshold} | min_confluences={min_confluences}"
+    )
 
     for i in indices:
         # Evita trade sobrepostos (aguarda exit do anterior)
@@ -196,7 +206,16 @@ def run_walkforward(
         if sig is None:
             continue
 
-        if sig["smc_score"] < threshold:
+        # Filtro de convicção — simétrico para LONG e SHORT
+        smc_score = sig["smc_score"]
+        direction = sig.get("direction", "")
+        if direction == "LONG"  and smc_score <  threshold:
+            continue
+        if direction == "SHORT" and smc_score > (100.0 - threshold):
+            continue
+
+        # Filtro de confluências
+        if sig.get("confluences", 0) < min_confluences:
             continue
 
         if not sig.get("entry") or not sig.get("stop"):

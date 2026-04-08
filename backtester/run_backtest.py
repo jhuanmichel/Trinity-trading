@@ -27,8 +27,8 @@ log = logging.getLogger("run_backtest")
 BACKTEST_FILE = ROOT / "dashboard" / "backtest_results.json"
 
 
-def run(symbol: str = "BTC/USDT:USDT", days: int = 180, threshold: float = 55.0,
-        initial_capital: float = 10_000.0) -> dict:
+def run(symbol: str = "BTC/USDT:USDT", days: int = 180, threshold: float = 60.0,
+        min_confluences: int = 5, initial_capital: float = 10_000.0) -> dict:
     """
     Executa o pipeline completo de backtest e retorna o dict de resultados.
 
@@ -41,7 +41,7 @@ def run(symbol: str = "BTC/USDT:USDT", days: int = 180, threshold: float = 55.0,
     from backtester.trade_simulator  import run_walkforward
     from backtester.performance_metrics import calc_metrics
 
-    log.info(f"=== BACKTEST START: {symbol} | {days} dias | threshold={threshold} ===")
+    log.info(f"=== BACKTEST START: {symbol} | {days} dias | threshold={threshold} | min_conf={min_confluences} ===")
 
     # 1. Dados históricos
     log.info("Etapa 1/3: Buscando dados históricos ...")
@@ -51,7 +51,8 @@ def run(symbol: str = "BTC/USDT:USDT", days: int = 180, threshold: float = 55.0,
 
     # 2. Walk-forward
     log.info("Etapa 2/3: Walk-forward signal simulation ...")
-    trades = run_walkforward(dfs=dfs, symbol=symbol, threshold=threshold)
+    trades = run_walkforward(dfs=dfs, symbol=symbol, threshold=threshold,
+                             min_confluences=min_confluences)
     log.info(f"  Total de trades gerados: {len(trades)}")
 
     # 3. Métricas
@@ -62,11 +63,12 @@ def run(symbol: str = "BTC/USDT:USDT", days: int = 180, threshold: float = 55.0,
     doc = {
         "generated_at": datetime.utcnow().isoformat(),
         "config": {
-            "symbol":           symbol,
-            "period_days":      days,
+            "symbol":             symbol,
+            "period_days":        days,
             "risk_per_trade_pct": 1.0,
-            "exit_rule":        "partial_thirds",
-            "signal_threshold": threshold,
+            "exit_rule":          "partial_thirds",
+            "signal_threshold":   threshold,
+            "min_confluences":    min_confluences,
             "initial_capital":  initial_capital,
         },
         "metrics":      result["metrics"],
@@ -97,14 +99,15 @@ def run(symbol: str = "BTC/USDT:USDT", days: int = 180, threshold: float = 55.0,
 
 def main():
     parser = argparse.ArgumentParser(description="Trinity Trading Backtest Engine")
-    parser.add_argument("--symbol",    default="BTC/USDT:USDT", help="Par a backtesting")
-    parser.add_argument("--days",      type=int,   default=180,  help="Período em dias")
-    parser.add_argument("--threshold", type=float, default=55.0, help="Score SMC mínimo")
-    parser.add_argument("--capital",   type=float, default=10000.0, help="Capital inicial")
+    parser.add_argument("--symbol",          default="BTC/USDT:USDT", help="Par a backtesting")
+    parser.add_argument("--days",            type=int,   default=180,  help="Período em dias")
+    parser.add_argument("--threshold",       type=float, default=60.0, help="Convicção mínima (LONG>=threshold; SHORT<=100-threshold)")
+    parser.add_argument("--min-confluences", type=int,   default=5,    help="Mínimo de camadas alinhadas (0-8)")
+    parser.add_argument("--capital",         type=float, default=10000.0, help="Capital inicial")
     args = parser.parse_args()
 
     run(symbol=args.symbol, days=args.days, threshold=args.threshold,
-        initial_capital=args.capital)
+        min_confluences=args.min_confluences, initial_capital=args.capital)
 
 
 if __name__ == "__main__":

@@ -1,1117 +1,470 @@
 {
-  "generated_at": "2026-04-05T04:30:56.005897",
+  "generated_at": "2026-04-05T04:44:48.254305",
   "config": {
     "symbol": "BTC/USDT:USDT",
     "period_days": 180,
     "risk_per_trade_pct": 1.0,
     "exit_rule": "partial_thirds",
-    "signal_threshold": 55.0,
+    "signal_threshold": 60.0,
+    "min_confluences": 5,
     "initial_capital": 10000.0
   },
   "metrics": {
-    "total_trades": 29,
-    "wins": 8,
-    "losses": 21,
-    "win_rate_pct": 27.6,
-    "expectancy_r": 0.7509,
+    "total_trades": 11,
+    "wins": 6,
+    "losses": 5,
+    "win_rate_pct": 54.5,
+    "expectancy_r": 0.643,
     "sharpe_ratio": 1.59,
-    "profit_factor": 2.16,
-    "max_drawdown_pct": -7.73,
-    "total_return_pct": 22.54,
-    "final_capital": 12254.37,
+    "profit_factor": 2.41,
+    "max_drawdown_pct": -3.94,
+    "total_return_pct": 7.17,
+    "final_capital": 10716.51,
     "initial_capital": 10000.0,
-    "avg_win_r": 5.06,
-    "avg_loss_r": -0.89
+    "avg_win_r": 2.01,
+    "avg_loss_r": -1.0
   },
   "equity_curve": [
     {
-      "date": "2025-10-01",
+      "date": "2025-09-25",
       "equity": 9900.0
     },
     {
-      "date": "2025-10-02",
-      "equity": 9801.0
+      "date": "2025-10-10",
+      "equity": 10076.02
     },
     {
-      "date": "2025-10-03",
-      "equity": 9702.99
+      "date": "2025-10-23",
+      "equity": 9975.26
     },
     {
-      "date": "2025-10-12",
-      "equity": 10368.03
+      "date": "2025-12-05",
+      "equity": 9875.51
     },
     {
-      "date": "2025-10-15",
-      "equity": 10264.35
-    },
-    {
-      "date": "2025-10-27",
-      "equity": 10161.71
-    },
-    {
-      "date": "2025-11-01",
-      "equity": 10060.09
-    },
-    {
-      "date": "2025-11-07",
-      "equity": 9959.49
-    },
-    {
-      "date": "2025-11-18",
-      "equity": 9859.9
-    },
-    {
-      "date": "2025-11-18",
-      "equity": 9761.3
-    },
-    {
-      "date": "2025-11-23",
-      "equity": 9663.69
-    },
-    {
-      "date": "2025-11-23",
-      "equity": 9567.05
-    },
-    {
-      "date": "2025-11-24",
-      "equity": 10544.9
+      "date": "2025-12-07",
+      "equity": 9776.75
     },
     {
       "date": "2025-12-09",
-      "equity": 10439.45
+      "equity": 9678.98
     },
     {
-      "date": "2025-12-22",
-      "equity": 10335.06
+      "date": "2026-01-03",
+      "equity": 9851.07
     },
     {
-      "date": "2025-12-27",
-      "equity": 10231.71
+      "date": "2026-01-12",
+      "equity": 10026.22
     },
     {
-      "date": "2025-12-29",
-      "equity": 10197.64
+      "date": "2026-01-31",
+      "equity": 10204.49
     },
     {
-      "date": "2026-01-02",
-      "equity": 11053.63
+      "date": "2026-03-03",
+      "equity": 10385.93
     },
     {
-      "date": "2026-01-16",
-      "equity": 11364.79
-    },
-    {
-      "date": "2026-01-27",
-      "equity": 11251.14
-    },
-    {
-      "date": "2026-01-28",
-      "equity": 11245.06
-    },
-    {
-      "date": "2026-02-06",
-      "equity": 11307.58
-    },
-    {
-      "date": "2026-02-09",
-      "equity": 11194.5
-    },
-    {
-      "date": "2026-02-13",
-      "equity": 11606.01
-    },
-    {
-      "date": "2026-02-28",
-      "equity": 11567.36
-    },
-    {
-      "date": "2026-03-02",
-      "equity": 11451.69
-    },
-    {
-      "date": "2026-03-13",
-      "equity": 11337.17
-    },
-    {
-      "date": "2026-03-13",
-      "equity": 11538.74
-    },
-    {
-      "date": "2026-03-16",
-      "equity": 12254.37
+      "date": "2026-04-02",
+      "equity": 10716.51
     }
   ],
   "trades": [
     {
       "id": 1,
-      "timestamp": "2025-10-01 16:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 62.8,
+      "timestamp": "2025-09-25 04:45:00+00:00",
+      "direction": "SHORT",
+      "smc_score": 37.4,
       "confluences": 5,
-      "alignment": "BULLISH_WEAK",
-      "entry": 117569.75,
-      "stop": 117303.2,
-      "tp1": 118357.2,
-      "tp2": 118708.54,
-      "tp3": 119235.54,
-      "rr1": 2.95,
-      "rr2": 4.27,
-      "rr3": 6.25,
+      "alignment": "BEARISH",
+      "entry": 112022.65,
+      "stop": 112207.89,
+      "tp1": 111161.91,
+      "tp2": 110813.26,
+      "tp3": 110290.27,
+      "rr1": 4.65,
+      "rr2": 6.53,
+      "rr3": 9.35,
       "partial_exits": [
         {
           "tp": "STOP",
-          "price": 117303.2,
+          "price": 112207.89,
           "fraction": 1.0,
           "pnl_r": -1.0
         }
       ],
       "exit_reason": "STOP",
-      "exit_price": 117303.2,
+      "exit_price": 112207.89,
       "pnl_r": -1.0,
       "pnl_pct": -1.0,
-      "duration_bars": 2,
+      "duration_bars": 18,
       "result": "LOSS"
     },
     {
       "id": 2,
-      "timestamp": "2025-10-02 12:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 61.8,
-      "confluences": 5,
-      "alignment": "BULLISH",
-      "entry": 118899.45,
-      "stop": 118875.23,
-      "tp1": 119438.97,
-      "tp2": 119626.89,
-      "tp3": 119908.76,
-      "rr1": 22.27,
-      "rr2": 30.03,
-      "rr3": 41.67,
-      "partial_exits": [
-        {
-          "tp": "STOP",
-          "price": 118875.23,
-          "fraction": 1.0,
-          "pnl_r": -1.0
-        }
-      ],
-      "exit_reason": "STOP",
-      "exit_price": 118875.23,
-      "pnl_r": -1.0,
-      "pnl_pct": -1.0,
-      "duration_bars": 3,
-      "result": "LOSS"
-    },
-    {
-      "id": 3,
-      "timestamp": "2025-10-03 16:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 57.8,
-      "confluences": 4,
-      "alignment": "BULLISH_WEAK",
-      "entry": 123394.2,
-      "stop": 122943.67,
-      "tp1": 124582.33,
-      "tp2": 125128.55,
-      "tp3": 125947.89,
-      "rr1": 2.64,
-      "rr2": 3.85,
-      "rr3": 5.67,
-      "partial_exits": [
-        {
-          "tp": "STOP",
-          "price": 122943.67,
-          "fraction": 1.0,
-          "pnl_r": -1.0
-        }
-      ],
-      "exit_reason": "STOP",
-      "exit_price": 122943.67,
-      "pnl_r": -1.0,
-      "pnl_pct": -1.0,
-      "duration_bars": 1,
-      "result": "LOSS"
-    },
-    {
-      "id": 4,
-      "timestamp": "2025-10-12 16:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 60.9,
+      "timestamp": "2025-10-10 20:45:00+00:00",
+      "direction": "SHORT",
+      "smc_score": 37.4,
       "confluences": 5,
       "alignment": "MIXED",
-      "entry": 113313.15,
-      "stop": 113121.01,
-      "tp1": 115231.59,
-      "tp2": 115935.12,
-      "tp3": 116990.41,
-      "rr1": 9.98,
-      "rr2": 13.65,
-      "rr3": 19.14,
-      "partial_exits": [
-        {
-          "tp": "TP1",
-          "price": 115231.59,
-          "fraction": 0.3333,
-          "pnl_r": 9.985
-        },
-        {
-          "tp": "TIMEOUT",
-          "price": 114329.1,
-          "fraction": 0.6667,
-          "pnl_r": 5.288
-        }
-      ],
-      "exit_reason": "TP1",
-      "exit_price": 114329.1,
-      "pnl_r": 6.854,
-      "pnl_pct": 6.854,
-      "duration_bars": 96,
-      "result": "WIN"
-    },
-    {
-      "id": 5,
-      "timestamp": "2025-10-15 08:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 58.3,
-      "confluences": 4,
-      "alignment": "MIXED",
-      "entry": 112969.5,
-      "stop": 112643.83,
-      "tp1": 113679.97,
-      "tp2": 114025.35,
-      "tp3": 114543.41,
-      "rr1": 2.18,
-      "rr2": 3.24,
-      "rr3": 4.83,
-      "partial_exits": [
-        {
-          "tp": "STOP",
-          "price": 112643.83,
-          "fraction": 1.0,
-          "pnl_r": -1.0
-        }
-      ],
-      "exit_reason": "STOP",
-      "exit_price": 112643.83,
-      "pnl_r": -1.0,
-      "pnl_pct": -1.0,
-      "duration_bars": 3,
-      "result": "LOSS"
-    },
-    {
-      "id": 6,
-      "timestamp": "2025-10-27 16:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 68.5,
-      "confluences": 5,
-      "alignment": "BULLISH",
-      "entry": 115052.25,
-      "stop": 114819.44,
-      "tp1": 115956.76,
-      "tp2": 116335.87,
-      "tp3": 116904.53,
-      "rr1": 3.89,
-      "rr2": 5.51,
-      "rr3": 7.96,
-      "partial_exits": [
-        {
-          "tp": "STOP",
-          "price": 114819.44,
-          "fraction": 1.0,
-          "pnl_r": -1.0
-        }
-      ],
-      "exit_reason": "STOP",
-      "exit_price": 114819.44,
-      "pnl_r": -1.0,
-      "pnl_pct": -1.0,
-      "duration_bars": 12,
-      "result": "LOSS"
-    },
-    {
-      "id": 7,
-      "timestamp": "2025-11-01 04:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 59.9,
-      "confluences": 4,
-      "alignment": "MIXED",
-      "entry": 109923.45,
-      "stop": 109867.11,
-      "tp1": 110563.29,
-      "tp2": 110795.34,
-      "tp3": 111143.43,
-      "rr1": 11.36,
-      "rr2": 15.48,
-      "rr3": 21.66,
-      "partial_exits": [
-        {
-          "tp": "STOP",
-          "price": 109867.11,
-          "fraction": 1.0,
-          "pnl_r": -1.0
-        }
-      ],
-      "exit_reason": "STOP",
-      "exit_price": 109867.11,
-      "pnl_r": -1.0,
-      "pnl_pct": -1.0,
-      "duration_bars": 22,
-      "result": "LOSS"
-    },
-    {
-      "id": 8,
-      "timestamp": "2025-11-07 20:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 58.2,
-      "confluences": 4,
-      "alignment": "MIXED",
-      "entry": 103784.9,
-      "stop": 103038.72,
-      "tp1": 104531.07,
-      "tp2": 105028.52,
-      "tp3": 105774.7,
-      "rr1": 1.0,
-      "rr2": 1.67,
-      "rr3": 2.67,
-      "partial_exits": [
-        {
-          "tp": "STOP",
-          "price": 103038.72,
-          "fraction": 1.0,
-          "pnl_r": -1.0
-        }
-      ],
-      "exit_reason": "STOP",
-      "exit_price": 103038.72,
-      "pnl_r": -1.0,
-      "pnl_pct": -1.0,
-      "duration_bars": 15,
-      "result": "LOSS"
-    },
-    {
-      "id": 9,
-      "timestamp": "2025-11-18 12:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 61.0,
-      "confluences": 5,
-      "alignment": "MIXED",
-      "entry": 91768.6,
-      "stop": 91232.04,
-      "tp1": 92305.16,
-      "tp2": 92662.87,
-      "tp3": 93199.43,
-      "rr1": 1.0,
-      "rr2": 1.67,
-      "rr3": 2.67,
-      "partial_exits": [
-        {
-          "tp": "STOP",
-          "price": 91232.04,
-          "fraction": 1.0,
-          "pnl_r": -1.0
-        }
-      ],
-      "exit_reason": "STOP",
-      "exit_price": 91232.04,
-      "pnl_r": -1.0,
-      "pnl_pct": -1.0,
-      "duration_bars": 4,
-      "result": "LOSS"
-    },
-    {
-      "id": 10,
-      "timestamp": "2025-11-18 16:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 58.0,
-      "confluences": 4,
-      "alignment": "MIXED",
-      "entry": 93224.85,
-      "stop": 92299.02,
-      "tp1": 94264.98,
-      "tp2": 94920.3,
-      "tp3": 95903.29,
-      "rr1": 1.12,
-      "rr2": 1.83,
-      "rr3": 2.89,
-      "partial_exits": [
-        {
-          "tp": "STOP",
-          "price": 92299.02,
-          "fraction": 1.0,
-          "pnl_r": -1.0
-        }
-      ],
-      "exit_reason": "STOP",
-      "exit_price": 92299.02,
-      "pnl_r": -1.0,
-      "pnl_pct": -1.0,
-      "duration_bars": 31,
-      "result": "LOSS"
-    },
-    {
-      "id": 11,
-      "timestamp": "2025-11-23 04:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 59.2,
-      "confluences": 4,
-      "alignment": "BEARISH",
-      "entry": 86293.55,
-      "stop": 86011.86,
-      "tp1": 87067.94,
-      "tp2": 87419.97,
-      "tp3": 87948.01,
-      "rr1": 2.75,
-      "rr2": 4.0,
-      "rr3": 5.87,
-      "partial_exits": [
-        {
-          "tp": "STOP",
-          "price": 86011.86,
-          "fraction": 1.0,
-          "pnl_r": -1.0
-        }
-      ],
-      "exit_reason": "STOP",
-      "exit_price": 86011.86,
-      "pnl_r": -1.0,
-      "pnl_pct": -1.0,
-      "duration_bars": 4,
-      "result": "LOSS"
-    },
-    {
-      "id": 12,
-      "timestamp": "2025-11-23 16:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 59.9,
-      "confluences": 4,
-      "alignment": "MIXED",
-      "entry": 86821.5,
-      "stop": 86798.36,
-      "tp1": 87811.64,
-      "tp2": 88149.39,
-      "tp3": 88656.03,
-      "rr1": 42.8,
-      "rr2": 57.4,
-      "rr3": 79.29,
-      "partial_exits": [
-        {
-          "tp": "STOP",
-          "price": 86798.36,
-          "fraction": 1.0,
-          "pnl_r": -1.0
-        }
-      ],
-      "exit_reason": "STOP",
-      "exit_price": 86798.36,
-      "pnl_r": -1.0,
-      "pnl_pct": -1.0,
-      "duration_bars": 1,
-      "result": "LOSS"
-    },
-    {
-      "id": 13,
-      "timestamp": "2025-11-24 16:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 71.0,
-      "confluences": 5,
-      "alignment": "MIXED",
-      "entry": 86756.05,
-      "stop": 86643.09,
-      "tp1": 88272.71,
-      "tp2": 88815.92,
-      "tp3": 89630.73,
-      "rr1": 13.43,
-      "rr2": 18.24,
-      "rr3": 25.45,
-      "partial_exits": [
-        {
-          "tp": "TP1",
-          "price": 88272.71,
-          "fraction": 0.3333,
-          "pnl_r": 13.427
-        },
-        {
-          "tp": "TP2",
-          "price": 88815.92,
-          "fraction": 0.3333,
-          "pnl_r": 18.235
-        },
-        {
-          "tp": "STOP",
-          "price": 86643.09,
-          "fraction": 0.3333,
-          "pnl_r": -1.0
-        }
-      ],
-      "exit_reason": "STOP",
-      "exit_price": 86643.09,
-      "pnl_r": 10.221,
-      "pnl_pct": 10.221,
-      "duration_bars": 67,
-      "result": "WIN"
-    },
-    {
-      "id": 14,
-      "timestamp": "2025-12-09 16:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 60.7,
-      "confluences": 5,
-      "alignment": "BEARISH",
-      "entry": 94203.2,
-      "stop": 93247.4,
-      "tp1": 95159.0,
-      "tp2": 95796.2,
-      "tp3": 96752.0,
-      "rr1": 1.0,
-      "rr2": 1.67,
-      "rr3": 2.67,
-      "partial_exits": [
-        {
-          "tp": "STOP",
-          "price": 93247.4,
-          "fraction": 1.0,
-          "pnl_r": -1.0
-        }
-      ],
-      "exit_reason": "STOP",
-      "exit_price": 93247.4,
-      "pnl_r": -1.0,
-      "pnl_pct": -1.0,
-      "duration_bars": 15,
-      "result": "LOSS"
-    },
-    {
-      "id": 15,
-      "timestamp": "2025-12-22 12:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 58.8,
-      "confluences": 4,
-      "alignment": "BULLISH",
-      "entry": 90117.8,
-      "stop": 89732.13,
-      "tp1": 90503.47,
-      "tp2": 90760.59,
-      "tp3": 91146.26,
-      "rr1": 1.0,
-      "rr2": 1.67,
-      "rr3": 2.67,
-      "partial_exits": [
-        {
-          "tp": "STOP",
-          "price": 89732.13,
-          "fraction": 1.0,
-          "pnl_r": -1.0
-        }
-      ],
-      "exit_reason": "STOP",
-      "exit_price": 89732.13,
-      "pnl_r": -1.0,
-      "pnl_pct": -1.0,
-      "duration_bars": 4,
-      "result": "LOSS"
-    },
-    {
-      "id": 16,
-      "timestamp": "2025-12-27 08:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 57.7,
-      "confluences": 4,
-      "alignment": "MIXED",
-      "entry": 87461.1,
-      "stop": 87455.65,
-      "tp1": 87678.35,
-      "tp2": 87752.59,
-      "tp3": 87863.94,
-      "rr1": 39.84,
-      "rr2": 53.45,
-      "rr3": 73.87,
-      "partial_exits": [
-        {
-          "tp": "STOP",
-          "price": 87455.65,
-          "fraction": 1.0,
-          "pnl_r": -1.0
-        }
-      ],
-      "exit_reason": "STOP",
-      "exit_price": 87455.65,
-      "pnl_r": -1.0,
-      "pnl_pct": -1.0,
-      "duration_bars": 8,
-      "result": "LOSS"
-    },
-    {
-      "id": 17,
-      "timestamp": "2025-12-29 00:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 63.0,
-      "confluences": 5,
-      "alignment": "BULLISH_WEAK",
-      "entry": 88149.0,
-      "stop": 87883.17,
-      "tp1": 88414.83,
-      "tp2": 88592.05,
-      "tp3": 88857.89,
+      "entry": 114196.3,
+      "stop": 115356.44,
+      "tp1": 113036.16,
+      "tp2": 112262.73,
+      "tp3": 111102.59,
       "rr1": 1.0,
       "rr2": 1.67,
       "rr3": 2.67,
       "partial_exits": [
         {
           "tp": "TP1",
-          "price": 88414.83,
-          "fraction": 0.3333,
-          "pnl_r": 1.0
-        },
-        {
-          "tp": "STOP",
-          "price": 87883.17,
-          "fraction": 0.6667,
-          "pnl_r": -1.0
-        }
-      ],
-      "exit_reason": "STOP",
-      "exit_price": 87883.17,
-      "pnl_r": -0.333,
-      "pnl_pct": -0.333,
-      "duration_bars": 3,
-      "result": "LOSS"
-    },
-    {
-      "id": 18,
-      "timestamp": "2026-01-02 08:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 55.1,
-      "confluences": 4,
-      "alignment": "MIXED",
-      "entry": 88902.6,
-      "stop": 88838.07,
-      "tp1": 89274.53,
-      "tp2": 89420.01,
-      "tp3": 89638.24,
-      "rr1": 5.76,
-      "rr2": 8.02,
-      "rr3": 11.4,
-      "partial_exits": [
-        {
-          "tp": "TP1",
-          "price": 89274.53,
-          "fraction": 0.3333,
-          "pnl_r": 5.764
-        },
-        {
-          "tp": "TP2",
-          "price": 89420.01,
-          "fraction": 0.3333,
-          "pnl_r": 8.018
-        },
-        {
-          "tp": "TP3",
-          "price": 89638.24,
-          "fraction": 0.3333,
-          "pnl_r": 11.4
-        }
-      ],
-      "exit_reason": "TP3",
-      "exit_price": 89638.24,
-      "pnl_r": 8.394,
-      "pnl_pct": 8.394,
-      "duration_bars": 6,
-      "result": "WIN"
-    },
-    {
-      "id": 19,
-      "timestamp": "2026-01-16 20:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 71.0,
-      "confluences": 5,
-      "alignment": "BULLISH",
-      "entry": 95005.5,
-      "stop": 94881.66,
-      "tp1": 95519.14,
-      "tp2": 95731.63,
-      "tp3": 96050.37,
-      "rr1": 4.15,
-      "rr2": 5.86,
-      "rr3": 8.44,
-      "partial_exits": [
-        {
-          "tp": "TP1",
-          "price": 95519.14,
-          "fraction": 0.3333,
-          "pnl_r": 4.148
-        },
-        {
-          "tp": "TIMEOUT",
-          "price": 95271.5,
-          "fraction": 0.6667,
-          "pnl_r": 2.148
-        }
-      ],
-      "exit_reason": "TP1",
-      "exit_price": 95271.5,
-      "pnl_r": 2.815,
-      "pnl_pct": 2.815,
-      "duration_bars": 96,
-      "result": "WIN"
-    },
-    {
-      "id": 20,
-      "timestamp": "2026-01-27 16:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 58.0,
-      "confluences": 4,
-      "alignment": "MIXED",
-      "entry": 88146.8,
-      "stop": 88142.45,
-      "tp1": 89275.95,
-      "tp2": 89653.79,
-      "tp3": 90220.54,
-      "rr1": 259.36,
-      "rr2": 346.15,
-      "rr3": 476.33,
-      "partial_exits": [
-        {
-          "tp": "STOP",
-          "price": 88142.45,
-          "fraction": 1.0,
-          "pnl_r": -1.0
-        }
-      ],
-      "exit_reason": "STOP",
-      "exit_price": 88142.45,
-      "pnl_r": -1.0,
-      "pnl_pct": -1.0,
-      "duration_bars": 2,
-      "result": "LOSS"
-    },
-    {
-      "id": 21,
-      "timestamp": "2026-01-28 12:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 59.0,
-      "confluences": 4,
-      "alignment": "BULLISH_WEAK",
-      "entry": 89755.5,
-      "stop": 89484.94,
-      "tp1": 90252.46,
-      "tp2": 90508.31,
-      "tp3": 90892.07,
-      "rr1": 1.84,
-      "rr2": 2.78,
-      "rr3": 4.2,
-      "partial_exits": [
-        {
-          "tp": "TP1",
-          "price": 90252.46,
-          "fraction": 0.3333,
-          "pnl_r": 1.837
-        },
-        {
-          "tp": "STOP",
-          "price": 89484.94,
-          "fraction": 0.6667,
-          "pnl_r": -1.0
-        }
-      ],
-      "exit_reason": "STOP",
-      "exit_price": 89484.94,
-      "pnl_r": -0.054,
-      "pnl_pct": -0.054,
-      "duration_bars": 9,
-      "result": "LOSS"
-    },
-    {
-      "id": 22,
-      "timestamp": "2026-02-06 16:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 57.1,
-      "confluences": 4,
-      "alignment": "MIXED",
-      "entry": 69747.3,
-      "stop": 68660.34,
-      "tp1": 70834.26,
-      "tp2": 71558.91,
-      "tp3": 72645.87,
-      "rr1": 1.0,
-      "rr2": 1.67,
-      "rr3": 2.67,
-      "partial_exits": [
-        {
-          "tp": "TP1",
-          "price": 70834.26,
+          "price": 113036.16,
           "fraction": 0.3333,
           "pnl_r": 1.0
         },
         {
           "tp": "TP2",
-          "price": 71558.91,
+          "price": 112262.73,
           "fraction": 0.3333,
           "pnl_r": 1.667
         },
         {
-          "tp": "STOP",
-          "price": 68660.34,
+          "tp": "TP3",
+          "price": 111102.59,
           "fraction": 0.3333,
-          "pnl_r": -1.0
+          "pnl_r": 2.667
         }
       ],
-      "exit_reason": "STOP",
-      "exit_price": 68660.34,
-      "pnl_r": 0.556,
-      "pnl_pct": 0.556,
-      "duration_bars": 58,
+      "exit_reason": "TP3",
+      "exit_price": 111102.59,
+      "pnl_r": 1.778,
+      "pnl_pct": 1.778,
+      "duration_bars": 1,
       "result": "WIN"
     },
     {
-      "id": 23,
-      "timestamp": "2026-02-09 04:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 59.0,
-      "confluences": 4,
-      "alignment": "BULLISH",
-      "entry": 70512.55,
-      "stop": 70399.44,
-      "tp1": 71597.56,
-      "tp2": 71996.93,
-      "tp3": 72595.99,
-      "rr1": 9.59,
-      "rr2": 13.12,
-      "rr3": 18.42,
+      "id": 3,
+      "timestamp": "2025-10-23 20:45:00+00:00",
+      "direction": "SHORT",
+      "smc_score": 30.9,
+      "confluences": 5,
+      "alignment": "MIXED",
+      "entry": 110057.7,
+      "stop": 110100.57,
+      "tp1": 108833.63,
+      "tp2": 108411.31,
+      "tp3": 107777.84,
+      "rr1": 28.55,
+      "rr2": 38.4,
+      "rr3": 53.18,
       "partial_exits": [
         {
           "tp": "STOP",
-          "price": 70399.44,
+          "price": 110100.57,
           "fraction": 1.0,
           "pnl_r": -1.0
         }
       ],
       "exit_reason": "STOP",
-      "exit_price": 70399.44,
+      "exit_price": 110100.57,
       "pnl_r": -1.0,
       "pnl_pct": -1.0,
       "duration_bars": 7,
       "result": "LOSS"
     },
     {
-      "id": 24,
-      "timestamp": "2026-02-13 16:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 60.8,
-      "confluences": 4,
-      "alignment": "MIXED",
-      "entry": 68775.45,
-      "stop": 68433.56,
-      "tp1": 69981.04,
-      "tp2": 70496.87,
-      "tp3": 71270.61,
-      "rr1": 3.53,
-      "rr2": 5.03,
-      "rr3": 7.3,
+      "id": 4,
+      "timestamp": "2025-12-05 16:45:00+00:00",
+      "direction": "SHORT",
+      "smc_score": 39.1,
+      "confluences": 5,
+      "alignment": "BEARISH",
+      "entry": 89147.2,
+      "stop": 89765.84,
+      "tp1": 87750.16,
+      "tp2": 87078.27,
+      "tp3": 86070.43,
+      "rr1": 2.26,
+      "rr2": 3.34,
+      "rr3": 4.97,
       "partial_exits": [
-        {
-          "tp": "TP1",
-          "price": 69981.04,
-          "fraction": 0.3333,
-          "pnl_r": 3.526
-        },
-        {
-          "tp": "TP2",
-          "price": 70496.87,
-          "fraction": 0.3333,
-          "pnl_r": 5.035
-        },
-        {
-          "tp": "TIMEOUT",
-          "price": 69618.7,
-          "fraction": 0.3333,
-          "pnl_r": 2.466
-        }
-      ],
-      "exit_reason": "TP2",
-      "exit_price": 69618.7,
-      "pnl_r": 3.676,
-      "pnl_pct": 3.676,
-      "duration_bars": 96,
-      "result": "WIN"
-    },
-    {
-      "id": 25,
-      "timestamp": "2026-02-28 20:30:00+00:00",
-      "direction": "LONG",
-      "smc_score": 58.0,
-      "confluences": 4,
-      "alignment": "MIXED",
-      "entry": 66746.3,
-      "stop": 66100.62,
-      "tp1": 67391.98,
-      "tp2": 67822.43,
-      "tp3": 68468.1,
-      "rr1": 1.0,
-      "rr2": 1.67,
-      "rr3": 2.67,
-      "partial_exits": [
-        {
-          "tp": "TP1",
-          "price": 67391.98,
-          "fraction": 0.3333,
-          "pnl_r": 1.0
-        },
         {
           "tp": "STOP",
-          "price": 66100.62,
-          "fraction": 0.6667,
+          "price": 89765.84,
+          "fraction": 1.0,
           "pnl_r": -1.0
         }
       ],
       "exit_reason": "STOP",
-      "exit_price": 66100.62,
-      "pnl_r": -0.333,
-      "pnl_pct": -0.333,
-      "duration_bars": 18,
+      "exit_price": 89765.84,
+      "pnl_r": -1.0,
+      "pnl_pct": -1.0,
+      "duration_bars": 86,
       "result": "LOSS"
     },
     {
-      "id": 26,
-      "timestamp": "2026-03-02 00:30:00+00:00",
+      "id": 5,
+      "timestamp": "2025-12-07 12:45:00+00:00",
       "direction": "LONG",
-      "smc_score": 72.7,
-      "confluences": 6,
+      "smc_score": 66.3,
+      "confluences": 5,
       "alignment": "MIXED",
-      "entry": 66580.0,
-      "stop": 65902.41,
-      "tp1": 67257.59,
-      "tp2": 67709.32,
-      "tp3": 68386.91,
+      "entry": 89428.1,
+      "stop": 89208.44,
+      "tp1": 89647.76,
+      "tp2": 89794.21,
+      "tp3": 90013.87,
       "rr1": 1.0,
       "rr2": 1.67,
       "rr3": 2.67,
       "partial_exits": [
         {
           "tp": "STOP",
-          "price": 65902.41,
+          "price": 89208.44,
           "fraction": 1.0,
           "pnl_r": -1.0
         }
       ],
       "exit_reason": "STOP",
-      "exit_price": 65902.41,
+      "exit_price": 89208.44,
       "pnl_r": -1.0,
       "pnl_pct": -1.0,
-      "duration_bars": 6,
+      "duration_bars": 2,
       "result": "LOSS"
     },
     {
-      "id": 27,
-      "timestamp": "2026-03-13 00:30:00+00:00",
+      "id": 6,
+      "timestamp": "2025-12-09 16:45:00+00:00",
       "direction": "LONG",
-      "smc_score": 56.4,
-      "confluences": 4,
-      "alignment": "MIXED",
-      "entry": 71262.4,
-      "stop": 71041.86,
-      "tp1": 71912.94,
-      "tp2": 72203.29,
-      "tp3": 72638.83,
-      "rr1": 2.95,
-      "rr2": 4.27,
-      "rr3": 6.24,
+      "smc_score": 61.7,
+      "confluences": 5,
+      "alignment": "BEARISH",
+      "entry": 93834.05,
+      "stop": 93168.31,
+      "tp1": 95124.49,
+      "tp2": 95776.54,
+      "tp3": 96754.63,
+      "rr1": 1.94,
+      "rr2": 2.92,
+      "rr3": 4.39,
       "partial_exits": [
         {
           "tp": "STOP",
-          "price": 71041.86,
+          "price": 93168.31,
           "fraction": 1.0,
           "pnl_r": -1.0
         }
       ],
       "exit_reason": "STOP",
-      "exit_price": 71041.86,
+      "exit_price": 93168.31,
       "pnl_r": -1.0,
       "pnl_pct": -1.0,
-      "duration_bars": 9,
+      "duration_bars": 14,
       "result": "LOSS"
     },
     {
-      "id": 28,
-      "timestamp": "2026-03-13 08:30:00+00:00",
+      "id": 7,
+      "timestamp": "2026-01-03 12:45:00+00:00",
       "direction": "LONG",
-      "smc_score": 60.4,
+      "smc_score": 67.2,
       "confluences": 5,
       "alignment": "BULLISH_WEAK",
-      "entry": 71889.9,
-      "stop": 71544.85,
-      "tp1": 72234.95,
-      "tp2": 72464.99,
-      "tp3": 72810.04,
+      "entry": 89997.3,
+      "stop": 89821.09,
+      "tp1": 90173.51,
+      "tp2": 90290.98,
+      "tp3": 90467.19,
       "rr1": 1.0,
       "rr2": 1.67,
       "rr3": 2.67,
       "partial_exits": [
         {
           "tp": "TP1",
-          "price": 72234.95,
+          "price": 90173.51,
           "fraction": 0.3333,
           "pnl_r": 1.0
         },
         {
           "tp": "TP2",
-          "price": 72464.99,
+          "price": 90290.98,
           "fraction": 0.3333,
           "pnl_r": 1.667
         },
         {
           "tp": "TP3",
-          "price": 72810.04,
+          "price": 90467.19,
           "fraction": 0.3333,
           "pnl_r": 2.667
         }
       ],
       "exit_reason": "TP3",
-      "exit_price": 72810.04,
+      "exit_price": 90467.19,
       "pnl_r": 1.778,
       "pnl_pct": 1.778,
-      "duration_bars": 17,
+      "duration_bars": 35,
       "result": "WIN"
     },
     {
-      "id": 29,
-      "timestamp": "2026-03-16 12:30:00+00:00",
+      "id": 8,
+      "timestamp": "2026-01-12 00:45:00+00:00",
       "direction": "LONG",
-      "smc_score": 59.1,
-      "confluences": 4,
+      "smc_score": 66.3,
+      "confluences": 5,
       "alignment": "BULLISH",
-      "entry": 73483.7,
-      "stop": 73404.3,
-      "tp1": 74139.5,
-      "tp2": 74384.56,
-      "tp3": 74752.16,
-      "rr1": 8.26,
-      "rr2": 11.35,
-      "rr3": 15.98,
+      "entry": 91227.9,
+      "stop": 90816.42,
+      "tp1": 91639.38,
+      "tp2": 91913.7,
+      "tp3": 92325.19,
+      "rr1": 1.0,
+      "rr2": 1.67,
+      "rr3": 2.67,
       "partial_exits": [
         {
           "tp": "TP1",
-          "price": 74139.5,
+          "price": 91639.38,
           "fraction": 0.3333,
-          "pnl_r": 8.259
+          "pnl_r": 1.0
         },
         {
           "tp": "TP2",
-          "price": 74384.56,
+          "price": 91913.7,
           "fraction": 0.3333,
-          "pnl_r": 11.346
+          "pnl_r": 1.667
+        },
+        {
+          "tp": "TP3",
+          "price": 92325.19,
+          "fraction": 0.3333,
+          "pnl_r": 2.667
+        }
+      ],
+      "exit_reason": "TP3",
+      "exit_price": 92325.19,
+      "pnl_r": 1.778,
+      "pnl_pct": 1.778,
+      "duration_bars": 8,
+      "result": "WIN"
+    },
+    {
+      "id": 9,
+      "timestamp": "2026-01-31 16:45:00+00:00",
+      "direction": "SHORT",
+      "smc_score": 36.2,
+      "confluences": 5,
+      "alignment": "MIXED",
+      "entry": 80327.3,
+      "stop": 81295.21,
+      "tp1": 79359.39,
+      "tp2": 78714.12,
+      "tp3": 77746.21,
+      "rr1": 1.0,
+      "rr2": 1.67,
+      "rr3": 2.67,
+      "partial_exits": [
+        {
+          "tp": "TP1",
+          "price": 79359.39,
+          "fraction": 0.3333,
+          "pnl_r": 1.0
+        },
+        {
+          "tp": "TP2",
+          "price": 78714.12,
+          "fraction": 0.3333,
+          "pnl_r": 1.667
+        },
+        {
+          "tp": "TP3",
+          "price": 77746.21,
+          "fraction": 0.3333,
+          "pnl_r": 2.667
+        }
+      ],
+      "exit_reason": "TP3",
+      "exit_price": 77746.21,
+      "pnl_r": 1.778,
+      "pnl_pct": 1.778,
+      "duration_bars": 7,
+      "result": "WIN"
+    },
+    {
+      "id": 10,
+      "timestamp": "2026-03-03 16:45:00+00:00",
+      "direction": "LONG",
+      "smc_score": 63.2,
+      "confluences": 5,
+      "alignment": "MIXED",
+      "entry": 68137.3,
+      "stop": 67132.16,
+      "tp1": 69142.44,
+      "tp2": 69812.53,
+      "tp3": 70817.67,
+      "rr1": 1.0,
+      "rr2": 1.67,
+      "rr3": 2.67,
+      "partial_exits": [
+        {
+          "tp": "TP1",
+          "price": 69142.44,
+          "fraction": 0.3333,
+          "pnl_r": 1.0
+        },
+        {
+          "tp": "TP2",
+          "price": 69812.53,
+          "fraction": 0.3333,
+          "pnl_r": 1.667
+        },
+        {
+          "tp": "TP3",
+          "price": 70817.67,
+          "fraction": 0.3333,
+          "pnl_r": 2.667
+        }
+      ],
+      "exit_reason": "TP3",
+      "exit_price": 70817.67,
+      "pnl_r": 1.778,
+      "pnl_pct": 1.778,
+      "duration_bars": 64,
+      "result": "WIN"
+    },
+    {
+      "id": 11,
+      "timestamp": "2026-04-02 12:45:00+00:00",
+      "direction": "SHORT",
+      "smc_score": 39.8,
+      "confluences": 5,
+      "alignment": "MIXED",
+      "entry": 66248.25,
+      "stop": 66292.61,
+      "tp1": 65735.99,
+      "tp2": 65550.44,
+      "tp3": 65272.13,
+      "rr1": 11.55,
+      "rr2": 15.73,
+      "rr3": 22.0,
+      "partial_exits": [
+        {
+          "tp": "TP1",
+          "price": 65735.99,
+          "fraction": 0.3333,
+          "pnl_r": 11.548
         },
         {
           "tp": "STOP",
-          "price": 73404.3,
-          "fraction": 0.3333,
+          "price": 66292.61,
+          "fraction": 0.6667,
           "pnl_r": -1.0
         }
       ],
       "exit_reason": "STOP",
-      "exit_price": 73404.3,
-      "pnl_r": 6.202,
-      "pnl_pct": 6.202,
-      "duration_bars": 8,
+      "exit_price": 66292.61,
+      "pnl_r": 3.183,
+      "pnl_pct": 3.183,
+      "duration_bars": 5,
       "result": "WIN"
     }
   ]

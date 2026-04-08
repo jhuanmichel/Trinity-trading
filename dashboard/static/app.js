@@ -814,7 +814,7 @@ function renderHistory(signals) {
     tbody.innerHTML = `<tr><td colspan="8" class="table-empty">Nenhum sinal registrado ainda</td></tr>`;
     return;
   }
-  tbody.innerHTML = signals.map(sig => {
+  tbody.innerHTML = signals.slice(0, 5).map(sig => {
     const score = sig.inst_score || 0;
     const dir   = sig.direction || '—';
     const sc    = scoreColor(score);
