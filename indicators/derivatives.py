@@ -87,7 +87,12 @@ def get_long_short_ratio(symbol: str = "BTC") -> dict:
 
 def analyze(symbol: str = "BTC") -> dict:
     """
-    Combina todos os dados de derivativos e retorna score.
+    Combina OI + Long/Short ratio e retorna score.
+
+    NOTA: O funding rate NÃO contribui para o score aqui.
+    Ele é coletado e exposto no dict de retorno para exibição/alertas,
+    mas a pontuação e bloqueio por funding é responsabilidade exclusiva
+    do FundingRateManager (funding_rate_manager.py), evitando dupla contagem.
     """
     funding = get_funding_rate(symbol)
     oi      = get_open_interest(symbol)
@@ -95,44 +100,44 @@ def analyze(symbol: str = "BTC") -> dict:
 
     score = 50  # neutro
 
-    # Funding rate
-    fr = funding.get("funding_rate", 0)
-    if fr < -0.05:
-        score += 20   # funding muito negativo → mercado short demais → possível alta
-    elif fr < 0:
-        score += 10
-    elif fr > 0.1:
-        score -= 20   # funding muito positivo → mercado long demais → possível queda
-    elif fr > 0.05:
-        score -= 10
-
-    # OI
+    # OI — posições abrindo/fechando
     oi_1h = oi.get("oi_change_1h", 0)
-    if oi_1h > 2:
-        score += 10   # OI crescendo = posições abrindo (tendência real)
-    elif oi_1h < -2:
-        score -= 5    # OI caindo = posições fechando
+    if oi_1h > 3:
+        score += 20   # OI subindo forte = tendência real com força
+    elif oi_1h > 1:
+        score += 10   # OI subindo = confirmação moderada
+    elif oi_1h < -3:
+        score -= 15   # OI caindo forte = posições fechando em pânico
+    elif oi_1h < -1:
+        score -= 7    # OI caindo = cuidado
 
-    # Long/Short ratio
+    # Long/Short ratio — sentimento de posicionamento
     long_pct = ls.get("long_pct", 50)
     if long_pct > 75:
-        score -= 20   # 75%+ long = mercado excessivamente comprado = perigo
+        score -= 25   # 75%+ long = mercado excessivamente comprado → queda provável
+    elif long_pct > 60:
+        score -= 10
     elif long_pct < 30:
-        score += 20   # 30%- long = mercado muito short = possível squeeze de alta
+        score += 25   # 30%- long = mercado muito short → squeeze provável
     elif long_pct < 45:
         score += 10
 
     score = max(0, min(100, score))
 
+    fr = funding.get("funding_rate", 0)  # em % — apenas para exibição
+
     return {
-        "score":      round(score),
-        **funding,
+        "score":             round(score),
+        # funding exposto para display/alertas, mas NÃO soma no score
+        "funding_rate":      fr,
+        "funding_rate_raw":  fr / 100,   # decimal — lido pelo FundingRateManager
+        "funding_signal":    funding.get("funding_signal", "INDISPONÍVEL"),
         **oi,
         **ls,
         "summary": (
-            f"Funding: {fr:.4f}% ({funding.get('funding_signal','?')}) | "
+            f"Funding: {fr:.4f}% ({funding.get('funding_signal','?')}) [via FundingManager] | "
             f"OI: {oi.get('oi_usd','?')}B (1h: {oi_1h:+.1f}%) | "
-            f"L/S: {ls.get('long_pct',50):.0f}% / {ls.get('short_pct',50):.0f}% "
+            f"L/S: {long_pct:.0f}% / {ls.get('short_pct',50):.0f}% "
             f"({ls.get('ls_signal','?')})"
         ),
     }
