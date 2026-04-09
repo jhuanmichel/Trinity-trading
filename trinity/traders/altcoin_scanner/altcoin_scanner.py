@@ -55,7 +55,7 @@ SCAN_SYMBOLS = [
     "ZECUSDT",   # Zcash
 ]
 
-TOP_RESULTS    = 8     # top N no resultado
+TOP_RESULTS    = 50    # máximo de coins no resultado (todas escaneadas)
 MEXC_KLINES    = "https://api.mexc.com/api/v3/klines"
 REQUEST_DELAY  = 0.2   # segundos entre requests
 
