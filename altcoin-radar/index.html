@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Altcoin Radar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="page">
+
+  <!-- ── Header ── -->
+  <header class="header">
+    <span class="logo">ALTCOIN RADAR</span>
+    <div class="badge-live">
+      <span class="live-dot"></span>
+      Ao vivo
+    </div>
+  </header>
+
+  <!-- ── Search ── -->
+  <div class="search-wrap">
+    <div class="search-box">
+      <span class="search-icon">⌕</span>
+      <input
+        id="search-input"
+        class="search-input"
+        type="text"
+        placeholder="Digite a coin — ex: SOL, ETH, BNB..."
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button id="btn-analyze" class="btn-analyze">Analisar</button>
+    </div>
+    <div id="autocomplete" class="autocomplete"></div>
+  </div>
+
+  <!-- ── Estado: vazio ── -->
+  <div id="state-empty">
+    <div class="empty-icon">⌕</div>
+    <div class="empty-title">Busque uma altcoin</div>
+    <div class="empty-sub">Digite o símbolo e pressione Analisar</div>
+    <div class="chips-label">SINAIS ATIVOS AGORA</div>
+    <div id="chips" class="chips"></div>
+    <div class="scroll-hint">↓</div>
+  </div>
+
+  <!-- ── Estado: carregando (skeleton) ── -->
+  <div id="state-loading">
+    <div class="skeleton-card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div class="sk" style="width:120px;height:20px;margin-bottom:8px"></div>
+          <div class="sk" style="width:80px;height:12px"></div>
+        </div>
+        <div class="sk" style="width:60px;height:28px;border-radius:5px"></div>
+      </div>
+      <div class="sk" style="width:180px;height:34px"></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px">
+        <div class="sk" style="height:60px"></div>
+        <div class="sk" style="height:60px"></div>
+        <div class="sk" style="height:60px"></div>
+      </div>
+      <div class="sk" style="width:100%;height:40px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="sk" style="height:44px"></div>
+        <div class="sk" style="height:44px"></div>
+        <div class="sk" style="height:44px"></div>
+        <div class="sk" style="height:44px"></div>
+      </div>
+      <div class="sk" style="width:100%;height:20px"></div>
+    </div>
+  </div>
+
+  <!-- ── Estado: erro ── -->
+  <div id="state-error">
+    <div class="error-msg" id="error-msg">Erro ao buscar dados.</div>
+    <button id="btn-retry" class="btn-retry">Tentar novamente</button>
+  </div>
+
+  <!-- ── Estado: resultado ── -->
+  <div id="state-result">
+    <div class="result-card">
+
+      <!-- Topo: nome + preço -->
+      <div class="card-top">
+        <div class="card-title-row">
+          <div class="coin-info">
+            <span class="coin-name" id="c-name">—</span>
+            <span class="coin-pair" id="c-pair">—</span>
+          </div>
+          <span id="c-dir-badge" class="dir-badge">—</span>
+        </div>
+        <div class="price-row">
+          <span class="price-val" id="c-price">—</span>
+          <span class="price-change" id="c-change">—</span>
+        </div>
+      </div>
+
+      <!-- Métricas: Volume | Funding | OI -->
+      <div class="metrics-grid">
+        <div class="metric-cell">
+          <span class="metric-label">Volume 24h</span>
+          <span class="metric-val" id="c-vol">—</span>
+        </div>
+        <div class="metric-cell">
+          <span class="metric-label">Funding Rate</span>
+          <span class="metric-val" id="c-fr">—</span>
+        </div>
+        <div class="metric-cell">
+          <span class="metric-label">Open Interest</span>
+          <span class="metric-val" id="c-oi">—</span>
+        </div>
+      </div>
+
+      <!-- Funding score squares -->
+      <div class="funding-section">
+        <div class="section-label">Score de Assertividade — Funding</div>
+        <div class="funding-score-wrap">
+          <div class="funding-squares" id="c-fsq"></div>
+          <div class="funding-detail">
+            <span class="funding-score-label" id="c-funding-label">—</span>
+            <span class="funding-rate-val"   id="c-funding-rate">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Histórico funding -->
+      <div class="history-section">
+        <div class="section-label">Histórico Funding — 8 períodos</div>
+        <div class="history-bars" id="c-history-bars"></div>
+      </div>
+
+      <!-- Níveis de entrada -->
+      <div class="levels-section">
+        <div class="section-label">Níveis</div>
+        <div class="levels-grid">
+          <div class="level-cell">
+            <span class="level-key">Entrada</span>
+            <span class="level-val entry" id="c-entry">—</span>
+          </div>
+          <div class="level-cell">
+            <span class="level-key">Stop Loss</span>
+            <span class="level-val sl" id="c-sl">—</span>
+          </div>
+          <div class="level-cell">
+            <span class="level-key">TP 1</span>
+            <span class="level-val tp" id="c-tp1">—</span>
+          </div>
+          <div class="level-cell">
+            <span class="level-key">TP 2</span>
+            <span class="level-val tp" id="c-tp2">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Score de confiança -->
+      <div class="score-section">
+        <div class="section-label">Score de Confiança</div>
+        <div class="score-header">
+          <span class="score-num" id="c-score-num">—</span>
+          <span class="score-txt"  id="c-score-txt">—</span>
+        </div>
+        <div class="score-bar-track">
+          <div class="score-bar-fill" id="c-score-bar" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Tags SMC -->
+      <div class="smc-section" id="c-smc-tags"></div>
+
+      <!-- Footer -->
+      <div class="card-footer">
+        <div class="next-scan-wrap">
+          Próxima análise em <span id="next-scan-timer">—</span>
+        </div>
+        <button id="btn-refresh" class="btn-refresh">↻ Atualizar</button>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
