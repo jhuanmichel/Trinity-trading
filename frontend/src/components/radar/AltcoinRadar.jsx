@@ -1,15 +1,146 @@
 /**
- * AltcoinRadar.jsx — Grid de altcoins scaneadas
+ * AltcoinRadar.jsx — Grid de altcoins com search, filtros e modal de detalhe
  */
-import React, { memo } from 'react'
-import { motion } from 'framer-motion'
+import React, { memo, useState, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { fmtPrice, fmtPct, pctColor } from '../../engine/formatters'
+import ScoreGauge from '../ui/ScoreGauge'
 import './AltcoinRadar.css'
 
-const AltCard = memo(({ coin, index }) => {
+/* ── Modal de detalhe ─────────────────────────────────────────────────────── */
+const AltModal = memo(({ coin, onClose }) => {
+  if (!coin) return null
+
   const dir   = coin.direction ?? 'NEUTRO'
   const score = coin.smc_score ?? coin.score ?? 50
-  const conv  = coin.conviction ?? Math.abs(score - 50)
+  const dirColor = dir === 'LONG' ? 'var(--green)' : dir === 'SHORT' ? 'var(--red)' : 'var(--text-muted)'
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="alt-modal-overlay"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={e => e.target === e.currentTarget && onClose()}
+      >
+        <motion.div
+          className="alt-modal-box"
+          initial={{ opacity: 0, scale: 0.92, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.92, y: 20 }}
+          transition={{ type: 'spring', damping: 22, stiffness: 300 }}
+        >
+          {/* Header */}
+          <div className="alt-modal-head">
+            <div>
+              <div className="alt-modal-symbol">
+                {coin.symbol}<span className="alt-quote">/USDT</span>
+              </div>
+              <div className="alt-modal-pair-sub">{coin.pair}</div>
+            </div>
+            <div className="alt-modal-head-right">
+              <span className={`badge ${dir === 'LONG' ? 'badge-green' : dir === 'SHORT' ? 'badge-red' : 'badge-dim'}`}>
+                {dir}
+              </span>
+              <button className="alt-modal-close" onClick={onClose}>✕</button>
+            </div>
+          </div>
+
+          {/* Gauge + preço */}
+          <div className="alt-modal-gauge-row">
+            <ScoreGauge score={score} size={140} />
+            <div className="alt-modal-price-col">
+              <div className="alt-modal-price">{fmtPrice(coin.price)}</div>
+              {coin.change_24h !== undefined && (
+                <div className="alt-modal-change" style={{ color: pctColor(coin.change_24h) }}>
+                  {fmtPct(coin.change_24h)} 24h
+                </div>
+              )}
+              <div className="alt-modal-score-label">
+                SMC SCORE <span style={{ color: dirColor }}>{score}</span>
+              </div>
+              <div className="alt-modal-conviction">
+                CONVICTION <span>{coin.conviction ?? Math.abs(score - 50)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Estrutura de mercado */}
+          <div className="alt-modal-section-title">ESTRUTURA DE MERCADO</div>
+          <div className="alt-modal-grid">
+            <div className="alt-modal-item">
+              <span className="alt-modal-key">BIAS</span>
+              <span className="alt-modal-val" style={{ color: dirColor }}>{coin.bias ?? '-'}</span>
+            </div>
+            <div className="alt-modal-item">
+              <span className="alt-modal-key">STRUCTURE</span>
+              <span className="alt-modal-val">{coin.structure ?? '-'}</span>
+            </div>
+            <div className="alt-modal-item">
+              <span className="alt-modal-key">BOS ↑</span>
+              <span className="alt-modal-val" style={{ color: coin.bos_bull ? 'var(--green)' : 'var(--text-muted)' }}>
+                {coin.bos_bull ? 'SIM' : 'NÃO'}
+              </span>
+            </div>
+            <div className="alt-modal-item">
+              <span className="alt-modal-key">BOS ↓</span>
+              <span className="alt-modal-val" style={{ color: coin.bos_bear ? 'var(--red)' : 'var(--text-muted)' }}>
+                {coin.bos_bear ? 'SIM' : 'NÃO'}
+              </span>
+            </div>
+            <div className="alt-modal-item">
+              <span className="alt-modal-key">CHOCH</span>
+              <span className="alt-modal-val" style={{ color: coin.choch ? 'var(--yellow)' : 'var(--text-muted)' }}>
+                {coin.choch ? 'SIM' : 'NÃO'}
+              </span>
+            </div>
+            <div className="alt-modal-item">
+              <span className="alt-modal-key">OBs</span>
+              <span className="alt-modal-val">{coin.ob_count ?? 0}</span>
+            </div>
+            <div className="alt-modal-item">
+              <span className="alt-modal-key">FVGs</span>
+              <span className="alt-modal-val">{coin.fvg_count ?? 0}</span>
+            </div>
+          </div>
+
+          {/* Níveis */}
+          {coin.entry && (
+            <>
+              <div className="alt-modal-section-title">NÍVEIS</div>
+              <div className="alt-modal-levels">
+                <div className="alt-modal-level">
+                  <span className="alt-modal-level-key">ENTRY</span>
+                  <span className="alt-modal-level-val text-yellow">{fmtPrice(coin.entry)}</span>
+                </div>
+                <div className="alt-modal-level">
+                  <span className="alt-modal-level-key">STOP</span>
+                  <span className="alt-modal-level-val text-red">{fmtPrice(coin.stop)}</span>
+                </div>
+                <div className="alt-modal-level">
+                  <span className="alt-modal-level-key">TP1</span>
+                  <span className="alt-modal-level-val text-green">{fmtPrice(coin.tp1)}</span>
+                </div>
+                <div className="alt-modal-level">
+                  <span className="alt-modal-level-key">TP2</span>
+                  <span className="alt-modal-level-val text-green">{fmtPrice(coin.tp2)}</span>
+                </div>
+              </div>
+            </>
+          )}
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  )
+})
+
+AltModal.displayName = 'AltModal'
+
+/* ── Card individual ──────────────────────────────────────────────────────── */
+const AltCard = memo(({ coin, index, onClick }) => {
+  const dir   = coin.direction ?? 'NEUTRO'
+  const score = coin.smc_score ?? coin.score ?? 50
 
   const cls = dir === 'LONG' ? 'alt-long' : dir === 'SHORT' ? 'alt-short' : 'alt-neutro'
 
@@ -19,6 +150,7 @@ const AltCard = memo(({ coin, index }) => {
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ delay: index * 0.04 }}
+      onClick={() => onClick(coin)}
     >
       <div className="alt-card-header">
         <div className="alt-symbol-wrap">
@@ -64,7 +196,7 @@ const AltCard = memo(({ coin, index }) => {
         {coin.fvg_count > 0 && <span className="alt-tag alt-tag-dim">FVG×{coin.fvg_count}</span>}
       </div>
 
-      {/* Entry if exists */}
+      {/* Entry */}
       {coin.entry && (
         <div className="alt-entry">
           <span className="alt-entry-label">ENTRY</span>
@@ -77,13 +209,28 @@ const AltCard = memo(({ coin, index }) => {
 
 AltCard.displayName = 'AltCard'
 
+/* ── Radar principal ──────────────────────────────────────────────────────── */
 const AltcoinRadar = memo(({ altcoinScan }) => {
+  const [query,  setQuery]  = useState('')
+  const [filter, setFilter] = useState('all')
+  const [modal,  setModal]  = useState(null)
+
   const coins  = altcoinScan?.candidates ?? []
   const scanTs = altcoinScan?.scan_ts ?? null
   const total  = altcoinScan?.coins_scanned ?? 0
 
+  const filtered = coins.filter(c => {
+    const matchDir = filter === 'all' || c.direction === filter
+    const matchQ   = !query || (c.symbol ?? '').toLowerCase().includes(query.toLowerCase())
+    return matchDir && matchQ
+  })
+
+  const onCardClick = useCallback(coin => setModal(coin), [])
+  const closeModal  = useCallback(() => setModal(null), [])
+
   return (
     <div className="alt-radar-wrap">
+      {/* Cabeçalho */}
       <div className="alt-radar-header">
         <div className="alt-radar-title-row">
           <span className="live-dot" />
@@ -93,18 +240,50 @@ const AltcoinRadar = memo(({ altcoinScan }) => {
         {scanTs && <span className="alt-radar-ts">{new Date(scanTs).toLocaleTimeString()}</span>}
       </div>
 
+      {/* Toolbar: search + filtros */}
+      <div className="alt-toolbar">
+        <div className="alt-search-wrap">
+          <input
+            className="alt-search"
+            placeholder="Buscar coin..."
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+          />
+          {query && (
+            <button className="alt-search-clear" onClick={() => setQuery('')}>✕</button>
+          )}
+        </div>
+        <div className="alt-filter-btns">
+          {['all', 'LONG', 'SHORT'].map(f => (
+            <button
+              key={f}
+              className={`alt-filter-btn ${filter === f ? 'active' : ''}`}
+              onClick={() => setFilter(f)}
+            >
+              {f === 'all' ? 'TODOS' : f}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Grid */}
       {coins.length === 0 ? (
         <div className="alt-empty">
           <span className="spinner" />
           <span>Escaneando altcoins...</span>
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="alt-empty">Nenhuma coin encontrada</div>
       ) : (
         <div className="alt-grid">
-          {coins.map((coin, i) => (
-            <AltCard key={coin.symbol ?? i} coin={coin} index={i} />
+          {filtered.map((coin, i) => (
+            <AltCard key={coin.symbol ?? i} coin={coin} index={i} onClick={onCardClick} />
           ))}
         </div>
       )}
+
+      {/* Modal */}
+      {modal && <AltModal coin={modal} onClose={closeModal} />}
     </div>
   )
 })
