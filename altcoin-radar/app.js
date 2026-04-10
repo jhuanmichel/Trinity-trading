@@ -114,13 +114,9 @@ function showState(state) {
   elResult.style.display  = state === 'result'  ? 'block' : 'none';
 }
 
-// ── Chips (estado vazio) ──────────────────────────────────────────────────────
+// ── Chips (desativado — empty state mostra só busca) ──────────────────────────
 function renderChips(signals) {
-  // top 7 por score desc
-  const top = [...signals].sort((a, b) => b.score - a.score).slice(0, 7);
-  elChips.innerHTML = top.map(s =>
-    `<div class="chip" onclick="analyzeSymbol('${s.symbol}')">${s.symbol}</div>`
-  ).join('');
+  if (!elChips) return; // elemento removido do HTML
 }
 
 // ── Autocomplete ──────────────────────────────────────────────────────────────
@@ -180,7 +176,8 @@ async function fetchAllSignals() {
 function renderResult(sig, funding) {
   const dir       = (sig.direction || 'NEUTRO').toLowerCase();
   const dirUp     = sig.direction || 'NEUTRO';
-  const scoreVal  = sig.score ?? 50;
+  // suporta "score" (standalone api) e "smc_score" (backend Trinity)
+  const scoreVal  = sig.score ?? sig.smc_score ?? 0;
   const scoreCls  = scoreClass(scoreVal);
   const changeCls = (sig.change24h ?? 0) >= 0 ? 'up' : 'down';
   const fs        = sig.fundingScore ?? funding?.score ?? 0;
