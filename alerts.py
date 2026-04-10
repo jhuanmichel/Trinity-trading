@@ -184,6 +184,7 @@ def send_institutional_signal(
     cycle_data:     dict = None,
     direction_data: dict = None,
     neural_data:    dict = None,
+    funding_score:  int = None,
 ) -> bool:
     """
     Envia alerta institucional no formato Smart Money com todos os detalhes das 7 camadas.
@@ -229,6 +230,17 @@ def send_institutional_signal(
         total  = mtf_confluence.get("total_timeframes", 4)
         mtf_line = f"\n🕐 <b>MTF ({len(agreed)}/{total} TFs confirmam):</b> {', '.join(agreed)}"
 
+    # Funding Gate — linha para o Telegram
+    _fs_map = {
+        2:  "✅✅ Confirma Forte (+2)",
+        1:  "✅ Favorável (+1)",
+        0:  "⚠️ Neutro (size 60%)",
+    }
+    funding_line = (
+        f"\n💸 Funding Gate: <b>{_fs_map.get(funding_score, f'score {funding_score:+d}')}</b>"
+        if funding_score is not None else ""
+    )
+
     now = datetime.now().strftime("%d/%m %H:%M")
 
     msg = f"""
@@ -242,7 +254,7 @@ def send_institutional_signal(
 🏆 Score: <b>{score}/100</b>
 💡 Confiança: <b>{confidence_pct}%</b>
 ⚡ Força: <b>{strength_label}</b>
-🔗 Confluências: <b>{confluences}/6 camadas</b>
+🔗 Confluências: <b>{confluences}/6 camadas</b>{funding_line}
 {mtf_line}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>📐 NÍVEIS DE TRADE:</b>

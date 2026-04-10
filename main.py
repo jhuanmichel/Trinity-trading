@@ -34,6 +34,7 @@ from config         import (
 )
 from morning_brief       import run_morning_brief
 from cycle_intelligence import run_cycle_intelligence
+from funding_rate_manager import get_manager as _get_funding_manager
 
 
 # ─── Logging ───────────────────────────────────────────────────────────────
@@ -785,9 +786,48 @@ def run_institutional_analysis():
         atr       = regime_data.get("atr", price * 0.005)
         entry, stop, tp1, tp2, tp3 = _calc_levels(price, direction, atr)
 
+        # ── Funding Rate Gate (FundingRateManager) ──────────────────────────
+        # Usa funding_rate_raw já presente em deriv_data — sem chamada extra de API.
+        log.info("💸 [18] Funding Rate Gate...")
+        _fm = _get_funding_manager()
+        funding_ok, funding_score, funding_reason = _fm.validate_from_deriv_data(
+            deriv_data = deriv_data,
+            direction  = direction,
+            exchange   = "mexc",
+        )
+        log.info(
+            f"   Funding: {'✅ LIBERADO' if funding_ok else '❌ BLOQUEADO'} "
+            f"| score={funding_score:+d} | {funding_reason}"
+        )
+
+        if not funding_ok:
+            log.info(f"❌ Funding bloqueou {direction} — sinal cancelado")
+            _write_dashboard_state(
+                price, inst, ms_data, volume_data, trend_data,
+                corr_data, regime_data, entry, stop, tp1, tp2, tp3,
+                smc_signal=smc_signal, mm_data=mm_data,
+                pressure_data=pressure_data, rare_data=rare_data,
+                trinity_score=trinity_score, geo_data=geo_data,
+                cycle_data=cycle_data, direction_data=direction_data,
+                neural_data=neural_data,
+            )
+            alerts.send_status_update(
+                price          = price,
+                trinity_score  = trinity_score,
+                neural_data    = neural_data,
+                inst_data      = inst,
+                pressure_data  = pressure_data,
+                direction_data = direction_data,
+                blocked_reason = f"funding_bloqueado | {funding_reason}",
+                struct         = struct,
+            )
+            return
+
         rare_tag = f" ⭐ {rare_data['setup_type']}" if rare_data["rare_setup"] else ""
-        log.info(f"🔔 SINAL INSTITUCIONAL: {direction} | Trinity {trinity_score} | "
-                 f"Entry ${entry:,.2f} | Stop ${stop:,.2f}{rare_tag}")
+        log.info(
+            f"🔔 SINAL INSTITUCIONAL: {direction} | Trinity {trinity_score} "
+            f"| Funding {funding_score:+d} | Entry ${entry:,.2f} | Stop ${stop:,.2f}{rare_tag}"
+        )
 
         _write_dashboard_state(
             price, inst, ms_data, volume_data, trend_data,
@@ -825,19 +865,23 @@ def run_institutional_analysis():
             cycle_data       = cycle_data,
             direction_data   = direction_data,
             neural_data      = neural_data,
+            funding_score    = funding_score,
         )
         log.info("✅ Sinal institucional enviado ao Telegram.\n")
 
         # Log em arquivo
         log_entry = {
-            "timestamp":  datetime.now().isoformat(),
-            "type":       "institutional",
-            "price":      price,
-            "direction":  direction,
-            "inst_score": score,
-            "confluences": inst["confluences"],
-            "entry":      entry,
-            "stop":       stop,
+            "timestamp":    datetime.now().isoformat(),
+            "type":         "institutional",
+            "price":        price,
+            "direction":    direction,
+            "inst_score":   score,
+            "confluences":  inst["confluences"],
+            "trinity_score": trinity_score,
+            "funding_score": funding_score,
+            "funding_reason": funding_reason,
+            "entry":        entry,
+            "stop":         stop,
             "tp1": tp1, "tp2": tp2, "tp3": tp3,
         }
         with open(f"logs/institutional_{datetime.now().strftime('%Y%m%d')}.jsonl", "a") as f:
