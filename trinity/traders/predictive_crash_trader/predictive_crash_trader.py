@@ -280,6 +280,53 @@ def run_crash_scan() -> dict:
     return _instance.run_scan()
 
 
+def run_crash_cycle() -> dict:
+    """
+    Ciclo completo: scan + salvar resultado + alertas Telegram (sync).
+    Usar no scheduler (main.py) e nos loops do servidor (server.py).
+    """
+    global _instance
+    if _instance is None:
+        _instance = PredictiveCrashTrader()
+    result = _instance.run_scan()
+    _save_result(result)
+
+    import time as _t
+    now     = _t.time()
+    alerted = 0
+    for c in result.get("candidates", []):
+        score  = c.get("opportunity_score", 0)
+        symbol = c.get("symbol", "")
+        cls    = c.get("move_classification", "")
+
+        if score < ALERT_THRESHOLD:
+            break
+
+        last_alert = _alert_cooldown.get(symbol, 0)
+        cooldown   = CRITICAL_COOLDOWN_S if score >= CRITICAL_THRESHOLD else ALERT_COOLDOWN_S
+
+        if (now - last_alert) < cooldown:
+            last_cls   = _alert_last_class.get(symbol, "")
+            last_score = _alert_last_score.get(symbol, 0.0)
+            tier_up    = _tier_rank(cls) > _tier_rank(last_cls)
+            score_up   = (score - last_score) >= 8.0
+            if not tier_up and not score_up:
+                continue
+
+        try:
+            _send_crash_telegram(c)
+            _alert_cooldown[symbol]   = now
+            _alert_last_score[symbol] = score
+            _alert_last_class[symbol] = cls
+            alerted += 1
+        except Exception as _e:
+            log.warning(f"[CrashTrader] Telegram error ({symbol}): {_e}")
+
+    if alerted:
+        log.info(f"[CrashTrader] {alerted} alertas Telegram enviados")
+    return result
+
+
 # ── Trinity Signal Helpers ────────────────────────────────────────────────────
 
 def _calc_crash_levels(price: float, expected_move_pct: float):

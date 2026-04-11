@@ -112,7 +112,7 @@ _analysis_running = False   # flag para evitar runs concorrentes
 
 
 async def _crash_scan_loop():
-    """Roda o Predictive Crash Trader a cada 30s em background."""
+    """Roda o Predictive Crash Trader a cada 30s em background (scan + alertas Telegram)."""
     import logging as _log
     _clog = _log.getLogger("crash_trader")
     # Aguarda 20s no startup para não competir com a análise institucional
@@ -121,14 +121,13 @@ async def _crash_scan_loop():
         try:
             import sys as _sys
             _sys.path.insert(0, str(BASE_DIR))
-            from trinity.traders.predictive_crash_trader.predictive_crash_trader import run_crash_scan
-            result = await asyncio.to_thread(run_crash_scan)
-            try:
-                CRASH_SCAN_FILE.write_text(
-                    __import__("json").dumps(result, indent=2, default=str)
-                )
-            except Exception as _we:
-                _clog.warning(f"Crash scan write error: {_we}")
+            from trinity.traders.predictive_crash_trader.predictive_crash_trader import run_crash_cycle
+            result = await asyncio.to_thread(run_crash_cycle)
+            _clog.debug(
+                f"Crash scan: {result.get('coins_scanned', 0)} coins | "
+                f"{len(result.get('candidates', []))} candidatos | "
+                f"{result.get('scan_duration_s', 0):.1f}s"
+            )
         except Exception as _e:
             _clog.error(f"Crash scan loop error: {_e}")
         await asyncio.sleep(30)

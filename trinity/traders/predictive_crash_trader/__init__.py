@@ -15,6 +15,7 @@ Pipeline:
 from trinity.traders.predictive_crash_trader.predictive_crash_trader import (
     PredictiveCrashTrader,
     run_crash_scan,
+    run_crash_cycle,
 )
 
-__all__ = ["PredictiveCrashTrader", "run_crash_scan"]
+__all__ = ["PredictiveCrashTrader", "run_crash_scan", "run_crash_cycle"]
