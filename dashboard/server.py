@@ -12,14 +12,16 @@ import asyncio
 import time as _time
 import requests as _req
 
-BASE_DIR         = Path(__file__).parent.parent
-STATE_FILE       = BASE_DIR / "dashboard" / "current_state.json"
-CRASH_SCAN_FILE  = BASE_DIR / "dashboard" / "crash_scan_latest.json"
-PUMP_SCAN_FILE   = BASE_DIR / "dashboard" / "pump_scan_latest.json"
-BACKTEST_FILE    = BASE_DIR / "dashboard" / "backtest_results.json"
+BASE_DIR          = Path(__file__).parent.parent
+STATE_FILE        = BASE_DIR / "dashboard" / "current_state.json"
+CRASH_SCAN_FILE   = BASE_DIR / "dashboard" / "crash_scan_latest.json"
+PUMP_SCAN_FILE    = BASE_DIR / "dashboard" / "pump_scan_latest.json"
+BACKTEST_FILE     = BASE_DIR / "dashboard" / "backtest_results.json"
 ALTCOIN_SCAN_FILE = BASE_DIR / "dashboard" / "altcoin_scan_latest.json"
-LOGS_DIR         = BASE_DIR / "logs"
-STATIC_DIR       = BASE_DIR / "dashboard" / "static"
+WIN_RATE_FILE     = BASE_DIR / "dashboard" / "win_rate.json"
+OPT_REPORT_FILE   = BASE_DIR / "dashboard" / "optimization_report.json"
+LOGS_DIR          = BASE_DIR / "logs"
+STATIC_DIR        = BASE_DIR / "dashboard" / "static"
 
 app = FastAPI(title="QuantDesk", version="1.0")
 
@@ -151,6 +153,8 @@ async def startup_event():
     asyncio.create_task(_pump_scan_loop())
     # Altcoin Scanner SMC — loop background a cada 5 min
     asyncio.create_task(_altcoin_scan_loop())
+    # Outcome Tracker — verifica pendentes a cada 15 min
+    asyncio.create_task(_outcome_check_loop())
 
 
 async def _run_analysis_bg(force: bool = False):
@@ -430,6 +434,24 @@ def get_crash_scanner():
     return JSONResponse(content={"scan_ts": None, "candidates": [], "coins_scanned": 0})
 
 
+async def _outcome_check_loop():
+    """Verifica outcomes pendentes a cada 15 minutos em background (OutcomeTracker)."""
+    import logging as _log
+    _olog = _log.getLogger("outcome_tracker")
+    await asyncio.sleep(60)   # aguarda 1 min no startup
+    while True:
+        try:
+            import sys as _sys
+            _sys.path.insert(0, str(BASE_DIR))
+            from outcome_tracker import get_tracker as _get_tracker
+            resolved = await asyncio.to_thread(_get_tracker().check_pending_outcomes)
+            if resolved:
+                _olog.info(f"OutcomeTracker: {len(resolved)} outcome(s) resolvido(s)")
+        except Exception as _e:
+            _olog.error(f"Outcome check loop error: {_e}")
+        await asyncio.sleep(900)   # 15 minutos
+
+
 async def _altcoin_scan_loop():
     """Roda o altcoin scanner a cada 5 min em background."""
     import logging as _log
@@ -511,6 +533,93 @@ def get_pump_scan():
         except Exception:
             pass
     return JSONResponse(content={"scan_ts": None, "candidates": [], "coins_scanned": 0})
+
+
+# ── Endpoints de Performance Real (Etapas 1 + 3) ─────────────────────────────
+
+@app.get("/api/win-rate")
+def get_win_rate():
+    """
+    Métricas de acerto real do bot — geradas automaticamente pelo OutcomeTracker.
+    Campos: total_signals, wins, losses, neutral, win_rate_pct, avg_score_wins,
+            avg_score_losses, best_direction, by_conviction.
+    """
+    if WIN_RATE_FILE.exists():
+        try:
+            return JSONResponse(content=json.loads(WIN_RATE_FILE.read_text()))
+        except Exception:
+            pass
+    # Nunca gerado ainda — retorna estrutura vazia
+    return JSONResponse(content={
+        "updated_at": None, "total_signals": 0, "wins": 0, "losses": 0,
+        "neutral": 0, "win_rate_pct": None, "avg_score_wins": None,
+        "avg_score_losses": None, "best_direction": None,
+        "by_conviction": {
+            "HIGH":   {"win_rate_pct": None, "count": 0},
+            "MEDIUM": {"win_rate_pct": None, "count": 0},
+        },
+    })
+
+
+@app.get("/api/optimization-report")
+def get_optimization_report():
+    """
+    Relatório de otimização de pesos — gerado pelo WeightOptimizer.
+    Campos: current_weights, suggested_weights, weight_changes, correlation_by_layer,
+            recommendation, samples_collected, samples_needed, safe_to_apply.
+    """
+    if OPT_REPORT_FILE.exists():
+        try:
+            return JSONResponse(content=json.loads(OPT_REPORT_FILE.read_text()))
+        except Exception:
+            pass
+    return JSONResponse(content={
+        "recommendation": "insufficient_data",
+        "samples_collected": 0,
+        "samples_needed": 30,
+        "safe_to_apply": False,
+    })
+
+
+@app.post("/api/apply-weights")
+async def apply_optimized_weights():
+    """
+    Aplica os pesos otimizados em smart_money_engine.py (com backup).
+    Só funciona se safe_to_apply == True no último relatório.
+    Retorna {applied: bool, error?: str}.
+    """
+    if not OPT_REPORT_FILE.exists():
+        return JSONResponse(content={"applied": False, "error": "relatório não encontrado"}, status_code=404)
+
+    try:
+        report = json.loads(OPT_REPORT_FILE.read_text())
+    except Exception as _e:
+        return JSONResponse(content={"applied": False, "error": f"leitura do relatório: {_e}"}, status_code=500)
+
+    if not report.get("safe_to_apply", False):
+        return JSONResponse(
+            content={
+                "applied": False,
+                "error": f"não seguro para aplicar — {report.get('recommendation')} "
+                         f"({report.get('samples_collected', 0)}/{report.get('samples_needed', 30)} amostras)",
+            },
+            status_code=400,
+        )
+
+    weights = report.get("suggested_weights", {})
+    if not weights:
+        return JSONResponse(content={"applied": False, "error": "pesos sugeridos ausentes"}, status_code=400)
+
+    try:
+        import sys as _sys
+        _sys.path.insert(0, str(BASE_DIR))
+        from weight_optimizer import get_optimizer as _get_opt
+        ok = await asyncio.to_thread(_get_opt().apply_weights, weights)
+        if ok:
+            return JSONResponse(content={"applied": True, "weights": weights})
+        return JSONResponse(content={"applied": False, "error": "falha na escrita do engine (backup restaurado)"}, status_code=500)
+    except Exception as _e:
+        return JSONResponse(content={"applied": False, "error": str(_e)}, status_code=500)
 
 
 # ── Serve React app v3.0 em /app/ ────────────────────────────────────────────

@@ -1721,6 +1721,181 @@ async function updateAltcoinRadar() {
   }
 }
 
+// ── Performance Real + Otimização SMC (Etapas 1 + 3) ────────────────────────
+
+async function updateWinRate() {
+  try {
+    const d = await fetch('/api/win-rate').then(r => r.json());
+
+    const wr     = d.win_rate_pct;
+    const wins   = d.wins   ?? 0;
+    const losses = d.losses ?? 0;
+    const total  = d.total_signals ?? 0;
+    const avW    = d.avg_score_wins;
+    const avL    = d.avg_score_losses;
+    const bestD  = d.best_direction;
+    const high   = d.by_conviction?.HIGH;
+    const med    = d.by_conviction?.MEDIUM;
+
+    const fmtWR = v => v != null ? `${v.toFixed(1)}%` : '—';
+    const fmtS  = v => v != null ? v.toFixed(1) : '—';
+
+    const wrEl = document.getElementById('pmWinRate');
+    if (wrEl) {
+      wrEl.textContent = wr != null ? `${wr.toFixed(1)}%` : '—';
+      wrEl.className = 'perf-value ' + (wr != null ? (wr >= 60 ? 'bull' : wr >= 45 ? '' : 'bear') : 'muted');
+    }
+
+    const wlEl = document.getElementById('pmWL');
+    if (wlEl) {
+      wlEl.textContent = `${wins}W / ${losses}L`;
+      wlEl.className = 'perf-value ' + (wins > losses ? 'bull' : losses > wins ? 'bear' : '');
+    }
+
+    const awEl = document.getElementById('pmAvgW');
+    if (awEl) { awEl.textContent = fmtS(avW); awEl.className = 'perf-value bull'; }
+
+    const alEl = document.getElementById('pmAvgL');
+    if (alEl) { alEl.textContent = fmtS(avL); alEl.className = 'perf-value bear'; }
+
+    const hwEl = document.getElementById('pmHighWR');
+    if (hwEl) {
+      hwEl.textContent = high ? fmtWR(high.win_rate_pct) + ` (${high.count})` : '—';
+      hwEl.className = 'perf-value ' + (high?.win_rate_pct != null ? (high.win_rate_pct >= 60 ? 'bull' : '') : 'muted');
+    }
+
+    const mwEl = document.getElementById('pmMedWR');
+    if (mwEl) {
+      mwEl.textContent = med ? fmtWR(med.win_rate_pct) + ` (${med.count})` : '—';
+      mwEl.className = 'perf-value ' + (med?.win_rate_pct != null ? (med.win_rate_pct >= 60 ? 'bull' : '') : 'muted');
+    }
+
+    const bdEl = document.getElementById('pmBestDir');
+    if (bdEl) {
+      bdEl.textContent = bestD ?? '—';
+      bdEl.className = 'perf-value ' + (bestD === 'LONG' ? 'bull' : bestD === 'SHORT' ? 'bear' : 'muted');
+    }
+
+    const smEl = document.getElementById('pmSamples');
+    if (smEl) { smEl.textContent = `${total} / 30`; }
+
+    // Barra de progresso (meta: 30 amostras WIN+LOSS)
+    const usable = wins + losses;
+    const pct    = Math.min(usable / 30 * 100, 100);
+    const pBar   = document.getElementById('perfProgressBar');
+    const pTxt   = document.getElementById('perfProgressTxt');
+    if (pBar) pBar.style.width = pct.toFixed(1) + '%';
+    if (pTxt) pTxt.textContent = `${usable} / 30`;
+
+    const sub = document.getElementById('perfSubtitle');
+    if (sub && d.updated_at) {
+      const dt = new Date(d.updated_at);
+      sub.textContent = `Última atualização: ${dt.toLocaleString('pt-BR')}`;
+    }
+
+  } catch(e) {
+    console.warn('[Trinity] Win rate error:', e);
+  }
+}
+
+async function updateOptimizationReport() {
+  try {
+    const d = await fetch('/api/optimization-report').then(r => r.json());
+
+    const rec    = d.recommendation ?? 'insufficient_data';
+    const safe   = d.safe_to_apply  ?? false;
+    const gain   = d.estimated_precision_gain;
+    const cw     = d.current_weights    ?? {};
+    const sw     = d.suggested_weights  ?? {};
+    const wc     = d.weight_changes     ?? {};
+    const corr   = d.correlation_by_layer ?? {};
+    const rsn    = d.reasoning_by_layer ?? {};
+
+    // Badge
+    const badge = document.getElementById('optimBadge');
+    if (badge) {
+      if (rec === 'apply') {
+        badge.textContent = 'APLICAR'; badge.className = 'optim-badge apply';
+      } else if (rec === 'collect_more_data') {
+        badge.textContent = `COLETAR (${d.samples_collected}/${d.samples_needed})`; badge.className = 'optim-badge collect';
+      } else {
+        badge.textContent = 'AGUARDANDO DADOS'; badge.className = 'optim-badge nodata';
+      }
+    }
+
+    // Ganho estimado
+    const precEl = document.getElementById('optimPrecision');
+    if (precEl) precEl.textContent = gain && gain !== 'indeterminado' ? `Ganho estimado: ${gain}` : '';
+
+    // Botão aplicar
+    const btn = document.getElementById('optimApplyBtn');
+    if (btn) { btn.style.display = safe ? 'inline-block' : 'none'; }
+
+    // Sub
+    const sub = document.getElementById('optimSubtitle');
+    if (sub && d.generated_at) {
+      const dt = new Date(d.generated_at);
+      sub.textContent = `Gerado em ${dt.toLocaleString('pt-BR')} · ${d.usable_outcomes ?? 0} outcomes`;
+    }
+
+    // Tabela de camadas
+    const tbody = document.getElementById('optimBody');
+    if (!tbody) return;
+    const layers = Object.keys(cw);
+    if (!layers.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="table-empty">Aguardando 30+ outcomes...</td></tr>';
+      return;
+    }
+    tbody.innerHTML = layers.map(layer => {
+      const cur    = cw[layer]  ?? 0;
+      const sug    = sw[layer]  ?? cur;
+      const delta  = wc[layer]  ?? 0;
+      const c      = corr[layer]?.correlation ?? null;
+      const reason = rsn[layer] ?? '';
+
+      const dClass = delta > 0 ? 'optim-delta-pos' : delta < 0 ? 'optim-delta-neg' : 'optim-delta-neu';
+      const dStr   = delta !== 0 ? `${delta > 0 ? '+' : ''}${delta}` : '—';
+      const cStr   = c != null   ? c.toFixed(3) : '—';
+
+      return `<tr>
+        <td style="font-weight:600">${layer}</td>
+        <td>${cur}</td>
+        <td>${sug}</td>
+        <td class="${dClass}">${dStr}</td>
+        <td class="${c != null && Math.abs(c) > 0.2 ? (c > 0 ? 'bull' : 'bear') : ''}">${cStr}</td>
+        <td style="font-size:10px;color:var(--text-muted)">${reason.split('|')[0] ?? ''}</td>
+      </tr>`;
+    }).join('');
+
+  } catch(e) {
+    console.warn('[Trinity] Optimization report error:', e);
+  }
+}
+
+async function applyOptimizedWeights() {
+  const btn = document.getElementById('optimApplyBtn');
+  if (!btn) return;
+  if (!confirm('Aplicar pesos otimizados no SMC Engine? Um backup será criado automaticamente.')) return;
+  btn.disabled = true;
+  btn.textContent = 'APLICANDO...';
+  try {
+    const r = await fetch('/api/apply-weights', { method: 'POST' });
+    const d = await r.json();
+    if (d.applied) {
+      btn.textContent = '✓ APLICADO';
+      setTimeout(() => updateOptimizationReport(), 2000);
+    } else {
+      alert('Falha: ' + (d.error ?? 'erro desconhecido'));
+      btn.disabled = false;
+      btn.textContent = 'APLICAR PESOS';
+    }
+  } catch(e) {
+    alert('Erro de rede: ' + e);
+    btn.disabled = false;
+    btn.textContent = 'APLICAR PESOS';
+  }
+}
+
 // Init
 refresh();
 priceTick();
@@ -1730,6 +1905,8 @@ updateCrashRadar();                             // Crash Radar — primeiro carr
 updatePumpRadar();                              // Pump Radar — primeiro carregamento
 updateBacktestResults();                        // Backtest Performance — primeiro carregamento
 updateAltcoinRadar();                           // Altcoin Radar — primeiro carregamento
+updateWinRate();                                // Performance Real — primeiro carregamento
+updateOptimizationReport();                     // Otimização SMC — primeiro carregamento
 setInterval(refresh,                REFRESH_MS);
 setInterval(priceTick,              PRICE_MS);
 setInterval(clockTick,              1000);
@@ -1740,4 +1917,6 @@ setInterval(updateCrashRadar,       CRASH_REFRESH_MS); // 30s — sincroniza com
 setInterval(updatePumpRadar,        PUMP_REFRESH_MS);  // 30s — sincroniza com ciclo do scanner
 setInterval(updateBacktestResults,  120_000);      // 2min — atualiza métricas de backtest
 setInterval(updateAltcoinRadar,     300_000);      // 5min — sincroniza com ciclo do scanner
+setInterval(updateWinRate,          300_000);      // 5min — sincroniza com ciclo do OutcomeTracker
+setInterval(updateOptimizationReport, 300_000);    // 5min — sincroniza com relatório de otimização
 clockTick();

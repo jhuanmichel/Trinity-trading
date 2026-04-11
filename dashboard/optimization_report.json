@@ -1,0 +1,100 @@
+{
+  "generated_at": "2026-04-11T07:01:31.555774+00:00",
+  "total_outcomes": 0,
+  "usable_outcomes": 0,
+  "current_weights": {
+    "market_structure": 20,
+    "liquidity": 15,
+    "bos": 15,
+    "choch": 15,
+    "order_blocks": 10,
+    "fvg": 10,
+    "volume_confirm": 10,
+    "momentum": 5
+  },
+  "suggested_weights": {
+    "market_structure": 20,
+    "liquidity": 15,
+    "bos": 15,
+    "choch": 15,
+    "order_blocks": 10,
+    "fvg": 10,
+    "volume_confirm": 10,
+    "momentum": 5
+  },
+  "weight_changes": {
+    "market_structure": 0,
+    "liquidity": 0,
+    "bos": 0,
+    "choch": 0,
+    "order_blocks": 0,
+    "fvg": 0,
+    "volume_confirm": 0,
+    "momentum": 0
+  },
+  "correlation_by_layer": {
+    "market_structure": {
+      "correlation": 0.0,
+      "avg_in_wins": 50.0,
+      "avg_in_losses": 50.0,
+      "rank": 1
+    },
+    "liquidity": {
+      "correlation": 0.0,
+      "avg_in_wins": 50.0,
+      "avg_in_losses": 50.0,
+      "rank": 2
+    },
+    "bos": {
+      "correlation": 0.0,
+      "avg_in_wins": 50.0,
+      "avg_in_losses": 50.0,
+      "rank": 3
+    },
+    "choch": {
+      "correlation": 0.0,
+      "avg_in_wins": 50.0,
+      "avg_in_losses": 50.0,
+      "rank": 4
+    },
+    "order_blocks": {
+      "correlation": 0.0,
+      "avg_in_wins": 50.0,
+      "avg_in_losses": 50.0,
+      "rank": 5
+    },
+    "fvg": {
+      "correlation": 0.0,
+      "avg_in_wins": 50.0,
+      "avg_in_losses": 50.0,
+      "rank": 6
+    },
+    "volume_confirm": {
+      "correlation": 0.0,
+      "avg_in_wins": 50.0,
+      "avg_in_losses": 50.0,
+      "rank": 7
+    },
+    "momentum": {
+      "correlation": 0.0,
+      "avg_in_wins": 50.0,
+      "avg_in_losses": 50.0,
+      "rank": 8
+    }
+  },
+  "recommendation": "insufficient_data",
+  "samples_collected": 0,
+  "samples_needed": 30,
+  "estimated_precision_gain": "indeterminado",
+  "safe_to_apply": false,
+  "reasoning_by_layer": {
+    "market_structure": "dados insuficientes",
+    "liquidity": "dados insuficientes",
+    "bos": "dados insuficientes",
+    "choch": "dados insuficientes",
+    "order_blocks": "dados insuficientes",
+    "fvg": "dados insuficientes",
+    "volume_confirm": "dados insuficientes",
+    "momentum": "dados insuficientes"
+  }
+}

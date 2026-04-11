@@ -2063,3 +2063,125 @@ body {
   color: var(--text);
   font-weight: 600;
 }
+
+/* ── PERFORMANCE REAL ──────────────────────────────────────────────────────── */
+
+.perf-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 700px) {
+  .perf-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.perf-card {
+  background: var(--surface2);
+  border: 1px solid var(--border-md);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.perf-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+.perf-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.perf-value.bull { color: var(--green); }
+.perf-value.bear { color: var(--red); }
+.perf-value.muted { color: var(--text-muted); }
+
+.perf-progress-wrap {
+  margin-top: 8px;
+}
+
+.perf-progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.perf-progress-bg {
+  background: var(--surface2);
+  border-radius: 3px;
+  height: 5px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.perf-progress-bar {
+  height: 100%;
+  background: var(--green);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+/* ── OTIMIZAÇÃO SMC ────────────────────────────────────────────────────────── */
+
+.optim-status-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.optim-badge {
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--surface2);
+  border: 1px solid var(--border-md);
+  color: var(--text-muted);
+}
+
+.optim-badge.apply    { background: var(--green-dim);  border-color: var(--green-border); color: var(--green); }
+.optim-badge.collect  { background: rgba(255,170,0,0.08); border-color: rgba(255,170,0,0.3); color: #FFAA00; }
+.optim-badge.nodata   { background: var(--surface2);   border-color: var(--border-md);    color: var(--text-muted); }
+
+.optim-precision {
+  font-size: 11px;
+  color: var(--green);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+}
+
+.optim-apply-btn {
+  padding: 5px 14px;
+  background: var(--green);
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.optim-apply-btn:hover { opacity: 0.85; }
+.optim-apply-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.optim-delta-pos { color: var(--green); font-weight: 600; }
+.optim-delta-neg { color: var(--red);   font-weight: 600; }
+.optim-delta-neu { color: var(--text-muted); }

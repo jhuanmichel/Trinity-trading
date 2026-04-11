@@ -7,7 +7,7 @@ import schedule
 import time
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Módulos do agente
@@ -36,6 +36,8 @@ from morning_brief       import run_morning_brief
 from cycle_intelligence import run_cycle_intelligence
 from funding_rate_manager import get_manager as _get_funding_manager
 from trinity.traders.predictive_pump_trader.predictive_pump_trader import run_pump_cycle as _run_pump_cycle
+from outcome_tracker import get_tracker as _get_tracker
+from high_conviction_filter import get_filter as _get_hcf
 
 
 # ─── Logging ───────────────────────────────────────────────────────────────
@@ -824,10 +826,51 @@ def run_institutional_analysis():
             )
             return
 
+        # ── High Conviction Filter (Etapa 2) ──────────────────────────────
+        log.info("🎯 [19] High Conviction Filter...")
+        conviction_tier = "BLOCKED"
+        try:
+            _hcf        = _get_hcf()
+            _hcf_signal = {"direction": direction, "score": trinity_score}
+            _hcf_eval   = _hcf.evaluate(_hcf_signal, smc_signal or {})
+            conviction_tier = _hcf_eval.get("conviction_tier", "BLOCKED")
+            log.info(
+                f"   HCF: {'✅ APROVADO' if _hcf_eval['approved'] else '❌ BLOQUEADO'} "
+                f"| tier={conviction_tier} "
+                f"| motivo={_hcf_eval.get('rejection_reason') or 'OK'}"
+            )
+            if not _hcf_eval["approved"]:
+                _hcf.log_rejection(_hcf_signal, _hcf_eval)
+                log.info(f"🚫 HCF bloqueou {direction} — sinal não enviado ao Telegram")
+                _write_dashboard_state(
+                    price, inst, ms_data, volume_data, trend_data,
+                    corr_data, regime_data, entry, stop, tp1, tp2, tp3,
+                    smc_signal=smc_signal, mm_data=mm_data,
+                    pressure_data=pressure_data, rare_data=rare_data,
+                    trinity_score=trinity_score, geo_data=geo_data,
+                    cycle_data=cycle_data, direction_data=direction_data,
+                    neural_data=neural_data,
+                )
+                alerts.send_status_update(
+                    price          = price,
+                    trinity_score  = trinity_score,
+                    neural_data    = neural_data,
+                    inst_data      = inst,
+                    pressure_data  = pressure_data,
+                    direction_data = direction_data,
+                    blocked_reason = f"hcf_bloqueado | {_hcf_eval.get('rejection_reason', '')}",
+                    struct         = struct,
+                )
+                return
+        except Exception as _hcf_err:
+            log.warning(f"   HCF lançou exceção (fail-closed): {_hcf_err}")
+            return  # fail-closed: qualquer erro no HCF bloqueia o sinal
+
         rare_tag = f" ⭐ {rare_data['setup_type']}" if rare_data["rare_setup"] else ""
         log.info(
             f"🔔 SINAL INSTITUCIONAL: {direction} | Trinity {trinity_score} "
-            f"| Funding {funding_score:+d} | Entry ${entry:,.2f} | Stop ${stop:,.2f}{rare_tag}"
+            f"| Funding {funding_score:+d} | tier={conviction_tier} "
+            f"| Entry ${entry:,.2f} | Stop ${stop:,.2f}{rare_tag}"
         )
 
         _write_dashboard_state(
@@ -869,6 +912,27 @@ def run_institutional_analysis():
             funding_score    = funding_score,
         )
         log.info("✅ Sinal institucional enviado ao Telegram.\n")
+
+        # ── OutcomeTracker: registra sinal para tracking automático ────────
+        try:
+            _layer_scores_ot = (smc_signal or {}).get("score", {}).get("layer_scores", {})
+            _ot = _get_tracker()
+            _signal_ot = {
+                "direction":       direction,
+                "score":           trinity_score,
+                "entry_price":     entry,
+                "stop_loss":       stop,
+                "tp1":             tp1,
+                "tp2":             tp2,
+                "symbol":          SYMBOL,
+                "timestamp":       datetime.now(timezone.utc).isoformat(),
+                "conviction_tier": conviction_tier,
+                "layer_scores":    _layer_scores_ot,
+            }
+            _sid = _ot.register_signal(_signal_ot)
+            log.info(f"   OutcomeTracker: sinal {_sid[:8]} registrado para tracking.")
+        except Exception as _ot_err:
+            log.warning(f"   OutcomeTracker falhou ao registrar: {_ot_err}")
 
         # Log em arquivo
         log_entry = {

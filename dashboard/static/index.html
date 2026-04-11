@@ -127,6 +127,99 @@
       </div>
     </section>
 
+    <!-- ── SECTION 4: PERFORMANCE REAL ─────────────────────────────────────── -->
+    <section class="section" id="perfSection">
+      <div class="section-header">
+        <h2 class="section-title">PERFORMANCE REAL</h2>
+        <span class="section-divider"></span>
+        <span class="section-sub" id="perfSubtitle">Métricas de acerto — atualizadas automaticamente</span>
+      </div>
+
+      <!-- Métricas principais -->
+      <div class="perf-metrics-grid" id="perfMetrics">
+        <div class="perf-card">
+          <span class="perf-label">Win Rate</span>
+          <span class="perf-value" id="pmWinRate">—</span>
+        </div>
+        <div class="perf-card">
+          <span class="perf-label">Wins / Losses</span>
+          <span class="perf-value" id="pmWL">—</span>
+        </div>
+        <div class="perf-card">
+          <span class="perf-label">Score médio (W)</span>
+          <span class="perf-value" id="pmAvgW">—</span>
+        </div>
+        <div class="perf-card">
+          <span class="perf-label">Score médio (L)</span>
+          <span class="perf-value" id="pmAvgL">—</span>
+        </div>
+        <div class="perf-card">
+          <span class="perf-label">HIGH conviction</span>
+          <span class="perf-value" id="pmHighWR">—</span>
+        </div>
+        <div class="perf-card">
+          <span class="perf-label">MEDIUM conviction</span>
+          <span class="perf-value" id="pmMedWR">—</span>
+        </div>
+        <div class="perf-card">
+          <span class="perf-label">Melhor direção</span>
+          <span class="perf-value" id="pmBestDir">—</span>
+        </div>
+        <div class="perf-card">
+          <span class="perf-label">Amostras</span>
+          <span class="perf-value" id="pmSamples">— / 30</span>
+        </div>
+      </div>
+
+      <!-- Barra de progresso para 30 amostras -->
+      <div class="perf-progress-wrap">
+        <div class="perf-progress-label">
+          <span>Coleta de dados para otimização</span>
+          <span id="perfProgressTxt">0 / 30</span>
+        </div>
+        <div class="perf-progress-bg">
+          <div class="perf-progress-bar" id="perfProgressBar" style="width:0%"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SECTION 4b: OTIMIZAÇÃO DE PESOS ───────────────────────────────────── -->
+    <section class="section" id="optimSection">
+      <div class="section-header">
+        <h2 class="section-title">OTIMIZAÇÃO SMC</h2>
+        <span class="section-divider"></span>
+        <span class="section-sub" id="optimSubtitle">Pesos ajustados por correlação com outcomes reais</span>
+      </div>
+
+      <!-- Status e recomendação -->
+      <div class="optim-status-row">
+        <span class="optim-badge" id="optimBadge">AGUARDANDO DADOS</span>
+        <span class="optim-precision" id="optimPrecision"></span>
+        <button class="optim-apply-btn" id="optimApplyBtn" style="display:none" onclick="applyOptimizedWeights()">
+          APLICAR PESOS
+        </button>
+      </div>
+
+      <!-- Tabela de pesos -->
+      <div class="table-wrapper">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Camada</th>
+              <th>Peso Atual</th>
+              <th>Peso Sugerido</th>
+              <th>Mudança</th>
+              <th>Correlação</th>
+              <th>Reasoning</th>
+            </tr>
+          </thead>
+          <tbody id="optimBody">
+            <tr><td colspan="6" class="table-empty">Aguardando 30+ outcomes...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- ── SECTION 5: CRASH + PUMP RADAR (lado a lado) ──────────────────────── -->
     <section class="section radar-dual-section" id="radarSection">
 
