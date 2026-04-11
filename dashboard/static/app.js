@@ -1685,7 +1685,9 @@ function openAltModal(symbol) {
   const rawScore = coin.smc_score || 50;
   // F1: display_score=null para no_structural_confirmation — exibe "—" na linha de score do modal
   const dispScore = (coin.display_score !== null && coin.display_score !== undefined) ? coin.display_score : null;
-  const score    = rawScore;  // rawScore usado no gauge e zoneInfo
+  // hideScore: belt-and-suspenders — cobre tanto display_score=null quanto filtered_reason direto
+  const hideScore = dispScore === null || coin.filtered_reason === 'no_structural_confirmation';
+  const score    = rawScore;  // rawScore mantido para zoneInfo (não exibido quando hideScore)
   const sc       = scoreColor(rawScore);
   const isLong   = coin.direction === 'LONG';
   const isShort  = coin.direction === 'SHORT';
@@ -1744,13 +1746,13 @@ function openAltModal(symbol) {
 
     <!-- Gauge mini -->
     <div style="text-align:center;margin:12px 0 8px">
-      ${renderGauge(score)}
+      ${renderGauge(hideScore ? 0 : score)}
     </div>
 
     <!-- SMC Layers -->
     <div class="adm-section-title">SMC ANALYSIS</div>
     <div class="adm-grid">
-      ${metricRow('Score', dispScore !== null
+      ${metricRow('Score', !hideScore
         ? `<b style="color:${sc}">${dispScore.toFixed(1)}</b> <span style="font-size:9px;color:${zoneInfo.color}">${zoneInfo.label}</span>`
         : `<span style="color:var(--text-dim)" title="Score indisponível — sem confirmação estrutural">—</span>`)}
       ${metricRow('Bias', coin.bias || '—')}
@@ -1775,7 +1777,7 @@ function openAltModal(symbol) {
   `;
 
   modal.style.display = 'flex';
-  setTimeout(() => animateGaugeTo(score), 50);
+  setTimeout(() => animateGaugeTo(hideScore ? 0 : score), 50);
 }
 
 function closeAltModal(event) {
