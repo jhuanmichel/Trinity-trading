@@ -1859,6 +1859,37 @@ body {
   pointer-events: none;
 }
 
+/* F2 — indicador de sessão institucional no cabeçalho do Altcoin Radar */
+.alt-session-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: rgba(139,152,165,0.08);
+  color: var(--text-dim);
+}
+.alt-session-indicator.active {
+  background: rgba(0,255,178,0.08);
+  border-color: rgba(0,255,178,0.25);
+  color: var(--bull);
+}
+.alt-session-indicator.active::before {
+  content: '●';
+  font-size: 7px;
+  color: var(--bull);
+}
+.alt-session-indicator.inactive::before {
+  content: '○';
+  font-size: 7px;
+  color: var(--text-dim);
+}
+
 .alt-levels {
   display: flex;
   gap: 6px;

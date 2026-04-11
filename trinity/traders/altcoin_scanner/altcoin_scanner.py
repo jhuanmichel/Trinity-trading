@@ -25,6 +25,7 @@ log = logging.getLogger(__name__)
 
 BASE_DIR   = Path(__file__).parent.parent.parent.parent
 STATE_FILE = BASE_DIR / "dashboard" / "current_state.json"
+LOGS_DIR   = BASE_DIR / "logs"
 sys.path.insert(0, str(BASE_DIR))
 
 # ── Thresholds de score em 3 camadas (C2) ────────────────────────────────────
@@ -231,6 +232,35 @@ def _quick_smc(df: pd.DataFrame, symbol: str, btc_bias: str = "NEUTRO") -> Optio
         except Exception as _c3_err:
             log.debug(f"[C3] is_btc_correlated_short falhou: {_c3_err}")
 
+        # ── F2: Filtro de sessão institucional ─────────────────────────────
+        session_info: dict = {"allowed": True, "session_name": "", "next_session": "",
+                              "reason": "default", "bypassed": False}
+        try:
+            from session_filter import apply_session_filter
+            session_info = apply_session_filter(direction=direction, score=score)
+            if not session_info["allowed"]:
+                # Loga rejeição em logs/rejected_signals_YYYY-MM-DD.jsonl
+                try:
+                    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+                    date_str  = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                    log_path  = LOGS_DIR / f"rejected_signals_{date_str}.jsonl"
+                    log_entry = json.dumps({
+                        "ts":     datetime.now(timezone.utc).isoformat(),
+                        "symbol": symbol,
+                        "reason": "out_of_session",
+                        "direction": direction,
+                        "score":  round(score, 1),
+                        "next_session": session_info.get("next_session", ""),
+                    })
+                    with open(log_path, "a") as _lf:
+                        _lf.write(log_entry + "\n")
+                except Exception as _log_err:
+                    log.debug(f"[F2] log rejeição falhou: {_log_err}")
+                filtered_reason = "out_of_session"
+                direction       = "NO_TRADE"
+        except Exception as _sf_err:
+            log.debug(f"[F2] session_filter falhou: {_sf_err}")
+
         # ── C4: ob_count real (corrige bug de contar chaves do dict) ───────
         ob_count = _ob_count_real(ob)
 
@@ -289,6 +319,10 @@ def _quick_smc(df: pd.DataFrame, symbol: str, btc_bias: str = "NEUTRO") -> Optio
             "price":        price,
             "change_24h":   change_24h,
             "smc_score":    round(score, 1),
+            # F1/F2: display_score=None para sinais sem confirmação estrutural ou fora de sessão
+            # score_raw preserva o valor original para logs e cálculos internos
+            "display_score": None if filtered_reason in ("no_structural_confirmation", "out_of_session") else round(score, 1),
+            "score_raw":    round(score, 1),
             "direction":    direction,
             "bias":         bias,
             "structure":    structure,
@@ -303,10 +337,11 @@ def _quick_smc(df: pd.DataFrame, symbol: str, btc_bias: str = "NEUTRO") -> Optio
             "tp2":          tp2,
             "conviction":   round(abs(score - 50), 1),
             # Campos novos
-            "filtered_reason":   filtered_reason,    # C1/C3: motivo do filtro
+            "filtered_reason":   filtered_reason,    # C1/C3/F2: motivo do filtro
             "should_alert":      should_alert,        # C2: elegível para Telegram
             "score_zone":        score_zone,          # C2: "signal"|"watch"|"noise"
             "struct_confirm":    struct_confirm,      # C5: label para o modal
+            "session_info":      session_info,        # F2: info da sessão ativa
         }
     except Exception as e:
         log.debug(f"[altcoin_scanner] SMC {symbol}: {e}")
@@ -324,6 +359,8 @@ def run_altcoin_scan() -> dict:
     - C2: threshold de display (score < 45 oculto do dashboard)
     - C3: filtro de correlação BTC (SHORT fraco em mercado bearish → NO_TRADE)
     - C4: ob_count corrigido para contar OBs reais (não chaves de dict)
+    - F1: display_score=None para cards sem confirmação estrutural
+    - F2: session filter — bloqueia sinais fora de janelas institucionais (bypass score≥75)
 
     Retorna dict com:
         scan_ts      — ISO timestamp
@@ -338,6 +375,18 @@ def run_altcoin_scan() -> dict:
     except Exception:
         btc_bias = "NEUTRO"
     log.info(f"[altcoin_scanner] BTC bias: {btc_bias}")
+
+    # F2: snapshot do estado de sessão no início do scan (para o dashboard)
+    try:
+        from session_filter import _current_session_name, _next_session_label, is_valid_session
+        _now = datetime.now(timezone.utc)
+        _session_state = {
+            "in_session":   is_valid_session(_now),
+            "session_name": _current_session_name(_now),
+            "next_session": _next_session_label(_now),
+        }
+    except Exception:
+        _session_state = {"in_session": False, "session_name": "", "next_session": ""}
 
     candidates = []
     raw_count  = 0  # total antes dos filtros de display
@@ -382,11 +431,12 @@ def run_altcoin_scan() -> dict:
     candidates.sort(key=sort_key, reverse=True)
 
     result = {
-        "scan_ts":       datetime.now(timezone.utc).isoformat(),
-        "coins_scanned": raw_count,
+        "scan_ts":         datetime.now(timezone.utc).isoformat(),
+        "coins_scanned":   raw_count,
         "coins_displayed": len(candidates),
-        "btc_bias":      btc_bias,
-        "candidates":    candidates[:TOP_RESULTS],
+        "btc_bias":        btc_bias,
+        "session_state":   _session_state,   # F2: estado de sessão no momento do scan
+        "candidates":      candidates[:TOP_RESULTS],
     }
     log.info(
         f"[altcoin_scanner] Concluído: {raw_count} coins escaneadas | "

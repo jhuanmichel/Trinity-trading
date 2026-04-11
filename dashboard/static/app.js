@@ -1512,6 +1512,21 @@ function _fmtAltPrice(p) {
 let _allAltCandidates = [];  // todos os candidatos do último scan
 let _altFilter        = 'all'; // 'all' | 'LONG' | 'SHORT'
 
+// F2: renderiza o indicador de sessão institucional no cabeçalho
+function renderSessionIndicator(sessionState) {
+  const el = document.getElementById('altSessionIndicator');
+  if (!el) return;
+  if (!sessionState) { el.textContent = ''; return; }
+  const active = sessionState.in_session;
+  el.className = 'alt-session-indicator ' + (active ? 'active' : 'inactive');
+  if (active) {
+    el.textContent = sessionState.session_name || 'Sessão ativa';
+  } else {
+    const next = sessionState.next_session || '';
+    el.textContent = next ? `Fora de sessão — próxima: ${next}` : 'Fora de sessão';
+  }
+}
+
 // C2: cor de zona do score para a barra visual
 function altScoreZoneColor(score) {
   if (score >= 62) return 'var(--green)';
@@ -1535,18 +1550,22 @@ function renderAltCard(c) {
   const dirBadgeCls = isLong ? 'alt-dir-long' : isShort ? 'alt-dir-short' : 'alt-dir-neutro';
   const dirLabel    = isLong ? '▲ LONG' : isShort ? '▼ SHORT' : '— NEUTRO';
 
-  const score   = c.smc_score || 50;
-  const sc      = altScoreZoneColor(score);
+  const score    = c.smc_score || 50;
+  // F1: display_score=null significa sem confirmação estrutural — mostrar "—" e barra cinza
+  const dispScore = (c.display_score !== null && c.display_score !== undefined) ? c.display_score : null;
+  const sc       = dispScore !== null ? altScoreZoneColor(dispScore) : 'var(--text-dim)';
   const chg     = c.change_24h || 0;
   const chgCls  = chg >= 0 ? 'up' : 'dn';
   const chgSign = chg >= 0 ? '+' : '';
 
-  // C5: badge de motivo de filtro para NO_TRADE
+  // C5/F2: badge de motivo de filtro para NO_TRADE
   let filterBadge = '';
   if (isNoTrade && c.filtered_reason === 'no_structural_confirmation') {
     filterBadge = '<span class="alt-filter-badge">Sem estrutura</span>';
   } else if (isNoTrade && c.filtered_reason === 'btc_correlation') {
     filterBadge = '<span class="alt-filter-badge">Correlação BTC</span>';
+  } else if (isNoTrade && c.filtered_reason === 'out_of_session') {
+    filterBadge = '<span class="alt-filter-badge">Fora de sessão</span>';
   }
 
   // C5: zona do score (para cards em observação)
@@ -1593,9 +1612,9 @@ function renderAltCard(c) {
     <div class="alt-score-row">
       <div class="alt-score-bar-wrap">
         <div class="alt-score-bar-zones"></div>
-        <div class="alt-score-bar" style="width:${score}%;background:${sc}"></div>
+        <div class="alt-score-bar" style="width:${dispScore !== null ? dispScore : 0}%;background:${sc}"${dispScore === null ? ' title="Score indisponível — sem confirmação estrutural"' : ''}></div>
       </div>
-      <span class="alt-score-num" style="color:${sc}">${score.toFixed(0)}</span>
+      <span class="alt-score-num" style="color:${sc}"${dispScore === null ? ' title="Score indisponível — sem confirmação estrutural"' : ''}>${dispScore !== null ? dispScore.toFixed(0) : '—'}</span>
     </div>
     ${tagsHtml}
     ${lvlsHtml}
@@ -1663,8 +1682,11 @@ function openAltModal(symbol) {
   const box   = document.getElementById('altModalBox');
   if (!modal || !box) return;
 
-  const score    = coin.smc_score || 50;
-  const sc       = scoreColor(score);
+  const rawScore = coin.smc_score || 50;
+  // F1: display_score=null para no_structural_confirmation — exibe "—" na linha de score do modal
+  const dispScore = (coin.display_score !== null && coin.display_score !== undefined) ? coin.display_score : null;
+  const score    = rawScore;  // rawScore usado no gauge e zoneInfo
+  const sc       = scoreColor(rawScore);
   const isLong   = coin.direction === 'LONG';
   const isShort  = coin.direction === 'SHORT';
   const dirColor = isLong ? 'var(--bull)' : isShort ? 'var(--bear)' : 'var(--text-muted)';
@@ -1691,10 +1713,15 @@ function openAltModal(symbol) {
     : score >= 45 ? { label: 'Observação', color: 'var(--yellow)' }
     : { label: 'Sem sinal (ruído)', color: 'var(--text-dim)' };
 
-  // C5: motivo do filtro
+  // C5/F2: motivo do filtro
+  const _filterLabels = {
+    'no_structural_confirmation': 'Sem BOS/CHoCH confirmado',
+    'btc_correlation':            'SHORT correlacionado ao BTC (score < 55)',
+    'out_of_session':             `Fora de janela institucional${coin.session_info?.next_session ? ` — próxima: ${coin.session_info.next_session}` : ''}`,
+  };
   const filterReasonHtml = coin.filtered_reason
     ? `<div style="margin-top:4px;padding:4px 8px;background:rgba(255,77,79,0.08);border:1px solid rgba(255,77,79,0.2);border-radius:4px;font-size:10px;color:var(--red)">
-         FILTRADO: ${coin.filtered_reason === 'no_structural_confirmation' ? 'Sem BOS/CHoCH confirmado' : coin.filtered_reason === 'btc_correlation' ? 'SHORT correlacionado ao BTC (score < 55)' : coin.filtered_reason}
+         FILTRADO: ${_filterLabels[coin.filtered_reason] || coin.filtered_reason}
        </div>`
     : '';
 
@@ -1723,7 +1750,9 @@ function openAltModal(symbol) {
     <!-- SMC Layers -->
     <div class="adm-section-title">SMC ANALYSIS</div>
     <div class="adm-grid">
-      ${metricRow('Score', `<b style="color:${sc}">${score.toFixed(1)}</b> <span style="font-size:9px;color:${zoneInfo.color}">${zoneInfo.label}</span>`)}
+      ${metricRow('Score', dispScore !== null
+        ? `<b style="color:${sc}">${dispScore.toFixed(1)}</b> <span style="font-size:9px;color:${zoneInfo.color}">${zoneInfo.label}</span>`
+        : `<span style="color:var(--text-dim)" title="Score indisponível — sem confirmação estrutural">—</span>`)}
       ${metricRow('Bias', coin.bias || '—')}
       ${metricRow('Confirmação estrutural', structConfirmHtml)}
       ${metricRow('BOS Bull', coin.bos_bull ? '✓' : '—', coin.bos_bull ? 'var(--bull)' : '')}
@@ -1762,6 +1791,9 @@ async function updateAltcoinRadar() {
     if (!grid) return;
 
     _allAltCandidates = data.candidates || [];
+
+    // F2: atualiza indicador de sessão com snapshot do scan
+    renderSessionIndicator(data.session_state || null);
 
     if (!_allAltCandidates.length) {
       grid.innerHTML = '<div class="alt-card" style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:24px">Aguardando primeiro scan...</div>';
