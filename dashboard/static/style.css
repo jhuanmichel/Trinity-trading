@@ -1774,6 +1774,7 @@ body {
   gap: 8px;
 }
 .alt-score-bar-wrap {
+  position: relative;
   flex: 1;
   height: 4px;
   background: var(--surface2);
@@ -1803,6 +1804,60 @@ body {
 .alt-dir-long  { background: rgba(0,255,178,0.12); color: var(--bull); border: 1px solid rgba(0,255,178,0.25); }
 .alt-dir-short { background: rgba(255,75,75,0.12);  color: var(--bear); border: 1px solid rgba(255,75,75,0.25); }
 .alt-dir-neutro { background: rgba(139,152,165,0.10); color: var(--text-muted); border: 1px solid var(--border); }
+
+/* C5 — badge de motivo de filtro (Sem estrutura, Correlação BTC) */
+.alt-filter-badge {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(139,152,165,0.12);
+  color: var(--text-muted);
+  border: 1px solid var(--border-md);
+  white-space: nowrap;
+}
+
+/* C2 — badges de zona de score */
+.alt-zone-watch {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(255,170,0,0.10);
+  color: #FFAA00;
+  border: 1px solid rgba(255,170,0,0.25);
+}
+.alt-zone-noise {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(77,90,104,0.15);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
+/* C5 — barra de score com zonas visuais (fundo) */
+.alt-score-bar-zones {
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  background: linear-gradient(to right,
+    rgba(77,90,104,0.25) 0%,
+    rgba(77,90,104,0.25) 45%,
+    rgba(255,170,0,0.20) 45%,
+    rgba(255,170,0,0.20) 62%,
+    rgba(0,255,178,0.15) 62%,
+    rgba(0,255,178,0.15) 100%
+  );
+  pointer-events: none;
+}
 
 .alt-levels {
   display: flex;

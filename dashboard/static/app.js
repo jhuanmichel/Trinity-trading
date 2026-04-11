@@ -1512,18 +1512,45 @@ function _fmtAltPrice(p) {
 let _allAltCandidates = [];  // todos os candidatos do último scan
 let _altFilter        = 'all'; // 'all' | 'LONG' | 'SHORT'
 
+// C2: cor de zona do score para a barra visual
+function altScoreZoneColor(score) {
+  if (score >= 62) return 'var(--green)';
+  if (score >= 45) return 'var(--yellow)';
+  return 'var(--text-dim)';
+}
+function altScoreZoneLabel(score, direction) {
+  if (direction === 'NO_TRADE' || direction === 'NEUTRO') return null;
+  if (score >= 62) return null;   // label implícita pelo badge de direção
+  if (score >= 45) return '<span class="alt-zone-watch">Observação</span>';
+  return '<span class="alt-zone-noise">Sem sinal</span>';
+}
+
 function renderAltCard(c) {
-  const isLong  = c.direction === 'LONG';
-  const isShort = c.direction === 'SHORT';
+  const isLong     = c.direction === 'LONG';
+  const isShort    = c.direction === 'SHORT';
+  const isNoTrade  = c.direction === 'NO_TRADE';
+  const isNeutro   = c.direction === 'NEUTRO';
+
   const dirCls      = isLong ? 'alt-long' : isShort ? 'alt-short' : 'alt-neutro';
   const dirBadgeCls = isLong ? 'alt-dir-long' : isShort ? 'alt-dir-short' : 'alt-dir-neutro';
   const dirLabel    = isLong ? '▲ LONG' : isShort ? '▼ SHORT' : '— NEUTRO';
 
   const score   = c.smc_score || 50;
-  const sc      = scoreColor(score);
+  const sc      = altScoreZoneColor(score);
   const chg     = c.change_24h || 0;
   const chgCls  = chg >= 0 ? 'up' : 'dn';
   const chgSign = chg >= 0 ? '+' : '';
+
+  // C5: badge de motivo de filtro para NO_TRADE
+  let filterBadge = '';
+  if (isNoTrade && c.filtered_reason === 'no_structural_confirmation') {
+    filterBadge = '<span class="alt-filter-badge">Sem estrutura</span>';
+  } else if (isNoTrade && c.filtered_reason === 'btc_correlation') {
+    filterBadge = '<span class="alt-filter-badge">Correlação BTC</span>';
+  }
+
+  // C5: zona do score (para cards em observação)
+  const zoneLabel = (!isNoTrade && !isNeutro) ? altScoreZoneLabel(score, c.direction) : null;
 
   const tags = [];
   if (c.bos_bull)   tags.push('<span class="alt-tag-bull">BOS↑</span>');
@@ -1533,10 +1560,13 @@ function renderAltCard(c) {
   if (c.fvg_count)  tags.push(`<span class="alt-tag-dim">FVG×${c.fvg_count}</span>`);
   const tagsHtml = tags.length ? `<div class="alt-tags-row">${tags.join('')}</div>` : '';
 
+  // Só mostra níveis se aprovado por C1 (direction LONG/SHORT)
   const lvls = [];
-  if (c.entry) lvls.push(`<span class="alt-lv-lbl">E</span><span class="alt-lv-val">$${_fmtAltPrice(c.entry)}</span>`);
-  if (c.tp1)   lvls.push(`<span class="alt-lv-lbl">TP1</span><span class="alt-lv-val alt-lv-tp">$${_fmtAltPrice(c.tp1)}</span>`);
-  if (c.stop)  lvls.push(`<span class="alt-lv-lbl">SL</span><span class="alt-lv-val alt-lv-sl">$${_fmtAltPrice(c.stop)}</span>`);
+  if (!isNoTrade && !isNeutro) {
+    if (c.entry) lvls.push(`<span class="alt-lv-lbl">E</span><span class="alt-lv-val">$${_fmtAltPrice(c.entry)}</span>`);
+    if (c.tp1)   lvls.push(`<span class="alt-lv-lbl">TP1</span><span class="alt-lv-val alt-lv-tp">$${_fmtAltPrice(c.tp1)}</span>`);
+    if (c.stop)  lvls.push(`<span class="alt-lv-lbl">SL</span><span class="alt-lv-val alt-lv-sl">$${_fmtAltPrice(c.stop)}</span>`);
+  }
   const lvlsHtml = lvls.length
     ? `<div class="alt-levels">${lvls.map(l => `<div class="alt-level">${l}</div>`).join('')}</div>`
     : '';
@@ -1550,7 +1580,11 @@ function renderAltCard(c) {
         <span class="alt-symbol">${c.symbol}</span>
         ${struct}
       </div>
-      <span class="alt-dir-badge ${dirBadgeCls}">${dirLabel}</span>
+      <div style="display:flex;gap:4px;align-items:center">
+        ${filterBadge}
+        ${zoneLabel || ''}
+        ${!isNoTrade ? `<span class="alt-dir-badge ${dirBadgeCls}">${dirLabel}</span>` : ''}
+      </div>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0">
       <span class="alt-price">$${_fmtAltPrice(c.price)}</span>
@@ -1558,6 +1592,7 @@ function renderAltCard(c) {
     </div>
     <div class="alt-score-row">
       <div class="alt-score-bar-wrap">
+        <div class="alt-score-bar-zones"></div>
         <div class="alt-score-bar" style="width:${score}%;background:${sc}"></div>
       </div>
       <span class="alt-score-num" style="color:${sc}">${score.toFixed(0)}</span>
@@ -1642,6 +1677,27 @@ function openAltModal(symbol) {
        <span class="adm-value" style="${color ? `color:${color}` : ''}">${value || '—'}</span>
      </div>`;
 
+  // C5: cor e label de confirmação estrutural
+  const structConfirm = coin.struct_confirm || null;
+  const structConfirmColor = structConfirm && structConfirm.includes('✓')
+    ? (coin.direction === 'LONG' ? 'var(--bull)' : 'var(--bear)')
+    : structConfirm && structConfirm.includes('✗') ? 'var(--red)' : '';
+  const structConfirmHtml = structConfirm
+    ? `<b style="color:${structConfirmColor || 'var(--text-muted)'}">${structConfirm}</b>`
+    : '—';
+
+  // C2: zone label para o modal
+  const zoneInfo = score >= 62 ? { label: 'Sinal ativo', color: 'var(--green)' }
+    : score >= 45 ? { label: 'Observação', color: 'var(--yellow)' }
+    : { label: 'Sem sinal (ruído)', color: 'var(--text-dim)' };
+
+  // C5: motivo do filtro
+  const filterReasonHtml = coin.filtered_reason
+    ? `<div style="margin-top:4px;padding:4px 8px;background:rgba(255,77,79,0.08);border:1px solid rgba(255,77,79,0.2);border-radius:4px;font-size:10px;color:var(--red)">
+         FILTRADO: ${coin.filtered_reason === 'no_structural_confirmation' ? 'Sem BOS/CHoCH confirmado' : coin.filtered_reason === 'btc_correlation' ? 'SHORT correlacionado ao BTC (score < 55)' : coin.filtered_reason}
+       </div>`
+    : '';
+
   box.innerHTML = `
     <div class="adm-header">
       <div>
@@ -1657,6 +1713,8 @@ function openAltModal(symbol) {
       </div>
     </div>
 
+    ${filterReasonHtml}
+
     <!-- Gauge mini -->
     <div style="text-align:center;margin:12px 0 8px">
       ${renderGauge(score)}
@@ -1665,19 +1723,20 @@ function openAltModal(symbol) {
     <!-- SMC Layers -->
     <div class="adm-section-title">SMC ANALYSIS</div>
     <div class="adm-grid">
-      ${metricRow('Score', `<b style="color:${sc}">${score.toFixed(1)}</b>`)}
+      ${metricRow('Score', `<b style="color:${sc}">${score.toFixed(1)}</b> <span style="font-size:9px;color:${zoneInfo.color}">${zoneInfo.label}</span>`)}
       ${metricRow('Bias', coin.bias || '—')}
+      ${metricRow('Confirmação estrutural', structConfirmHtml)}
       ${metricRow('BOS Bull', coin.bos_bull ? '✓' : '—', coin.bos_bull ? 'var(--bull)' : '')}
       ${metricRow('BOS Bear', coin.bos_bear ? '✓' : '—', coin.bos_bear ? 'var(--bear)' : '')}
       ${metricRow('CHoCH', coin.choch ? '✓ detectado' : '—', coin.choch ? 'var(--yellow)' : '')}
-      ${metricRow('Order Blocks', coin.ob_count || 0)}
+      ${metricRow('Order Blocks', coin.ob_count ?? 0)}
       ${metricRow('FVGs', coin.fvg_count || 0)}
       ${metricRow('Convicção', `${(coin.conviction || 0).toFixed(1)} pts`)}
     </div>
 
-    <!-- Níveis -->
-    ${(coin.entry || coin.stop || coin.tp1 || coin.tp2) ? `
-    <div class="adm-section-title" style="margin-top:10px">NÍVEIS DO SINAL</div>
+    <!-- Níveis — só para sinais aprovados por C1 -->
+    ${(coin.direction === 'LONG' || coin.direction === 'SHORT') && (coin.entry || coin.stop || coin.tp1 || coin.tp2) ? `
+    <div class="adm-section-title" style="margin-top:10px">NÍVEIS DO SINAL${coin.should_alert ? ' <span style="font-size:9px;color:var(--green);letter-spacing:0.04em">● ALERTA ATIVO</span>' : ''}</div>
     <div class="adm-grid">
       ${coin.entry ? metricRow('Entry',  `$${_fmtAltPrice(coin.entry)}`,  'var(--yellow)') : ''}
       ${coin.stop  ? metricRow('Stop',   `$${_fmtAltPrice(coin.stop)}`,   'var(--bear)')   : ''}
