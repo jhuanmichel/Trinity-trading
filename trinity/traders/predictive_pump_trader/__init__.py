@@ -18,6 +18,7 @@ Pipeline:
 from trinity.traders.predictive_pump_trader.predictive_pump_trader import (
     PredictivePumpTrader,
     run_pump_scan,
+    run_pump_cycle,
 )
 
-__all__ = ["PredictivePumpTrader", "run_pump_scan"]
+__all__ = ["PredictivePumpTrader", "run_pump_scan", "run_pump_cycle"]

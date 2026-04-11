@@ -389,7 +389,7 @@ async def get_liquidations():
 
 
 async def _pump_scan_loop():
-    """Roda o Predictive Pump Trader a cada 30s em background."""
+    """Roda o Predictive Pump Trader a cada 30s em background (scan + alertas Telegram)."""
     import logging as _log
     _plog = _log.getLogger("pump_trader")
     await asyncio.sleep(30)  # offset: crash começa em 20s, pump em 30s
@@ -397,14 +397,13 @@ async def _pump_scan_loop():
         try:
             import sys as _sys
             _sys.path.insert(0, str(BASE_DIR))
-            from trinity.traders.predictive_pump_trader.predictive_pump_trader import run_pump_scan
-            result = await asyncio.to_thread(run_pump_scan)
-            try:
-                PUMP_SCAN_FILE.write_text(
-                    __import__("json").dumps(result, indent=2, default=str)
-                )
-            except Exception as _we:
-                _plog.warning(f"Pump scan write error: {_we}")
+            from trinity.traders.predictive_pump_trader.predictive_pump_trader import run_pump_cycle
+            result = await asyncio.to_thread(run_pump_cycle)
+            _plog.debug(
+                f"Pump scan: {result.get('coins_scanned', 0)} coins | "
+                f"{len(result.get('candidates', []))} candidatos | "
+                f"{result.get('scan_duration_s', 0):.1f}s"
+            )
         except Exception as _e:
             _plog.error(f"Pump scan loop error: {_e}")
         await asyncio.sleep(30)

@@ -35,6 +35,7 @@ from config         import (
 from morning_brief       import run_morning_brief
 from cycle_intelligence import run_cycle_intelligence
 from funding_rate_manager import get_manager as _get_funding_manager
+from trinity.traders.predictive_pump_trader.predictive_pump_trader import run_pump_cycle as _run_pump_cycle
 
 
 # ─── Logging ───────────────────────────────────────────────────────────────
@@ -892,6 +893,33 @@ def run_institutional_analysis():
         alerts.send_error(f"[INSTITUCIONAL] {e}")
 
 
+def run_pump_radar():
+    """
+    Tarefa 4: Pump Radar — detecta pump institucional antes de acontecer.
+    Scan de altcoins + alertas Telegram para candidatos com score >= 70.
+    """
+    log.info("🚀 [PUMP RADAR] Scan de altcoins para pump institucional...")
+    try:
+        result = _run_pump_cycle()
+        candidates = result.get("candidates", [])
+        log.info(
+            f"[PumpRadar] {result.get('coins_scanned', 0)} coins scaneadas | "
+            f"{len(candidates)} candidatos qualificados | "
+            f"duração: {result.get('scan_duration_s', 0):.1f}s"
+        )
+        if candidates:
+            top = candidates[0]
+            log.info(
+                f"[PumpRadar] Top: {top.get('symbol')} | "
+                f"score {top.get('opportunity_score', 0):.0f} | "
+                f"{top.get('move_classification', '?')} | "
+                f"+{top.get('expected_move_pct', 0):.1f}%"
+            )
+        log.info("✅ Pump Radar concluído.\n")
+    except Exception as e:
+        log.error(f"💥 ERRO (pump_radar): {e}", exc_info=True)
+
+
 if __name__ == "__main__":
     log.info("🤖 Agente de IA para Futuros MEXC iniciado!")
     _liq_start()   # inicia WebSocket Binance liquidações em background
@@ -912,6 +940,11 @@ if __name__ == "__main__":
     run_institutional_analysis()
     schedule.every(INST_INTERVAL_MINUTES).minutes.do(run_institutional_analysis)
     log.info(f"🏛️  Análise institucional agendada a cada {INST_INTERVAL_MINUTES} min")
+
+    # Tarefa 4: Pump Radar a cada 30min (detecta pump antes de acontecer)
+    run_pump_radar()
+    schedule.every(30).minutes.do(run_pump_radar)
+    log.info("🚀 Pump Radar agendado a cada 30 min")
 
     # Morning Brief diário às 8h (horário local do servidor — use BRT)
     schedule.every().day.at("08:00").do(run_morning_brief)
