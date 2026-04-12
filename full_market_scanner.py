@@ -151,9 +151,9 @@ class QuickTriageScanner:
             return {}
 
     def _volume_usd(self, ticker: dict) -> float:
-        """volume24 * lastPrice."""
+        """amount24 = volume em USD já calculado pela exchange (correto para qualquer contractSize)."""
         try:
-            return float(ticker["volume24"]) * float(ticker["lastPrice"])
+            return float(ticker["amount24"])
         except Exception:
             return 0.0
 
