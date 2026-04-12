@@ -1665,6 +1665,10 @@ function _renderFilteredAlt(query) {
     );
   }
 
+  // Segunda camada: oculta NO_TRADE com score < 45 (threshold de display)
+  // LONG/SHORT aprovados sempre aparecem independente do score
+  filtered = filtered.filter(c => !(c.smc_score < 45 && c.direction === 'NO_TRADE'));
+
   if (!filtered.length) {
     grid.innerHTML = `<div class="alt-empty-msg">Nenhuma coin encontrada para "${q || _altFilter}"</div>`;
     return;

@@ -479,7 +479,14 @@ def get_altcoin_scanner():
     """Último resultado do Altcoin Scanner SMC."""
     if ALTCOIN_SCAN_FILE.exists():
         try:
-            return JSONResponse(content=json.loads(ALTCOIN_SCAN_FILE.read_text()))
+            data = json.loads(ALTCOIN_SCAN_FILE.read_text())
+            # Remove NO_TRADE com score < 45 (abaixo do threshold de display)
+            # Sinais LONG/SHORT aprovados sempre passam independente do score
+            data["candidates"] = [
+                c for c in data.get("candidates", [])
+                if not (c.get("direction") == "NO_TRADE" and c.get("smc_score", 0) < 45)
+            ]
+            return JSONResponse(content=data)
         except Exception:
             pass
     return JSONResponse(content={"scan_ts": None, "candidates": [], "coins_scanned": 0})
