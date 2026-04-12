@@ -1,212 +1,172 @@
 {
-  "scan_ts": "2026-04-12T17:08:17.234991+00:00",
-  "elapsed_seconds": 2.9,
+  "scan_ts": "2026-04-12T17:23:34.966682+00:00",
+  "elapsed_seconds": 2.1,
   "contracts_scanned": 855,
-  "candidates_stage1": 16,
-  "candidates_stage2": 16,
+  "candidates_stage1": 8,
+  "candidates_stage2": 8,
   "alerts_sent": 0,
   "top_pump": [
     {
-      "symbol": "MSTRSTOCK_USDT",
-      "pump_score": 33.3,
-      "crash_score": 0.0,
-      "dominant_type": "PUMP",
-      "last_price": 126.93,
-      "funding_rate": -0.009094,
-      "rise_fall": -0.0031,
-      "analyzed_at": "2026-04-12T17:08:16.372082+00:00"
-    },
-    {
-      "symbol": "ROBINHOOD_USDT",
-      "pump_score": 33.3,
-      "crash_score": 16.7,
-      "dominant_type": "PUMP",
-      "last_price": 68.26,
-      "funding_rate": -0.008949,
-      "rise_fall": -0.0074,
-      "analyzed_at": "2026-04-12T17:08:16.409516+00:00"
-    },
-    {
-      "symbol": "MUSTOCK_USDT",
-      "pump_score": 32.7,
-      "crash_score": 25.3,
-      "dominant_type": "PUMP",
-      "last_price": 415.42,
-      "funding_rate": -0.005737,
-      "rise_fall": -0.0024,
-      "analyzed_at": "2026-04-12T17:08:16.342419+00:00"
-    },
-    {
-      "symbol": "METASTOCK_USDT",
-      "pump_score": 28.7,
-      "crash_score": 16.7,
-      "dominant_type": "PUMP",
-      "last_price": 624.12,
-      "funding_rate": -0.006398,
-      "rise_fall": -0.0042,
-      "analyzed_at": "2026-04-12T17:08:16.320061+00:00"
-    },
-    {
       "symbol": "TESLA_USDT",
-      "pump_score": 28.7,
-      "crash_score": 33.3,
-      "dominant_type": "CRASH",
-      "last_price": 346.42,
-      "funding_rate": -0.007823,
-      "rise_fall": -0.0088,
-      "analyzed_at": "2026-04-12T17:08:16.364025+00:00"
-    },
-    {
-      "symbol": "PLTRSTOCK_USDT",
-      "pump_score": 28.7,
-      "crash_score": 4.7,
-      "dominant_type": "PUMP",
-      "last_price": 127.46,
-      "funding_rate": -0.00664,
-      "rise_fall": -0.004,
-      "analyzed_at": "2026-04-12T17:08:16.389384+00:00"
-    },
-    {
-      "symbol": "AMZNSTOCK_USDT",
-      "pump_score": 28.7,
+      "pump_score": 38.0,
       "crash_score": 16.7,
       "dominant_type": "PUMP",
-      "last_price": 236.13,
-      "funding_rate": -0.005415,
-      "rise_fall": -0.0031,
-      "analyzed_at": "2026-04-12T17:08:16.409390+00:00"
+      "last_price": 347.08,
+      "funding_rate": -0.008133,
+      "rise_fall": -0.0069,
+      "analyzed_at": "2026-04-12T17:23:34.966190+00:00"
     },
     {
       "symbol": "COINBASE_USDT",
-      "pump_score": 28.7,
-      "crash_score": 0.0,
+      "pump_score": 33.3,
+      "crash_score": 16.7,
       "dominant_type": "PUMP",
-      "last_price": 165.93,
-      "funding_rate": -0.007916,
-      "rise_fall": -0.006,
-      "analyzed_at": "2026-04-12T17:08:16.438889+00:00"
+      "last_price": 165.91,
+      "funding_rate": -0.008234,
+      "rise_fall": -0.0061,
+      "analyzed_at": "2026-04-12T17:23:34.807105+00:00"
     },
     {
-      "symbol": "0G_USDT",
-      "pump_score": 26.0,
-      "crash_score": 0.0,
+      "symbol": "NVIDIA_USDT",
+      "pump_score": 33.3,
+      "crash_score": 30.7,
       "dominant_type": "PUMP",
-      "last_price": 0.6115,
-      "funding_rate": -0.008838,
-      "rise_fall": 0.0769,
-      "analyzed_at": "2026-04-12T17:08:16.424292+00:00"
+      "last_price": 185.85,
+      "funding_rate": -0.008629,
+      "rise_fall": -0.0081,
+      "analyzed_at": "2026-04-12T17:23:34.926912+00:00"
     },
     {
       "symbol": "RAVE_USDT",
-      "pump_score": 21.3,
-      "crash_score": 16.7,
+      "pump_score": 31.3,
+      "crash_score": 0.0,
       "dominant_type": "PUMP",
-      "last_price": 3.3613,
-      "funding_rate": -0.008872,
-      "rise_fall": 0.0929,
-      "analyzed_at": "2026-04-12T17:08:16.393770+00:00"
+      "last_price": 3.4518,
+      "funding_rate": -0.010035,
+      "rise_fall": 0.1224,
+      "analyzed_at": "2026-04-12T17:23:34.730368+00:00"
+    },
+    {
+      "symbol": "AKE_USDT",
+      "pump_score": 21.3,
+      "crash_score": 20.0,
+      "dominant_type": "PUMP",
+      "last_price": 0.0006279,
+      "funding_rate": 0.001749,
+      "rise_fall": 0.1146,
+      "analyzed_at": "2026-04-12T17:23:34.817084+00:00"
+    },
+    {
+      "symbol": "0G_USDT",
+      "pump_score": 16.7,
+      "crash_score": 33.3,
+      "dominant_type": "CRASH",
+      "last_price": 0.6103,
+      "funding_rate": -0.008858,
+      "rise_fall": 0.0748,
+      "analyzed_at": "2026-04-12T17:23:34.907322+00:00"
+    },
+    {
+      "symbol": "FIDA_USDT",
+      "pump_score": 12.0,
+      "crash_score": 0.0,
+      "dominant_type": "PUMP",
+      "last_price": 0.01771,
+      "funding_rate": -0.005773,
+      "rise_fall": -0.1096,
+      "analyzed_at": "2026-04-12T17:23:34.837777+00:00"
+    },
+    {
+      "symbol": "BSB_USDT",
+      "pump_score": 9.3,
+      "crash_score": 9.3,
+      "dominant_type": "PUMP",
+      "last_price": 0.207,
+      "funding_rate": 0.00019,
+      "rise_fall": -0.1108,
+      "analyzed_at": "2026-04-12T17:23:34.800432+00:00"
     }
   ],
   "top_crash": [
     {
-      "symbol": "TESLA_USDT",
-      "pump_score": 28.7,
+      "symbol": "0G_USDT",
+      "pump_score": 16.7,
       "crash_score": 33.3,
       "dominant_type": "CRASH",
-      "last_price": 346.42,
-      "funding_rate": -0.007823,
-      "rise_fall": -0.0088,
-      "analyzed_at": "2026-04-12T17:08:16.364025+00:00"
-    },
-    {
-      "symbol": "MUSTOCK_USDT",
-      "pump_score": 32.7,
-      "crash_score": 25.3,
-      "dominant_type": "PUMP",
-      "last_price": 415.42,
-      "funding_rate": -0.005737,
-      "rise_fall": -0.0024,
-      "analyzed_at": "2026-04-12T17:08:16.342419+00:00"
-    },
-    {
-      "symbol": "CRCLSTOCK_USDT",
-      "pump_score": 12.0,
-      "crash_score": 21.3,
-      "dominant_type": "CRASH",
-      "last_price": 87.4,
-      "funding_rate": -0.007573,
-      "rise_fall": -0.0045,
-      "analyzed_at": "2026-04-12T17:08:16.563042+00:00"
-    },
-    {
-      "symbol": "METASTOCK_USDT",
-      "pump_score": 28.7,
-      "crash_score": 16.7,
-      "dominant_type": "PUMP",
-      "last_price": 624.12,
-      "funding_rate": -0.006398,
-      "rise_fall": -0.0042,
-      "analyzed_at": "2026-04-12T17:08:16.320061+00:00"
-    },
-    {
-      "symbol": "RAVE_USDT",
-      "pump_score": 21.3,
-      "crash_score": 16.7,
-      "dominant_type": "PUMP",
-      "last_price": 3.3613,
-      "funding_rate": -0.008872,
-      "rise_fall": 0.0929,
-      "analyzed_at": "2026-04-12T17:08:16.393770+00:00"
-    },
-    {
-      "symbol": "AMZNSTOCK_USDT",
-      "pump_score": 28.7,
-      "crash_score": 16.7,
-      "dominant_type": "PUMP",
-      "last_price": 236.13,
-      "funding_rate": -0.005415,
-      "rise_fall": -0.0031,
-      "analyzed_at": "2026-04-12T17:08:16.409390+00:00"
-    },
-    {
-      "symbol": "ROBINHOOD_USDT",
-      "pump_score": 33.3,
-      "crash_score": 16.7,
-      "dominant_type": "PUMP",
-      "last_price": 68.26,
-      "funding_rate": -0.008949,
-      "rise_fall": -0.0074,
-      "analyzed_at": "2026-04-12T17:08:16.409516+00:00"
+      "last_price": 0.6103,
+      "funding_rate": -0.008858,
+      "rise_fall": 0.0748,
+      "analyzed_at": "2026-04-12T17:23:34.907322+00:00"
     },
     {
       "symbol": "NVIDIA_USDT",
-      "pump_score": 16.7,
-      "crash_score": 14.0,
+      "pump_score": 33.3,
+      "crash_score": 30.7,
       "dominant_type": "PUMP",
-      "last_price": 185.89,
-      "funding_rate": -0.00826,
-      "rise_fall": -0.0078,
-      "analyzed_at": "2026-04-12T17:08:17.195485+00:00"
+      "last_price": 185.85,
+      "funding_rate": -0.008629,
+      "rise_fall": -0.0081,
+      "analyzed_at": "2026-04-12T17:23:34.926912+00:00"
     },
     {
-      "symbol": "PLTRSTOCK_USDT",
-      "pump_score": 28.7,
-      "crash_score": 4.7,
+      "symbol": "AKE_USDT",
+      "pump_score": 21.3,
+      "crash_score": 20.0,
       "dominant_type": "PUMP",
-      "last_price": 127.46,
-      "funding_rate": -0.00664,
-      "rise_fall": -0.004,
-      "analyzed_at": "2026-04-12T17:08:16.389384+00:00"
+      "last_price": 0.0006279,
+      "funding_rate": 0.001749,
+      "rise_fall": 0.1146,
+      "analyzed_at": "2026-04-12T17:23:34.817084+00:00"
     },
     {
-      "symbol": "INTCSTOCK_USDT",
-      "pump_score": 16.7,
-      "crash_score": 4.7,
+      "symbol": "COINBASE_USDT",
+      "pump_score": 33.3,
+      "crash_score": 16.7,
       "dominant_type": "PUMP",
-      "last_price": 61.39,
-      "funding_rate": -0.008387,
-      "rise_fall": -0.0093,
-      "analyzed_at": "2026-04-12T17:08:16.767223+00:00"
+      "last_price": 165.91,
+      "funding_rate": -0.008234,
+      "rise_fall": -0.0061,
+      "analyzed_at": "2026-04-12T17:23:34.807105+00:00"
+    },
+    {
+      "symbol": "TESLA_USDT",
+      "pump_score": 38.0,
+      "crash_score": 16.7,
+      "dominant_type": "PUMP",
+      "last_price": 347.08,
+      "funding_rate": -0.008133,
+      "rise_fall": -0.0069,
+      "analyzed_at": "2026-04-12T17:23:34.966190+00:00"
+    },
+    {
+      "symbol": "BSB_USDT",
+      "pump_score": 9.3,
+      "crash_score": 9.3,
+      "dominant_type": "PUMP",
+      "last_price": 0.207,
+      "funding_rate": 0.00019,
+      "rise_fall": -0.1108,
+      "analyzed_at": "2026-04-12T17:23:34.800432+00:00"
+    },
+    {
+      "symbol": "RAVE_USDT",
+      "pump_score": 31.3,
+      "crash_score": 0.0,
+      "dominant_type": "PUMP",
+      "last_price": 3.4518,
+      "funding_rate": -0.010035,
+      "rise_fall": 0.1224,
+      "analyzed_at": "2026-04-12T17:23:34.730368+00:00"
+    },
+    {
+      "symbol": "FIDA_USDT",
+      "pump_score": 12.0,
+      "crash_score": 0.0,
+      "dominant_type": "PUMP",
+      "last_price": 0.01771,
+      "funding_rate": -0.005773,
+      "rise_fall": -0.1096,
+      "analyzed_at": "2026-04-12T17:23:34.837777+00:00"
     }
   ]
 }

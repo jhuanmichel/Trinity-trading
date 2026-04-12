@@ -928,33 +928,6 @@ function renderETHCard() {
   </div>`;
 }
 
-// ── Section 3: History ────────────────────────────────────────────────────
-
-function renderHistory(signals) {
-  const tbody = document.getElementById('historyBody');
-  if (!signals || signals.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="table-empty">Nenhum sinal registrado ainda</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = signals.slice(0, 5).map(sig => {
-    const score = sig.inst_score || 0;
-    const dir   = sig.direction || '—';
-    const sc    = scoreColor(score);
-    const isL   = dir === 'LONG';
-    const isS   = dir === 'SHORT';
-    return `<tr>
-      <td class="c-muted">${fmtDateTime(sig.timestamp)}</td>
-      <td style="font-weight:600">BTC</td>
-      <td><span class="dir-badge ${isL ? 'dir-long' : isS ? 'dir-short' : 'dir-wait'}" style="font-size:10px;padding:3px 10px">${isL ? '▲ LONG' : isS ? '▼ SHORT' : dir}</span></td>
-      <td><span class="score-pill" style="background:${sc}22;color:${sc};border:1px solid ${sc}44">${score.toFixed(0)}%</span></td>
-      <td class="c-yellow">${sig.entry ? fmtPrice(sig.entry) : '—'}</td>
-      <td class="c-red">${sig.stop ? fmtPrice(sig.stop) : '—'}</td>
-      <td class="c-muted">${sig.confluences || 0}/6</td>
-      <td><span class="status-tag">Monitorando</span></td>
-    </tr>`;
-  }).join('');
-}
-
 // ── Real-time Price Ticker ─────────────────────────────────────────────────
 
 function fmtDelta(d) {
@@ -1004,16 +977,10 @@ async function priceTick() {
 
 async function refresh() {
   try {
-    const [sRes, hRes] = await Promise.all([
-      fetch('/api/status'),
-      fetch('/api/signals?limit=25'),
-    ]);
-    const state   = await sRes.json();
-    const signals = await hRes.json();
+    const state = await fetch('/api/status').then(r => r.json());
 
     renderRadar(state);
     document.getElementById('cardsGrid').innerHTML = renderBTCCard(state) + renderETHCard();
-    renderHistory(signals);
 
     const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     document.getElementById('updateTime').textContent = `Atualizado ${now}`;
@@ -1653,82 +1620,47 @@ function altScoreZoneLabel(score, direction) {
 }
 
 function renderAltCard(c) {
-  const isLong     = c.direction === 'LONG';
-  const isShort    = c.direction === 'SHORT';
-  const isNoTrade  = c.direction === 'NO_TRADE';
-  const isNeutro   = c.direction === 'NEUTRO';
+  const isLong    = c.direction === 'LONG';
+  const isShort   = c.direction === 'SHORT';
+  const isNoTrade = c.direction === 'NO_TRADE' || c.direction === 'NEUTRO';
 
   const dirCls      = isLong ? 'alt-long' : isShort ? 'alt-short' : 'alt-neutro';
   const dirBadgeCls = isLong ? 'alt-dir-long' : isShort ? 'alt-dir-short' : 'alt-dir-neutro';
-  const dirLabel    = isLong ? '▲ LONG' : isShort ? '▼ SHORT' : '— NEUTRO';
+  const dirLabel    = isLong ? '▲ LONG' : isShort ? '▼ SHORT' : '—';
 
-  const score    = c.smc_score || 50;
-  // F1: display_score=null significa sem confirmação estrutural — mostrar "—" e barra cinza
-  const dispScore = (c.display_score !== null && c.display_score !== undefined) ? c.display_score : null;
-  const sc       = dispScore !== null ? altScoreZoneColor(dispScore) : 'var(--text-dim)';
+  const score   = c.smc_score || 50;
+  const sc      = altScoreZoneColor(score);
   const chg     = c.change_24h || 0;
   const chgCls  = chg >= 0 ? 'up' : 'dn';
   const chgSign = chg >= 0 ? '+' : '';
 
-  // C5/F2: badge de motivo de filtro para NO_TRADE
-  let filterBadge = '';
-  if (isNoTrade && c.filtered_reason === 'no_structural_confirmation') {
-    filterBadge = '<span class="alt-filter-badge">Sem estrutura</span>';
-  } else if (isNoTrade && c.filtered_reason === 'btc_correlation') {
-    filterBadge = '<span class="alt-filter-badge">Correlação BTC</span>';
-  } else if (isNoTrade && c.filtered_reason === 'out_of_session') {
-    filterBadge = '<span class="alt-filter-badge">Fora de sessão</span>';
+  // Linha 3: score + OB + FVG inline
+  const metaParts = [
+    `<span style="color:${sc};font-weight:700;font-size:12px">${score}</span>`,
+    c.ob_count  ? `<span class="alt-tag-dim">OB×${c.ob_count}</span>`  : '',
+    c.fvg_count ? `<span class="alt-tag-dim">FVG×${c.fvg_count}</span>` : '',
+  ].filter(Boolean).join(' ');
+
+  // Linha 4: Entry + TP1 + SL numa linha (só para LONG/SHORT)
+  let lvlsHtml = '';
+  if (!isNoTrade && (c.entry || c.tp1 || c.stop)) {
+    const parts = [];
+    if (c.entry) parts.push(`<div class="alt-level"><span class="alt-lv-lbl">E</span><span class="alt-lv-val">$${_fmtAltPrice(c.entry)}</span></div>`);
+    if (c.tp1)   parts.push(`<div class="alt-level"><span class="alt-lv-lbl">TP1</span><span class="alt-lv-val alt-lv-tp">$${_fmtAltPrice(c.tp1)}</span></div>`);
+    if (c.stop)  parts.push(`<div class="alt-level"><span class="alt-lv-lbl">SL</span><span class="alt-lv-val alt-lv-sl">$${_fmtAltPrice(c.stop)}</span></div>`);
+    lvlsHtml = `<div class="alt-levels">${parts.join('')}</div>`;
   }
-
-  // C5: zona do score (para cards em observação)
-  const zoneLabel = (!isNoTrade && !isNeutro) ? altScoreZoneLabel(score, c.direction) : null;
-
-  const tags = [];
-  if (c.bos_bull)   tags.push('<span class="alt-tag-bull">BOS↑</span>');
-  if (c.bos_bear)   tags.push('<span class="alt-tag-bear">BOS↓</span>');
-  if (c.choch)      tags.push('<span class="alt-tag-choch">CHoCH</span>');
-  if (c.ob_count)   tags.push(`<span class="alt-tag-dim">OB×${c.ob_count}</span>`);
-  if (c.fvg_count)  tags.push(`<span class="alt-tag-dim">FVG×${c.fvg_count}</span>`);
-  const tagsHtml = tags.length ? `<div class="alt-tags-row">${tags.join('')}</div>` : '';
-
-  // Só mostra níveis se aprovado por C1 (direction LONG/SHORT)
-  const lvls = [];
-  if (!isNoTrade && !isNeutro) {
-    if (c.entry) lvls.push(`<span class="alt-lv-lbl">E</span><span class="alt-lv-val">$${_fmtAltPrice(c.entry)}</span>`);
-    if (c.tp1)   lvls.push(`<span class="alt-lv-lbl">TP1</span><span class="alt-lv-val alt-lv-tp">$${_fmtAltPrice(c.tp1)}</span>`);
-    if (c.stop)  lvls.push(`<span class="alt-lv-lbl">SL</span><span class="alt-lv-val alt-lv-sl">$${_fmtAltPrice(c.stop)}</span>`);
-  }
-  const lvlsHtml = lvls.length
-    ? `<div class="alt-levels">${lvls.map(l => `<div class="alt-level">${l}</div>`).join('')}</div>`
-    : '';
-
-  // Estrutura
-  const struct = c.structure ? `<span class="alt-struct">${c.structure}</span>` : '';
 
   return `<div class="alt-card ${dirCls}" onclick="openAltModal('${c.symbol}')" title="Ver detalhes de ${c.symbol}">
     <div class="alt-card-top">
-      <div style="display:flex;align-items:baseline;gap:3px">
-        <span class="alt-symbol">${c.symbol}</span>
-        ${struct}
-      </div>
-      <div style="display:flex;gap:4px;align-items:center">
-        ${filterBadge}
-        ${zoneLabel || ''}
-        ${!isNoTrade ? `<span class="alt-dir-badge ${dirBadgeCls}">${dirLabel}</span>` : ''}
-      </div>
+      <span class="alt-symbol">${c.symbol}</span>
+      <span class="alt-dir-badge ${dirBadgeCls}">${dirLabel}</span>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0">
+    <div style="display:flex;justify-content:space-between;align-items:center">
       <span class="alt-price">$${_fmtAltPrice(c.price)}</span>
       <span class="alt-change ${chgCls}">${chgSign}${chg.toFixed(2)}%</span>
     </div>
-    <div class="alt-score-row">
-      <div class="alt-score-bar-wrap">
-        <div class="alt-score-bar-zones"></div>
-        <div class="alt-score-bar" style="width:${dispScore !== null ? dispScore : 0}%;background:${sc}"${dispScore === null ? ' title="Score indisponível — sem confirmação estrutural"' : ''}></div>
-      </div>
-      <span class="alt-score-num" style="color:${sc}"${dispScore === null ? ' title="Score indisponível — sem confirmação estrutural"' : ''}>${dispScore !== null ? dispScore.toFixed(0) : '—'}</span>
-    </div>
-    ${tagsHtml}
+    <div style="display:flex;align-items:center;gap:5px">${metaParts}</div>
     ${lvlsHtml}
   </div>`;
 }
@@ -1862,7 +1794,7 @@ function openAltModal(symbol) {
 
     <!-- Gauge mini -->
     <div style="text-align:center;margin:12px 0 8px">
-      ${renderGauge(hideScore ? 0 : score)}
+      ${renderGauge(rawScore)}
     </div>
 
     <!-- SMC Layers -->
@@ -1897,7 +1829,7 @@ function openAltModal(symbol) {
   `;
 
   modal.style.display = 'flex';
-  setTimeout(() => animateGaugeTo(hideScore ? 0 : score), 50);
+  setTimeout(() => animateGaugeTo(rawScore), 50);
 }
 
 function closeAltModal(event) {
@@ -2015,104 +1947,6 @@ async function updateWinRate() {
   }
 }
 
-async function updateOptimizationReport() {
-  try {
-    const d = await fetch('/api/optimization-report').then(r => r.json());
-
-    const rec    = d.recommendation ?? 'insufficient_data';
-    const safe   = d.safe_to_apply  ?? false;
-    const gain   = d.estimated_precision_gain;
-    const cw     = d.current_weights    ?? {};
-    const sw     = d.suggested_weights  ?? {};
-    const wc     = d.weight_changes     ?? {};
-    const corr   = d.correlation_by_layer ?? {};
-    const rsn    = d.reasoning_by_layer ?? {};
-
-    // Badge
-    const badge = document.getElementById('optimBadge');
-    if (badge) {
-      if (rec === 'apply') {
-        badge.textContent = 'APLICAR'; badge.className = 'optim-badge apply';
-      } else if (rec === 'collect_more_data') {
-        badge.textContent = `COLETAR (${d.samples_collected}/${d.samples_needed})`; badge.className = 'optim-badge collect';
-      } else {
-        badge.textContent = 'AGUARDANDO DADOS'; badge.className = 'optim-badge nodata';
-      }
-    }
-
-    // Ganho estimado
-    const precEl = document.getElementById('optimPrecision');
-    if (precEl) precEl.textContent = gain && gain !== 'indeterminado' ? `Ganho estimado: ${gain}` : '';
-
-    // Botão aplicar
-    const btn = document.getElementById('optimApplyBtn');
-    if (btn) { btn.style.display = safe ? 'inline-block' : 'none'; }
-
-    // Sub
-    const sub = document.getElementById('optimSubtitle');
-    if (sub && d.generated_at) {
-      const dt = new Date(d.generated_at);
-      sub.textContent = `Gerado em ${dt.toLocaleString('pt-BR')} · ${d.usable_outcomes ?? 0} outcomes`;
-    }
-
-    // Tabela de camadas
-    const tbody = document.getElementById('optimBody');
-    if (!tbody) return;
-    const layers = Object.keys(cw);
-    if (!layers.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="table-empty">Aguardando 30+ outcomes...</td></tr>';
-      return;
-    }
-    tbody.innerHTML = layers.map(layer => {
-      const cur    = cw[layer]  ?? 0;
-      const sug    = sw[layer]  ?? cur;
-      const delta  = wc[layer]  ?? 0;
-      const c      = corr[layer]?.correlation ?? null;
-      const reason = rsn[layer] ?? '';
-
-      const dClass = delta > 0 ? 'optim-delta-pos' : delta < 0 ? 'optim-delta-neg' : 'optim-delta-neu';
-      const dStr   = delta !== 0 ? `${delta > 0 ? '+' : ''}${delta}` : '—';
-      const cStr   = c != null   ? c.toFixed(3) : '—';
-
-      return `<tr>
-        <td style="font-weight:600">${layer}</td>
-        <td>${cur}</td>
-        <td>${sug}</td>
-        <td class="${dClass}">${dStr}</td>
-        <td class="${c != null && Math.abs(c) > 0.2 ? (c > 0 ? 'bull' : 'bear') : ''}">${cStr}</td>
-        <td style="font-size:10px;color:var(--text-muted)">${reason.split('|')[0] ?? ''}</td>
-      </tr>`;
-    }).join('');
-
-  } catch(e) {
-    console.warn('[Trinity] Optimization report error:', e);
-  }
-}
-
-async function applyOptimizedWeights() {
-  const btn = document.getElementById('optimApplyBtn');
-  if (!btn) return;
-  if (!confirm('Aplicar pesos otimizados no SMC Engine? Um backup será criado automaticamente.')) return;
-  btn.disabled = true;
-  btn.textContent = 'APLICANDO...';
-  try {
-    const r = await fetch('/api/apply-weights', { method: 'POST' });
-    const d = await r.json();
-    if (d.applied) {
-      btn.textContent = '✓ APLICADO';
-      setTimeout(() => updateOptimizationReport(), 2000);
-    } else {
-      alert('Falha: ' + (d.error ?? 'erro desconhecido'));
-      btn.disabled = false;
-      btn.textContent = 'APLICAR PESOS';
-    }
-  } catch(e) {
-    alert('Erro de rede: ' + e);
-    btn.disabled = false;
-    btn.textContent = 'APLICAR PESOS';
-  }
-}
-
 // ── News Sentinel — indicador macro no header ─────────────────────────────────
 async function updateMacroIndicator() {
   const dot  = document.getElementById('macroDot');
@@ -2164,7 +1998,6 @@ updatePumpRadar();                              // Pump Radar — primeiro carre
 updateBacktestResults();                        // Backtest Performance — primeiro carregamento
 updateAltcoinRadar();                           // Altcoin Radar — primeiro carregamento
 updateWinRate();                                // Performance Real — primeiro carregamento
-updateOptimizationReport();                     // Otimização SMC — primeiro carregamento
 updateMacroIndicator();                         // News Sentinel — primeiro carregamento
 setInterval(refresh,                REFRESH_MS);
 setInterval(priceTick,              PRICE_MS);
@@ -2177,7 +2010,6 @@ setInterval(updatePumpRadar,        PUMP_REFRESH_MS);  // 30s — sincroniza com
 setInterval(updateBacktestResults,  120_000);      // 2min — atualiza métricas de backtest
 setInterval(updateAltcoinRadar,     300_000);      // 5min — sincroniza com ciclo do scanner
 setInterval(updateWinRate,          300_000);      // 5min — sincroniza com ciclo do OutcomeTracker
-setInterval(updateOptimizationReport, 300_000);    // 5min — sincroniza com relatório de otimização
 setInterval(updateMacroIndicator,   120_000);      // 2min — sincroniza com ciclo do News Sentinel
 clockTick();
 

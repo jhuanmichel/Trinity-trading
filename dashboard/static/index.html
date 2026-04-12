@@ -104,35 +104,6 @@
       </div>
     </section>
 
-    <!-- ── SECTION 3: HISTÓRICO ──────────────────────────────────────────── -->
-    <section class="section">
-      <div class="section-header">
-        <h2 class="section-title">HISTÓRICO DE SINAIS</h2>
-        <span class="section-divider"></span>
-        <span class="section-sub">Rastreamento de performance institucional</span>
-      </div>
-
-      <div class="table-wrapper">
-        <table class="history-table">
-          <thead>
-            <tr>
-              <th>Horário</th>
-              <th>Ativo</th>
-              <th>Direção</th>
-              <th>Score</th>
-              <th>Entry</th>
-              <th>Stop</th>
-              <th>Confluências</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="historyBody">
-            <tr><td colspan="8" class="table-empty">Carregando...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
     <!-- ── SECTION 4: PERFORMANCE REAL ─────────────────────────────────────── -->
     <section class="section" id="perfSection">
       <div class="section-header">
@@ -186,43 +157,6 @@
         <div class="perf-progress-bg">
           <div class="perf-progress-bar" id="perfProgressBar" style="width:0%"></div>
         </div>
-      </div>
-    </section>
-
-    <!-- ── SECTION 4b: OTIMIZAÇÃO DE PESOS ───────────────────────────────────── -->
-    <section class="section" id="optimSection">
-      <div class="section-header">
-        <h2 class="section-title">OTIMIZAÇÃO SMC</h2>
-        <span class="section-divider"></span>
-        <span class="section-sub" id="optimSubtitle">Pesos ajustados por correlação com outcomes reais</span>
-      </div>
-
-      <!-- Status e recomendação -->
-      <div class="optim-status-row">
-        <span class="optim-badge" id="optimBadge">AGUARDANDO DADOS</span>
-        <span class="optim-precision" id="optimPrecision"></span>
-        <button class="optim-apply-btn" id="optimApplyBtn" style="display:none" onclick="applyOptimizedWeights()">
-          APLICAR PESOS
-        </button>
-      </div>
-
-      <!-- Tabela de pesos -->
-      <div class="table-wrapper">
-        <table class="history-table">
-          <thead>
-            <tr>
-              <th>Camada</th>
-              <th>Peso Atual</th>
-              <th>Peso Sugerido</th>
-              <th>Mudança</th>
-              <th>Correlação</th>
-              <th>Reasoning</th>
-            </tr>
-          </thead>
-          <tbody id="optimBody">
-            <tr><td colspan="6" class="table-empty">Aguardando 30+ outcomes...</td></tr>
-          </tbody>
-        </table>
       </div>
     </section>
 

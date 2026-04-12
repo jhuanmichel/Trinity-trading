@@ -36,6 +36,105 @@ MEXC_BASE     = "https://contract.mexc.com/api/v1/contract"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# C3: Constantes e funções module-level — níveis de trade, DNA, notas táticas
+# ══════════════════════════════════════════════════════════════════════════════
+
+_LEVELS: dict = {
+    "PUMP": {
+        "stop_pct": -0.015,   # -1.5%
+        "tp1_pct":  +0.022,   # +2.2%
+        "tp2_pct":  +0.042,   # +4.2%
+        "tp3_pct":  +0.064,   # +6.4%
+    },
+    "CRASH": {
+        "stop_pct": +0.015,   # +1.5%
+        "tp1_pct":  -0.022,   # -2.2%
+        "tp2_pct":  -0.042,   # -4.2%
+        "tp3_pct":  -0.064,   # -6.4%
+    },
+}
+
+_PROBABILITY: dict = {
+    "CRÍTICO": 76,
+    "ALTO":    67,
+    "MÉDIO":   59,
+}
+
+_DNA_MAP: dict = {
+    "PUMP": {
+        "d1": "Funding Squeeze",
+        "d2": "OI Breakout",
+        "d3": "Volume Surge",
+        "d4": "CVD Pressure",
+        "d5": "Liquidity Hunt",
+        "d6": "Volatility Coil",
+    },
+    "CRASH": {
+        "d1": "Funding Overload",
+        "d2": "OI Unwind",
+        "d3": "Volume Dump",
+        "d4": "CVD Divergence",
+        "d5": "Liquidity Sweep",
+        "d6": "Volatility Coil",
+    },
+}
+
+_TACTICAL_NOTES: dict = {
+    "CRÍTICO": "Setup de alta convicção. Monitorar price action de perto.",
+    "ALTO":    "Setup válido com confirmação. Usar tamanho padrão.",
+    "MÉDIO":   "Setup preliminar. Aguardar confirmação adicional.",
+}
+
+
+def calculate_trade_levels(price: float, dominant_type: str, tier: str) -> dict:
+    """
+    Calcula Entry/Stop/TP1/TP2/TP3 com base no tipo dominante e tier.
+    Retorna dict com entry, stop, tp1, tp2, tp3, prob_pct, move_pct.
+    """
+    lvl   = _LEVELS.get(dominant_type, _LEVELS["PUMP"])
+    entry = price
+    stop  = round(price * (1.0 + lvl["stop_pct"]), 6)
+    tp1   = round(price * (1.0 + lvl["tp1_pct"]),  6)
+    tp2   = round(price * (1.0 + lvl["tp2_pct"]),  6)
+    tp3   = round(price * (1.0 + lvl["tp3_pct"]),  6)
+    prob  = _PROBABILITY.get(tier, 59)
+    move_pct = abs(lvl["tp3_pct"]) * 100   # ex: 6.4
+    return {
+        "entry":    entry,
+        "stop":     stop,
+        "tp1":      tp1,
+        "tp2":      tp2,
+        "tp3":      tp3,
+        "prob_pct": prob,
+        "move_pct": move_pct,
+    }
+
+
+def _get_dna_label(detectors: dict, dominant_type: str) -> str:
+    """
+    Retorna label do setup baseado no detector com maior score
+    para o tipo dominante. Fallback: 'Multi-Signal'.
+    """
+    dna_map  = _DNA_MAP.get(dominant_type, _DNA_MAP["PUMP"])
+    key_map  = "pump" if dominant_type == "PUMP" else "crash"
+    best_key   = None
+    best_score = 0.0
+
+    for det_key in dna_map:
+        d = detectors.get(det_key, {})
+        # D3 e D6 são agnósticos (campo "score")
+        if "score" in d:
+            score = float(d.get("score", 0))
+        else:
+            score = float(d.get(key_map, 0))
+        if score > best_score:
+            best_score = score
+            best_key   = det_key
+
+    return dna_map.get(best_key, "Multi-Signal") if best_key else "Multi-Signal"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # MarketMemory — histórico em RAM, cooldowns, aceleração de score
 # ══════════════════════════════════════════════════════════════════════════════
 class MarketMemory:
@@ -651,9 +750,23 @@ class DeepAnalysisEngine:
             v = d.get("crash", d.get("score", 0))
             return float(v) if isinstance(v, (int, float)) else 0.0
 
+        # C2: Cap D5 contribution — evita falsos positivos quando D5 não tem confirmação
+        # others_pump/crash = soma de todos exceto D5
+        others_pump  = _p("d1") + _p("d2") + _p("d3") + _p("d4") + _p("d6")
+        others_crash = _c("d1") + _c("d2") + _c("d3") + _c("d4") + _c("d6")
+
+        d5_pump_eff  = _p("d5")
+        d5_crash_eff = _c("d5")
+
+        # Se demais detectores são fracos (< 8 pts), D5 sozinho não pode ultrapassar 12 pts
+        if others_pump  < 8 and d5_pump_eff  > 12:
+            d5_pump_eff  = 12.0
+        if others_crash < 8 and d5_crash_eff > 12:
+            d5_crash_eff = 12.0
+
         # D3 e D6 são agnósticos: contribuem igual para pump e crash
-        raw_pump  = _p("d1") + _p("d2") + _p("d3") + _p("d4") + _p("d5") + _p("d6")
-        raw_crash = _c("d1") + _c("d2") + _c("d3") + _c("d4") + _c("d5") + _c("d6")
+        raw_pump  = _p("d1") + _p("d2") + _p("d3") + _p("d4") + d5_pump_eff  + _p("d6")
+        raw_crash = _c("d1") + _c("d2") + _c("d3") + _c("d4") + d5_crash_eff + _c("d6")
 
         pump_score  = round(raw_pump  * 100 / 150, 1)
         crash_score = round(raw_crash * 100 / 150, 1)
@@ -698,23 +811,29 @@ class AlertDispatcher:
                 return tier
         return None
 
-    def should_alert(self, symbol: str, result: dict, acceleration: float) -> tuple:
+    def should_alert(self, symbol: str, result: dict,
+                     acceleration: float, streak: int = 0) -> tuple:
         """
         Retorna (bool, tier, motivo).
+
+        C1 — Lógica corrigida:
+          - Score >= 52 (tier direto): alerta imediato via score_threshold.
+          - Score < 52 (tier None):    aceleração SÓ dispara se dom_score >= 42
+                                       AND streak >= 2 AND acceleration >= 20.
+          Elimina alertas espúrios (ex: score 26 + accel 26 não dispara mais).
         """
         dominant_type  = result["dominant_type"]
         dominant_score = result["dominant_score"]
         tiers          = self.PUMP_TIERS if dominant_type == "PUMP" else self.CRASH_TIERS
         tier           = self._get_tier(dominant_score, tiers)
 
-        if tier is None and acceleration < self.ACCEL_MIN:
-            return False, None, None
-
-        if tier is None and acceleration >= self.ACCEL_MIN:
+        if tier is not None:
+            motivo = "score_threshold"
+        elif dominant_score >= 42 and streak >= 2 and acceleration >= 20:
             tier   = "MÉDIO"
             motivo = "acceleration"
         else:
-            motivo = "score_threshold"
+            return False, None, None
 
         if self.memory.is_in_cooldown(symbol, self.COOLDOWNS[tier]):
             return False, None, None
@@ -723,19 +842,27 @@ class AlertDispatcher:
 
     def _format_message(self, symbol: str, result: dict, tier: str,
                         acceleration: float, streak: int) -> str:
+        """
+        C4 — Formato rico: DNA label, níveis de trade, probabilidade,
+             componentes 6×25, notas táticas.
+        """
         dominant_type  = result["dominant_type"]
         dominant_score = result["dominant_score"]
         ticker         = result["ticker"]
         dets           = result["detectors"]
+        is_pump        = dominant_type == "PUMP"
 
-        header_emoji = "🚀" if dominant_type == "PUMP" else "⚠️"
-        type_label   = "PUMP SETUP" if dominant_type == "PUMP" else "CRASH SETUP"
-        is_pump      = dominant_type == "PUMP"
+        price = float(ticker.get("lastPrice", 0) or 0)
+        rfr   = float(ticker.get("riseFallRate", 0) or 0)
 
-        price      = float(ticker.get("lastPrice", 0) or 0)
-        rfr        = float(ticker.get("riseFallRate", 0) or 0)
-        fr         = float(ticker.get("fundingRate",  0) or 0)
-        oi_chg_pct = dets.get("d2", {}).get("details", {}).get("oi_change_pct", 0.0)
+        dna      = _get_dna_label(dets, dominant_type)
+        levels   = calculate_trade_levels(price, dominant_type, tier)
+        prob     = levels["prob_pct"]
+        move_pct = levels["move_pct"]
+        tactical = _TACTICAL_NOTES.get(tier, "")
+
+        header_emoji = "🚀" if is_pump else "⚠️"
+        arrow        = "▲" if is_pump else "▼"
 
         def _s(det_key: str) -> int:
             """Score de um detector para o tipo dominante."""
@@ -746,22 +873,30 @@ class AlertDispatcher:
             v = d.get(key, 0)
             return int(v) if isinstance(v, (int, float)) else 0
 
+        def _fmt_p(p: float) -> str:
+            """Formata preço com precisão adequada."""
+            if p >= 1000:
+                return f"${p:,.2f}"
+            elif p >= 1:
+                return f"${p:,.4f}"
+            return f"${p:.6f}"
+
         lines = [
-            f"{header_emoji} {type_label} — {symbol}",
-            f"Tier: {tier} · Score: {dominant_score:.0f}/100",
+            f"{header_emoji} {dominant_type} SETUP — {symbol} [{tier}]",
+            f"DNA: {dna}   {arrow} Score: {dominant_score:.0f}/100",
             "",
-            f"Preço:        ${price:,.4f}",
-            f"Variação 24h: {rfr:+.1%}",
-            f"Funding:      {fr:+.5f}",
-            f"OI change:    {oi_chg_pct:+.1f}%",
+            f"Entry:  {_fmt_p(levels['entry'])}   Stop: {_fmt_p(levels['stop'])}",
+            f"TP1:    {_fmt_p(levels['tp1'])}",
+            f"TP2:    {_fmt_p(levels['tp2'])}",
+            f"TP3:    {_fmt_p(levels['tp3'])}   Move: ~{move_pct:.1f}%",
+            f"Prob:   {prob}%",
             "",
-            "Detectores:",
-            f"  Funding extremo:    {_s('d1')}/25",
-            f"  Aceleração de OI:   {_s('d2')}/25",
-            f"  Volume spike:       {_s('d3')}/25",
-            f"  CVD pressão:        {_s('d4')}/25",
-            f"  Cluster liquidez:   {_s('d5')}/25",
-            f"  Compressão vol.:    {_s('d6')}/25",
+            f"Preço:   {_fmt_p(price)}   Var24h: {rfr:+.1%}",
+            "",
+            "Detectores (×/25):",
+            f"  Funding:   {_s('d1')}   OI Accel: {_s('d2')}",
+            f"  Volume:    {_s('d3')}   CVD:      {_s('d4')}",
+            f"  Liquidez:  {_s('d5')}   Compressão: {_s('d6')}",
         ]
 
         if acceleration >= 12:
@@ -770,7 +905,7 @@ class AlertDispatcher:
                 f"⚡ Aceleração: +{acceleration:.0f} pts · Streak: {streak} scans"
             )
 
-        lines += ["", "⚠️ Gerencie o risco — setup, não certeza."]
+        lines += ["", tactical]
         return "\n".join(lines)
 
     def dispatch(self, symbol: str, result: dict) -> bool:
@@ -780,7 +915,7 @@ class AlertDispatcher:
         acceleration = self.memory.get_acceleration(symbol, score_key)
         streak       = self.memory.get_streak(symbol, score_key, 52.0)
 
-        should, tier, motivo = self.should_alert(symbol, result, acceleration)
+        should, tier, motivo = self.should_alert(symbol, result, acceleration, streak)
         if not should:
             return False
 
@@ -864,16 +999,31 @@ class FullMarketScanner:
                     logger.error(f"[FMS] Erro analisando {sym}: {e}")
 
         def _slim(r: dict) -> dict:
-            """Versão enxuta sem detectors para o JSON de saída."""
+            """Versão enxuta sem detectors para o JSON de saída.
+            C4: inclui levels e dna para exibição no dashboard."""
+            price    = float(r["ticker"].get("lastPrice", 0) or 0)
+            dom_type = r["dominant_type"]
+            dom_score = r["dominant_score"]
+            # Determina tier para cálculo de levels
+            tiers = (AlertDispatcher.PUMP_TIERS
+                     if dom_type == "PUMP"
+                     else AlertDispatcher.CRASH_TIERS)
+            tier = "MÉDIO"
+            for t, threshold in tiers.items():
+                if dom_score >= threshold:
+                    tier = t
+                    break
             return {
                 "symbol":        r["symbol"],
                 "pump_score":    r["pump_score"],
                 "crash_score":   r["crash_score"],
-                "dominant_type": r["dominant_type"],
-                "last_price":    float(r["ticker"].get("lastPrice", 0) or 0),
+                "dominant_type": dom_type,
+                "last_price":    price,
                 "funding_rate":  float(r["ticker"].get("fundingRate", 0) or 0),
                 "rise_fall":     float(r["ticker"].get("riseFallRate", 0) or 0),
                 "analyzed_at":   r["analyzed_at"],
+                "levels":        calculate_trade_levels(price, dom_type, tier),
+                "dna":           _get_dna_label(r["detectors"], dom_type),
             }
 
         top_pump  = sorted(results, key=lambda x: x["pump_score"],  reverse=True)[:10]
