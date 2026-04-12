@@ -60,6 +60,18 @@ def _run_scheduler():
     # Backtest walk-forward mensal (atualiza métricas e equity curve)
     schedule.every(30).days.do(run_monthly_backtest)
 
+    # Full Market Scanner — varre todos os contratos MEXC a cada 90s
+    from full_market_scanner import FullMarketScanner as _FMSClass
+    _fms_instance = _FMSClass()
+
+    def _run_fms_cycle():
+        try:
+            _fms_instance.run_full_scan()
+        except Exception as e:
+            log.error(f"[FMS] Erro no ciclo: {e}")
+
+    schedule.every(90).seconds.do(_run_fms_cycle)
+
     log.info("Bot scheduler iniciado.")
     run_institutional_analysis()   # roda imediatamente ao subir
     run_optimization_report()      # gera relatório inicial (pode ser "insufficient_data")

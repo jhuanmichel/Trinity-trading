@@ -283,6 +283,47 @@
       </div>
     </section>
 
+    <!-- ── SECTION 6: FULL MARKET SCANNER (MERCADO COMPLETO) ───────────────── -->
+    <section class="section" id="fmsSection">
+      <div class="section-header">
+        <h2 class="section-title">MERCADO COMPLETO</h2>
+        <span class="section-divider"></span>
+        <span class="section-sub">Full scan MEXC Futures — todos os contratos a cada 90s</span>
+        <span class="fms-live-badge" id="fmsScanBadge">AGUARDANDO</span>
+      </div>
+
+      <div class="fms-meta-bar" id="fmsMetaBar">
+        <span class="c-muted" style="font-size:11px">Iniciando scanner...</span>
+      </div>
+
+      <div class="fms-dual">
+        <!-- TOP PUMP -->
+        <div class="fms-panel" id="fmsPumpPanel">
+          <div class="fms-panel-header fms-pump-header">
+            <span class="fms-panel-icon">🚀</span>
+            <span class="fms-panel-title">TOP PUMP SETUPS</span>
+          </div>
+          <div class="fms-list" id="fmsPumpList">
+            <div class="fms-row skeleton-card" style="height:38px"></div>
+            <div class="fms-row skeleton-card" style="height:38px;margin-top:4px"></div>
+            <div class="fms-row skeleton-card" style="height:38px;margin-top:4px"></div>
+          </div>
+        </div>
+        <!-- TOP CRASH -->
+        <div class="fms-panel" id="fmsCrashPanel">
+          <div class="fms-panel-header fms-crash-header">
+            <span class="fms-panel-icon">⚠️</span>
+            <span class="fms-panel-title">TOP CRASH SETUPS</span>
+          </div>
+          <div class="fms-list" id="fmsCrashList">
+            <div class="fms-row skeleton-card" style="height:38px"></div>
+            <div class="fms-row skeleton-card" style="height:38px;margin-top:4px"></div>
+            <div class="fms-row skeleton-card" style="height:38px;margin-top:4px"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ── SECTION 5: CRASH + PUMP RADAR (lado a lado) ──────────────────────── -->
     <section class="section radar-dual-section" id="radarSection">
 

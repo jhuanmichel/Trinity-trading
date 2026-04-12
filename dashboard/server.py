@@ -20,10 +20,17 @@ BACKTEST_FILE     = BASE_DIR / "dashboard" / "backtest_results.json"
 ALTCOIN_SCAN_FILE = BASE_DIR / "dashboard" / "altcoin_scan_latest.json"
 WIN_RATE_FILE     = BASE_DIR / "dashboard" / "win_rate.json"
 OPT_REPORT_FILE   = BASE_DIR / "dashboard" / "optimization_report.json"
+FMS_SCAN_FILE     = BASE_DIR / "dashboard" / "full_market_scan.json"
 LOGS_DIR          = BASE_DIR / "logs"
 STATIC_DIR        = BASE_DIR / "dashboard" / "static"
 
 app = FastAPI(title="QuantDesk", version="1.0")
+
+# ── Full Market Scanner singleton ─────────────────────────────────────────────
+import sys as _sys
+_sys.path.insert(0, str(BASE_DIR))
+from full_market_scanner import FullMarketScanner as _FMSClass
+_fms = _FMSClass()
 
 # ── Price ticker cache ────────────────────────────────────────────────────────
 _MEXC_TICKER  = "https://api.mexc.com/api/v3/ticker/24hr"
@@ -157,6 +164,8 @@ async def startup_event():
     asyncio.create_task(_outcome_check_loop())
     # News Sentinel — monitoramento de notícias macro a cada 2 min
     asyncio.create_task(_news_sentinel_loop())
+    # Full Market Scanner — varre todos os contratos MEXC a cada 90s
+    asyncio.create_task(_fms_loop())
 
 
 async def _run_analysis_bg(force: bool = False):
@@ -436,6 +445,26 @@ def get_crash_scanner():
     return JSONResponse(content={"scan_ts": None, "candidates": [], "coins_scanned": 0})
 
 
+@app.get("/api/full-market-scan")
+async def api_full_market_scan():
+    """Status completo do último ciclo do Full Market Scanner."""
+    return JSONResponse(content=_fms.get_current_status())
+
+
+@app.get("/api/full-market-scan/top")
+async def api_full_market_scan_top():
+    """Top 10 pump e crash do último ciclo (versão enxuta para o dashboard)."""
+    s = _fms.get_current_status()
+    return JSONResponse(content={
+        "top_pump":          s.get("top_pump",  [])[:10],
+        "top_crash":         s.get("top_crash", [])[:10],
+        "scan_ts":           s.get("scan_ts"),
+        "contracts_scanned": s.get("contracts_scanned"),
+        "elapsed_seconds":   s.get("elapsed_seconds"),
+        "candidates_stage2": s.get("candidates_stage2"),
+    })
+
+
 async def _outcome_check_loop():
     """Verifica outcomes pendentes a cada 15 minutos em background (OutcomeTracker)."""
     import logging as _log
@@ -468,6 +497,19 @@ async def _news_sentinel_loop():
         except Exception as _e:
             _nlog.error(f"[NEWS] Erro no loop: {_e}")
         await asyncio.sleep(120)   # 2 minutos
+
+
+async def _fms_loop():
+    """Full Market Scanner — varre todos os contratos MEXC a cada 90s."""
+    import logging as _log
+    _fmslog = _log.getLogger("full_market_scanner")
+    await asyncio.sleep(60)   # offset: começa 60s após startup
+    while True:
+        try:
+            await asyncio.to_thread(_fms.run_full_scan)
+        except Exception as _e:
+            _fmslog.error(f"[FMS] Loop error: {_e}")
+        await asyncio.sleep(90)
 
 
 async def _altcoin_scan_loop():

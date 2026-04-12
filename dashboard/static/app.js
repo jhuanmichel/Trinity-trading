@@ -2180,3 +2180,84 @@ setInterval(updateWinRate,          300_000);      // 5min — sincroniza com ci
 setInterval(updateOptimizationReport, 300_000);    // 5min — sincroniza com relatório de otimização
 setInterval(updateMacroIndicator,   120_000);      // 2min — sincroniza com ciclo do News Sentinel
 clockTick();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FULL MARKET SCANNER — Mercado Completo
+// Polling a cada 95s — sincroniza com ciclo de 90s do scanner
+// ─────────────────────────────────────────────────────────────────────────────
+const FMS_REFRESH_MS = 95_000;
+
+function _fmsTierClass(score) {
+  if (score >= 82) return 'CRÍTICO';
+  if (score >= 67) return 'ALTO';
+  if (score >= 52) return 'MÉDIO';
+  return '';
+}
+
+function _renderFmsList(items, listId, scoreKey, scoreClass) {
+  const el = document.getElementById(listId);
+  if (!el) return;
+  if (!items || !items.length) {
+    el.innerHTML = '<div class="fms-empty">Sem candidatos no último scan</div>';
+    return;
+  }
+  el.innerHTML = items.slice(0, 5).map(r => {
+    const score = (r[scoreKey] || 0).toFixed(0);
+    const fr    = parseFloat(r.funding_rate || 0);
+    const chg   = parseFloat(r.rise_fall || 0);
+    const sym   = (r.symbol || '').replace('_USDT', '');
+
+    const frClass = fr < -0.001 ? 'neg' : fr > 0.001 ? 'pos' : 'neu';
+    const chgClass = chg > 0.01 ? 'pos' : chg < -0.01 ? 'neg' : 'neu';
+    const frTxt  = (fr * 100).toFixed(4) + '%';
+    const chgTxt = (chg >= 0 ? '+' : '') + (chg * 100).toFixed(1) + '%';
+
+    const tier = _fmsTierClass(parseFloat(score));
+    const tierTag = tier ? ` <span style="font-size:9px;opacity:0.7">${tier}</span>` : '';
+
+    return `<div class="fms-row">
+      <span class="fms-symbol">${sym}${tierTag}</span>
+      <span class="${scoreClass}">${score}</span>
+      <span class="fms-fr ${frClass}">${frTxt}</span>
+      <span class="fms-chg ${chgClass}">${chgTxt}</span>
+    </div>`;
+  }).join('');
+}
+
+async function updateFmsScanner() {
+  try {
+    const r = await fetch('/api/full-market-scan/top');
+    if (!r.ok) return;
+    const d = await r.json();
+
+    // badge
+    const badge = document.getElementById('fmsScanBadge');
+    if (badge) {
+      const hasData = d.scan_ts && (d.top_pump?.length || d.top_crash?.length);
+      badge.textContent = hasData ? 'AO VIVO' : 'AGUARDANDO';
+      badge.className   = 'fms-live-badge' + (hasData ? ' active' : '');
+    }
+
+    // meta bar
+    const meta = document.getElementById('fmsMetaBar');
+    if (meta && d.scan_ts) {
+      const ts      = new Date(d.scan_ts);
+      const elapsed = d.elapsed_seconds || 0;
+      const contracts = d.contracts_scanned || 0;
+      const cands     = d.candidates_stage2 || 0;
+      meta.innerHTML = `
+        <span class="fms-meta-stat">Atualizado: <span class="fms-meta-val">${ts.toLocaleTimeString('pt-BR')}</span></span>
+        <span class="fms-meta-stat">Contratos: <span class="fms-meta-val">${contracts}</span></span>
+        <span class="fms-meta-stat">Candidatos: <span class="fms-meta-val">${cands}</span></span>
+        <span class="fms-meta-stat">Duração: <span class="fms-meta-val">${elapsed}s</span></span>`;
+    }
+
+    // listas
+    _renderFmsList(d.top_pump,  'fmsPumpList',  'pump_score',  'fms-score-pump');
+    _renderFmsList(d.top_crash, 'fmsCrashList', 'crash_score', 'fms-score-crash');
+
+  } catch (_) {}
+}
+
+updateFmsScanner();
+setInterval(updateFmsScanner, FMS_REFRESH_MS);

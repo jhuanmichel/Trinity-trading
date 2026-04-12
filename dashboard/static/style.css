@@ -2373,3 +2373,120 @@ body {
 .optim-delta-pos { color: var(--green); font-weight: 600; }
 .optim-delta-neg { color: var(--red);   font-weight: 600; }
 .optim-delta-neu { color: var(--text-muted); }
+
+/* ── FULL MARKET SCANNER — Mercado Completo ──────────────────────────────── */
+
+.fms-live-badge {
+  margin-left: auto;
+  padding: 3px 9px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--border-md);
+  background: var(--surface2);
+  color: var(--text-muted);
+}
+.fms-live-badge.active {
+  background: rgba(0,200,100,0.12);
+  border-color: rgba(0,200,100,0.3);
+  color: #00C864;
+}
+
+.fms-meta-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 0 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  border-bottom: 1px solid var(--border-dim);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.fms-meta-stat { color: var(--text-secondary); }
+.fms-meta-val  { color: var(--text-primary); font-weight: 600; margin-left: 2px; }
+
+.fms-dual {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 700px) { .fms-dual { grid-template-columns: 1fr; } }
+
+.fms-panel {
+  background: var(--surface2);
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.fms-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+}
+.fms-pump-header  { background: rgba(0,200,100,0.07);  border-bottom: 1px solid rgba(0,200,100,0.15); color: #00C864; }
+.fms-crash-header { background: rgba(255,60,60,0.07);  border-bottom: 1px solid rgba(255,60,60,0.15); color: #FF3C3C; }
+.fms-panel-icon   { font-size: 13px; }
+.fms-panel-title  { font-size: 10px; letter-spacing: 0.1em; }
+
+.fms-list { padding: 6px; display: flex; flex-direction: column; gap: 3px; }
+
+.fms-row {
+  display: grid;
+  grid-template-columns: 1fr 52px 48px 48px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-dim);
+  background: var(--surface);
+  font-size: 11px;
+  gap: 6px;
+  transition: background 0.15s;
+}
+.fms-row:hover { background: var(--surface2); }
+
+.fms-symbol {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fms-symbol .fms-accel { color: #FFB800; font-size: 10px; margin-left: 4px; }
+
+.fms-score-pump  { color: #00C864; font-weight: 700; font-family: 'JetBrains Mono', monospace; font-size: 12px; text-align: right; }
+.fms-score-crash { color: #FF3C3C; font-weight: 700; font-family: 'JetBrains Mono', monospace; font-size: 12px; text-align: right; }
+
+.fms-fr {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  text-align: right;
+}
+.fms-fr.neg { color: #00C864; }
+.fms-fr.pos { color: #FF3C3C; }
+.fms-fr.neu { color: var(--text-muted); }
+
+.fms-chg {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  text-align: right;
+}
+.fms-chg.pos { color: #00C864; }
+.fms-chg.neg { color: #FF3C3C; }
+.fms-chg.neu { color: var(--text-muted); }
+
+.fms-empty {
+  padding: 18px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 11px;
+}
