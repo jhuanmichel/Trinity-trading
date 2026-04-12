@@ -31,6 +31,18 @@ def run_seasonality_recalc():
         log.error(f"[SEASONALITY] Erro no recalculo mensal: {e}")
 
 
+def run_monthly_backtest():
+    """Executa backtest walk-forward mensal. Usa parquet histórico se disponível."""
+    try:
+        log.info("[BACKTEST] Iniciando backtest mensal...")
+        from backtester.run_backtest import run as _bt_run
+        result = _bt_run()
+        trades = result.get("metrics", {}).get("total_trades", 0)
+        log.info(f"[BACKTEST] Backtest mensal concluído — {trades} trades")
+    except Exception as e:
+        log.error(f"[BACKTEST] Erro no backtest mensal: {e}")
+
+
 def _run_scheduler():
     import schedule
     from main import run_analysis_summary, run_analysis_signal, run_institutional_analysis, run_pump_radar
@@ -45,6 +57,8 @@ def _run_scheduler():
     schedule.every().day.at("00:05").do(run_optimization_report)
     # Recalculo mensal de sazonalidade (dados históricos Binance)
     schedule.every(30).days.do(run_seasonality_recalc)
+    # Backtest walk-forward mensal (atualiza métricas e equity curve)
+    schedule.every(30).days.do(run_monthly_backtest)
 
     log.info("Bot scheduler iniciado.")
     run_institutional_analysis()   # roda imediatamente ao subir

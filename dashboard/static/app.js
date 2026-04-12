@@ -1467,6 +1467,111 @@ function renderBtTrades(trades) {
   tbody.innerHTML = rows.join('');
 }
 
+// Renderiza cards das 4 janelas walk-forward
+function renderBtWindows(windows) {
+  const el = document.getElementById('btWindowsGrid');
+  if (!el || !windows || windows.length === 0) {
+    if (el) el.style.display = 'none';
+    return;
+  }
+  el.style.display = 'grid';
+
+  const nameMap = {
+    'COVID_Crash':    'COVID-19',
+    'Bull_Run_2021':  'Bull 2021',
+    'Bear_LUNA_FTX':  'Bear+FTX',
+    'Recovery_ETF':   'ETF 2023-24',
+  };
+
+  el.innerHTML = windows.map(w => {
+    const m   = w.metrics || {};
+    const wr  = m.win_rate_pct ?? 0;
+    const cls = wr >= 50 ? 'bt-win-card' : 'bt-loss-card';
+    const label = nameMap[w.name] || w.name;
+    const period = (w.period || '').split(' → ').map(d => d.slice(0,4)).join('→');
+    return `<div class="bt-window-card ${cls}">
+      <div class="bt-window-name">${label}</div>
+      <div class="bt-window-period">${period}</div>
+      <div class="bt-window-wr">${wr.toFixed(0)}%</div>
+      <div class="bt-window-sub">${m.total_trades ?? 0}T · PF ${(m.profit_factor ?? 0).toFixed(1)}</div>
+    </div>`;
+  }).join('');
+}
+
+// Renderiza linha de parâmetros ótimos
+function renderBtOptimal(data) {
+  const row = document.getElementById('btOptimalRow');
+  const val = document.getElementById('btOptimalValue');
+  const btn = document.getElementById('btApplyBtn');
+  if (!row || !val) return;
+
+  const opt = data.optimal_params;
+  if (!opt) { row.style.display = 'none'; return; }
+
+  const p = opt.optimal_params || opt;
+  const m = data.metrics || {};
+
+  row.style.display = 'flex';
+  val.textContent = `threshold=${p.score_threshold ?? '—'} · ATR×${p.atr_mult ?? '—'} · TP1=${p.tp1_ratio ?? '—'}R · TP2=${p.tp2_ratio ?? '—'}R`;
+
+  // Botão aplicar: mostra somente se wr≥60% E trades≥50 E dd≤30%
+  const canApply = (
+    m.win_rate_pct >= 60 &&
+    m.total_trades >= 50 &&
+    m.max_drawdown_pct <= 30
+  );
+  if (btn) btn.style.display = canApply ? 'inline-flex' : 'none';
+
+  // Armazena parâmetros para uso no onclick
+  if (btn) btn.dataset.params = JSON.stringify(p);
+}
+
+// Exibe modal com parâmetros ótimos (sem modificar config automaticamente)
+function showOptimalParams() {
+  const btn = document.getElementById('btApplyBtn');
+  if (!btn) return;
+  try {
+    const p = JSON.parse(btn.dataset.params || '{}');
+    const msg = [
+      '=== PARÂMETROS ÓTIMOS ENCONTRADOS ===',
+      '',
+      `  score_threshold: ${p.score_threshold}`,
+      `  atr_mult:        ${p.atr_mult}`,
+      `  tp1_ratio:       ${p.tp1_ratio}`,
+      `  tp2_ratio:       ${p.tp2_ratio}`,
+      '',
+      'Para aplicar, atualize DEFAULT_PARAMS em backtesting_engine.py',
+      'ou passe --threshold ao rodar backtester.run_backtest.',
+    ].join('\n');
+    alert(msg);
+  } catch (_) {}
+}
+
+// Dispara backtest assíncrono via API
+async function triggerBacktest() {
+  const btn = document.getElementById('btRunBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⟳ RODANDO...'; }
+  try {
+    const resp = await fetch('/api/run-backtest');
+    if (resp.status === 202) {
+      console.info('[Trinity] Backtest iniciado. Aguardando 90s...');
+      setTimeout(() => {
+        updateBacktestResults();
+        if (btn) { btn.disabled = false; btn.innerHTML = '▶ RODAR BACKTEST'; }
+      }, 90_000);
+    } else if (resp.status === 409) {
+      alert('Backtest já em execução. Aguarde...');
+      if (btn) { btn.disabled = false; btn.innerHTML = '▶ RODAR BACKTEST'; }
+    } else {
+      alert(`Erro ao iniciar backtest: HTTP ${resp.status}`);
+      if (btn) { btn.disabled = false; btn.innerHTML = '▶ RODAR BACKTEST'; }
+    }
+  } catch (e) {
+    console.warn('[Trinity] triggerBacktest error:', e);
+    if (btn) { btn.disabled = false; btn.innerHTML = '▶ RODAR BACKTEST'; }
+  }
+}
+
 async function updateBacktestResults() {
   try {
     const data = await fetch('/api/backtest-results').then(r => r.json());
@@ -1476,8 +1581,12 @@ async function updateBacktestResults() {
         '<div class="bt-metric-card bt-neutral" style="grid-column:1/-1;text-align:center">' +
         '<div class="bt-metric-label">STATUS</div>' +
         '<div class="bt-metric-value" style="font-size:14px">Backtest não executado</div>' +
-        '<div class="bt-metric-sub">Execute: python -m backtester.run_backtest</div>' +
+        '<div class="bt-metric-sub">Execute: python scripts/fetch_historical_data.py → python -m backtester.run_backtest</div>' +
         '</div>';
+      const wg = document.getElementById('btWindowsGrid');
+      if (wg) wg.style.display = 'none';
+      const or = document.getElementById('btOptimalRow');
+      if (or) or.style.display = 'none';
       return;
     }
 
@@ -1485,14 +1594,17 @@ async function updateBacktestResults() {
     renderBtMetrics({ ...m, period_days: data.config?.period_days });
     renderBtEquityCurve(data.equity_curve || []);
     renderBtTrades(data.trades || []);
+    renderBtWindows(data.windows || []);
+    renderBtOptimal(data);
 
     const subtitle = document.getElementById('btSubtitle');
     if (subtitle && data.config) {
       const gen = data.generated_at ? new Date(data.generated_at) : null;
       const genStr = gen ? gen.toLocaleDateString('pt-BR') : '';
+      const engine = data.config.engine === 'legacy_mexc' ? 'MEXC/CCXT' : 'Walk-Forward 4×';
       subtitle.textContent =
-        `${data.config.period_days} dias · BTC/USDT · SMC Engine · ` +
-        `${data.config.risk_per_trade_pct}% risco/trade · gerado ${genStr}`;
+        `${data.config.period_days} dias · BTC/USDT · ${engine} · ` +
+        `${data.config.risk_per_trade_pct}% risco/trade · ${genStr}`;
     }
   } catch (e) {
     console.warn('[Trinity] Backtest fetch error:', e);

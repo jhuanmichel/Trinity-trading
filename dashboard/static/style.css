@@ -1734,6 +1734,77 @@ body {
   border: 1px solid rgba(139,152,165,0.20);
 }
 
+/* ── BACKTEST — novos elementos walk-forward ─────────────────────────────── */
+.bt-run-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 12px;
+  padding: 3px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  border-radius: 4px;
+  border: 1px solid rgba(0,200,255,0.35);
+  background: rgba(0,200,255,0.08);
+  color: #00C8FF;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.bt-run-btn:hover { background: rgba(0,200,255,0.18); border-color: #00C8FF; }
+.bt-run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.bt-windows-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 8px 0;
+}
+@media (max-width: 900px) { .bt-windows-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 520px) { .bt-windows-grid { grid-template-columns: 1fr; } }
+
+.bt-window-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.bt-window-name  { font-size: 10px; font-weight: 700; letter-spacing: 0.8px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
+.bt-window-period{ font-size: 9px; color: var(--text-dim); margin-bottom: 6px; }
+.bt-window-wr    { font-size: 16px; font-weight: 700; }
+.bt-window-sub   { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+.bt-window-card.bt-win-card  .bt-window-wr { color: var(--bull); }
+.bt-window-card.bt-loss-card .bt-window-wr { color: var(--bear); }
+
+.bt-optimal-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 4px;
+  padding: 8px 12px;
+  background: rgba(0,255,178,0.04);
+  border: 1px solid rgba(0,255,178,0.12);
+  border-radius: 6px;
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+.bt-optimal-label { font-weight: 700; letter-spacing: 0.6px; color: var(--text-muted); font-size: 10px; }
+.bt-optimal-value { color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+.bt-apply-btn {
+  margin-left: auto;
+  padding: 3px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  border-radius: 4px;
+  border: 1px solid rgba(0,255,178,0.40);
+  background: rgba(0,255,178,0.10);
+  color: var(--bull);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.bt-apply-btn:hover { background: rgba(0,255,178,0.22); }
+
 /* ── ALTCOIN RADAR ───────────────────────────────────────────────────────── */
 .alt-scan-badge {
   display: inline-flex;

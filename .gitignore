@@ -22,6 +22,10 @@ pip-selfcheck.json
 # ── Logs & dados gerados ─────────────────────────────────────────────────────
 logs/
 
+# ── Dados históricos OHLCV (parquets grandes — não commitar)
+data/
+data/historical/
+
 # ── macOS ─────────────────────────────────────────────────────────────────────
 .DS_Store
 .AppleDouble

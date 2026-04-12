@@ -226,6 +226,63 @@
       </div>
     </section>
 
+    <!-- ── SECTION 4c: BACKTEST WALK-FORWARD ────────────────────────────────── -->
+    <section class="section" id="backtestSection">
+      <div class="section-header">
+        <h2 class="section-title">BACKTEST PERFORMANCE</h2>
+        <span class="section-divider"></span>
+        <span class="section-sub" id="btSubtitle">Walk-forward · BTC/USDT · SMC Engine</span>
+        <!-- Botão disparar backtest -->
+        <button class="bt-run-btn" id="btRunBtn" onclick="triggerBacktest()" title="Executar backtest walk-forward">
+          ▶ RODAR BACKTEST
+        </button>
+      </div>
+
+      <!-- Métricas globais (8 cards) -->
+      <div class="bt-metrics-grid" id="btMetrics">
+        <div class="bt-metric-card bt-neutral" style="grid-column:1/-1;text-align:center">
+          <div class="bt-metric-label">STATUS</div>
+          <div class="bt-metric-value" style="font-size:14px">Backtest não executado</div>
+          <div class="bt-metric-sub">Execute: python scripts/fetch_historical_data.py → python -m backtester.run_backtest</div>
+        </div>
+      </div>
+
+      <!-- Equity curve (LightweightCharts) -->
+      <div class="bt-chart-wrap" id="btChartWrap" style="height:200px;margin:10px 0 6px"></div>
+
+      <!-- Walk-Forward Windows (4 períodos) -->
+      <div class="bt-windows-grid" id="btWindowsGrid" style="display:none"></div>
+
+      <!-- Parâmetros ótimos + botão aplicar -->
+      <div class="bt-optimal-row" id="btOptimalRow" style="display:none">
+        <span class="bt-optimal-label">PARÂMETROS ÓTIMOS:</span>
+        <span class="bt-optimal-value" id="btOptimalValue"></span>
+        <button class="bt-apply-btn" id="btApplyBtn" onclick="showOptimalParams()"
+          style="display:none">APLICAR PARÂMETROS ÓTIMOS</button>
+      </div>
+
+      <!-- Tabela de trades -->
+      <div class="table-wrapper">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Dir</th>
+              <th>Score</th>
+              <th>Entry</th>
+              <th>Saída</th>
+              <th>R</th>
+              <th>P&amp;L%</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="btBody">
+            <tr><td colspan="8" class="table-empty">Aguardando backtest...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- ── SECTION 5: CRASH + PUMP RADAR (lado a lado) ──────────────────────── -->
     <section class="section radar-dual-section" id="radarSection">
 
