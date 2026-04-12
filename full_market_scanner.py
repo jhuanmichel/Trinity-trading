@@ -231,7 +231,7 @@ class QuickTriageScanner:
     EXCLUDED_KEYWORDS = [
         'STOCK', 'ETF', 'US30', 'ALUMINUM', 'COPPER', 'GOLD', 'SILVER',
         'NVIDIA', 'NVDA', 'TESLA', 'TSLA', 'APPLE', 'AAPL', 'AMAZON', 'AMZN',
-        'GOOGLE', 'GOOGL', 'META', 'MSTR', 'COIN', 'COINBASE', 'MSFT',
+        'GOOGLE', 'GOOGL', 'META', 'MSTR', 'COINBASE', 'MSFT',
         'MICROSOFT', 'NETFLIX', 'NFLX', 'AMD', 'INTEL', 'INTC', 'BABA',
         'OIL', 'CRUDE', 'NATGAS', 'WHEAT', 'CORN', 'PLATINUM', 'PALLADIUM',
         'EWY', 'SPX', 'NDX', 'DJI', 'VIX', 'BULLA', 'INX',
