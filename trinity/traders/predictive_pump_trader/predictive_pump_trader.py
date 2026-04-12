@@ -8,12 +8,11 @@ Pipeline a cada ciclo (30s):
   1. AltcoinMarketScanner.scan_universe()  → top 50 pump candidates (cache 5min)
   2. AltcoinMarketScanner.fetch_batch()    → dados completos em paralelo
   3. Para cada coin:
-     a. WhaleAccumulationDetector
+     a. SilentAccumulationDetector         — funding + OI + CVD (0-25)
      b. ShortSqueezeDetector
      c. LiquidityGravityDetector
      d. BreakoutPressureDetector
-     e. PumpPredictionModel (smart money)
-     f. PumpScoringEngine → pump_score final
+     e. PumpScoringEngine → pump_score final (4×25)
   4. Filtra top N por pump_score
   5. Salva em dashboard/pump_scan_latest.json
   6. Envia alerta Telegram se score >= ALERT_THRESHOLD
@@ -46,9 +45,9 @@ log = logging.getLogger(__name__)
 # ── Config ────────────────────────────────────────────────────────────────────
 SCAN_INTERVAL_S    = 30
 TOP_RESULTS        = 5         # top N oportunidades institucionais
-OPP_THRESHOLD      = 70        # opportunity_score mínimo para incluir
-ALERT_THRESHOLD    = 70        # opp_score mínimo para alerta Telegram
-LAUNCH_THRESHOLD   = 88        # opp_score para alerta urgente
+OPP_THRESHOLD      = 55        # opportunity_score mínimo para incluir (calibrado Gate.io)
+ALERT_THRESHOLD    = 55        # opp_score mínimo para alerta Telegram
+LAUNCH_THRESHOLD   = 80        # opp_score para alerta urgente
 BASE_DIR           = Path(__file__).parent.parent.parent.parent
 SCAN_OUTPUT_FILE   = BASE_DIR / "dashboard" / "pump_scan_latest.json"
 
@@ -71,7 +70,7 @@ class PumpCandidate:
     urgency:             str       # WATCH/ALERT/READY/LAUNCH
     recommended_action:  str
     signal_valid:        bool
-    component_scores:    dict      # {whale, squeeze, gravity, breakout, smart_money}
+    component_scores:    dict      # {silent_acc, squeeze, gravity, breakout} cada 0-25
     top_signals:         list
     funding_rate:        float
     long_short_ratio:    float
@@ -102,8 +101,8 @@ class PredictivePumpTrader:
         from trinity.traders.predictive_pump_trader.altcoin_market_scanner import (
             scan_universe, fetch_batch,
         )
-        from trinity.traders.predictive_pump_trader.whale_accumulation_detector import (
-            detect_whale_accumulation,
+        from trinity.traders.predictive_pump_trader.silent_accumulation_detector import (
+            detect_silent_accumulation,
         )
         from trinity.traders.predictive_pump_trader.short_squeeze_detector import (
             detect_short_squeeze,
@@ -114,20 +113,16 @@ class PredictivePumpTrader:
         from trinity.traders.predictive_pump_trader.breakout_pressure_detector import (
             detect_breakout_pressure,
         )
-        from trinity.traders.predictive_pump_trader.pump_prediction_model import (
-            predict_pump,
-        )
         from trinity.traders.predictive_pump_trader.pump_scoring_engine import (
             score_pump,
         )
 
         self._scan_universe   = scan_universe
         self._fetch_batch     = fetch_batch
-        self._detect_whale    = detect_whale_accumulation
+        self._detect_silent   = detect_silent_accumulation
         self._detect_squeeze  = detect_short_squeeze
         self._detect_gravity  = detect_liquidity_gravity
         self._detect_breakout = detect_breakout_pressure
-        self._predict_pump    = predict_pump
         self._score_pump      = score_pump
 
     def run_scan(self) -> dict:
@@ -186,16 +181,15 @@ class PredictivePumpTrader:
     def _analyze_coin(self, coin_data: dict, scan_ts: str) -> Optional[PumpCandidate]:
         symbol = coin_data.get("symbol", "?")
 
-        whale_result    = self._detect_whale(coin_data)
+        silent_result   = self._detect_silent(coin_data)
         squeeze_result  = self._detect_squeeze(coin_data)
         gravity_result  = self._detect_gravity(coin_data)
         breakout_result = self._detect_breakout(coin_data)
-        sm_result       = self._predict_pump(coin_data)
 
         # Score final — passa coin_data para o Expected Move Model
         score_result = self._score_pump(
-            whale_result, squeeze_result, gravity_result,
-            breakout_result, sm_result, coin_data,
+            silent_result, squeeze_result, gravity_result,
+            breakout_result, coin_data,
         )
 
         price           = coin_data.get("price", 0)
@@ -507,11 +501,11 @@ def _send_pump_telegram(c: dict):
             f"🏆 Trinity Score: *{opp_score:.0f}/100*\n"
             f"📈 Expected Move: *+{move_pct:.1f}%*\n"
             f"🎯 Probabilidade: *{prob_pct:.0f}%*\n\n"
-            f"📋 *RAZÕES INSTITUCIONAIS:*\n"
-            f"🐋 Whale:    `{comp.get('whale', 0):.0f}/100`\n"
-            f"💧 Squeeze:  `{comp.get('squeeze', 0):.0f}/100`\n"
-            f"⚡ Funding:  `{funding_str}`\n"
-            f"📈 OI:       `{oi_str}`\n\n"
+            f"📋 *COMPONENTES (4×25):*\n"
+            f"🧘 Silent:   `{comp.get('silent_acc', 0):.1f}/25`\n"
+            f"💧 Squeeze:  `{comp.get('squeeze', 0):.1f}/25`\n"
+            f"🎯 Gravity:  `{comp.get('gravity', 0):.1f}/25`\n"
+            f"📊 Breakout: `{comp.get('breakout', 0):.1f}/25`\n\n"
             f"🔑 *Sinais:*\n{signals_text}\n\n"
             f"📌 *NÍVEIS DE TRADE:*\n"
             f"`Entry: {entry_str}`\n"

@@ -9,11 +9,12 @@ Pipeline a cada ciclo (30s):
   2. AltcoinMarketScanner.fetch_batch()    → dados completos em paralelo
   3. Para cada coin:
      a. LiquidityCollapseDetector
-     b. LeveragePressureDetector
+     b. LeveragePressureDetector          → injeta _leverage_result
      c. WhaleDumpDetector
      d. VolatilityCompressionDetector
-     e. CascadePredictionModel
-     f. CrashScoringEngine → crash_score final
+     e. CascadePredictionModel            → injeta _cascade_result
+     f. LiquidationCascadeDetector (M4)   — cascade score 0-25
+     g. CrashScoringEngine → crash_score final (4×25)
   4. Filtra top N por crash_score
   5. Salva em dashboard/crash_scan_latest.json
   6. Envia alerta Telegram se score >= ALERT_THRESHOLD
@@ -46,9 +47,9 @@ log = logging.getLogger(__name__)
 # ── Config ────────────────────────────────────────────────────────────────────
 SCAN_INTERVAL_S      = 30       # ciclo de scan em segundos
 TOP_RESULTS          = 5        # top N oportunidades institucionais
-OPP_THRESHOLD        = 70       # opportunity_score mínimo para incluir
-ALERT_THRESHOLD      = 70       # opp_score mínimo para alerta Telegram
-CRITICAL_THRESHOLD   = 88       # opp_score para alerta crítico repetido
+OPP_THRESHOLD        = 55       # opportunity_score mínimo para incluir (calibrado Gate.io)
+ALERT_THRESHOLD      = 55       # opp_score mínimo para alerta Telegram
+CRITICAL_THRESHOLD   = 80       # opp_score para alerta crítico repetido
 BASE_DIR             = Path(__file__).parent.parent.parent.parent  # raiz do projeto
 SCAN_OUTPUT_FILE     = BASE_DIR / "dashboard" / "crash_scan_latest.json"
 
@@ -72,7 +73,7 @@ class CrashCandidate:
     urgency:             str       # WATCH/ALERT/DANGER/CRITICAL
     recommended_action:  str
     signal_valid:        bool
-    component_scores:    dict      # {liquidity, leverage, whale, compression, funding_oi, cascade}
+    component_scores:    dict      # {cascade, collapse, whale, volatility} cada 0-25
     top_signals:         list
     funding_rate:        float
     long_short_ratio:    float
@@ -124,18 +125,22 @@ class PredictiveCrashTrader:
         from trinity.traders.predictive_crash_trader.cascade_prediction_model import (
             predict_cascade,
         )
+        from trinity.traders.predictive_crash_trader.liquidation_cascade_detector import (
+            detect_liquidation_cascade,
+        )
         from trinity.traders.predictive_crash_trader.crash_scoring_engine import (
             score_crash,
         )
 
-        self._scan_universe    = scan_universe
-        self._fetch_batch      = fetch_batch
-        self._detect_liq       = detect_liquidity_collapse
-        self._detect_lev       = detect_leverage_pressure
-        self._detect_whale     = detect_whale_dump
-        self._detect_vol       = detect_volatility_compression
-        self._predict_cascade  = predict_cascade
-        self._score_crash      = score_crash
+        self._scan_universe     = scan_universe
+        self._fetch_batch       = fetch_batch
+        self._detect_liq        = detect_liquidity_collapse
+        self._detect_lev        = detect_leverage_pressure
+        self._detect_whale      = detect_whale_dump
+        self._detect_vol        = detect_volatility_compression
+        self._predict_cascade   = predict_cascade
+        self._detect_cascade_m4 = detect_liquidation_cascade
+        self._score_crash       = score_crash
 
     def run_scan(self) -> dict:
         """
@@ -199,18 +204,22 @@ class PredictiveCrashTrader:
         symbol = coin_data.get("symbol", "?")
 
         # Pipeline de detectores
-        liq_result  = self._detect_liq(coin_data)
-        lev_result  = self._detect_lev(coin_data)
+        liq_result   = self._detect_liq(coin_data)
+        lev_result   = self._detect_lev(coin_data)
         whale_result = self._detect_whale(coin_data)
-        vol_result  = self._detect_vol(coin_data)
+        vol_result   = self._detect_vol(coin_data)
 
-        # Injeta resultado de leverage no cascade para usar cascade_probability
+        # Injeta leverage_result → cascade usa cascade_probability
         coin_data["_leverage_result"] = lev_result
         cas_result = self._predict_cascade(coin_data)
 
-        # Score final — passa coin_data para o Expected Move Model
+        # Injeta cascade_result → M4 usa gap_acceleration_risk + cascade_strength
+        coin_data["_cascade_result"] = cas_result
+        cascade_m4_result = self._detect_cascade_m4(coin_data)
+
+        # Score final 4×25 — passa coin_data para DNA + Expected Move Model
         score_result = self._score_crash(
-            liq_result, lev_result, whale_result, vol_result, cas_result, coin_data
+            cascade_m4_result, liq_result, whale_result, vol_result, coin_data
         )
 
         price           = coin_data.get("price", 0)
@@ -530,11 +539,11 @@ def _send_crash_telegram(c: dict):
             f"🏆 Trinity Score: *{opp_score:.0f}/100*\n"
             f"📉 Expected Move: *-{move_pct:.1f}%*\n"
             f"🎯 Probabilidade: *{prob_pct:.0f}%*\n\n"
-            f"📋 *RAZÕES INSTITUCIONAIS:*\n"
-            f"💧 Liquidity: `{comp.get('liquidity', 0):.0f}/100`\n"
-            f"🐋 Whale:     `{comp.get('whale', 0):.0f}/100`\n"
-            f"⚡ Funding:   `{funding_str}`\n"
-            f"📈 OI:        `{oi_str}`\n\n"
+            f"📋 *COMPONENTES (4×25):*\n"
+            f"⚡ Cascade:   `{comp.get('cascade', 0):.1f}/25`\n"
+            f"💧 Collapse:  `{comp.get('collapse', 0):.1f}/25`\n"
+            f"🐋 Whale:     `{comp.get('whale', 0):.1f}/25`\n"
+            f"📊 Volatility:`{comp.get('volatility', 0):.1f}/25`\n\n"
             f"🔑 *Sinais:*\n{signals_text}\n\n"
             f"📌 *NÍVEIS DE TRADE:*\n"
             f"`Entry: {entry_str}`\n"

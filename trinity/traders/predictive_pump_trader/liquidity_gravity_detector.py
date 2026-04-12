@@ -32,7 +32,7 @@ BID_WALL_BAND_PCT    = 1.5    # analisa bids até 1.5% abaixo do preço
 ASK_BAND_PCT         = 5.0    # analisa asks até 5% acima do preço
 BID_WALL_RATIO       = 2.5    # bids/asks > 2.5 = bid wall forte
 ASK_CLUSTER_BAND_PCT = 3.0    # cluster de asks entre 1% e 5% acima
-MIN_CLUSTER_USD      = 100_000  # cluster mínimo para ser relevante ($100K)
+MIN_CLUSTER_USD      = 10_000   # cluster mínimo para ser relevante ($10K, Gate.io altcoins)
 GRAVITY_STRONG       = 70.0   # strength >= 70 = efeito ímã forte
 PRICE_BAND_PCT       = 0.005  # 0.5% por banda de análise
 

@@ -40,8 +40,8 @@ log = logging.getLogger(__name__)
 
 # ── Limiares ──────────────────────────────────────────────────────────────────
 DEPTH_BAND_PCT         = 0.03    # analisa ±3% em torno do preço
-THIN_BOOK_USD          = 500_000  # livro "fino" abaixo de $500K
-COLLAPSE_BID_USD       = 200_000  # suporte colapsado abaixo de $200K
+THIN_BOOK_USD          = 50_000   # livro "fino" abaixo de $50K (Gate.io altcoins)
+COLLAPSE_BID_USD       = 20_000   # suporte colapsado abaixo de $20K
 ASK_WALL_MULTIPLIER    = 3.0      # ask wall se asks > 3× bids
 IMBALANCE_THRESHOLD    = -0.35   # imbalance ≤ -0.35 = muito mais asks que bids
 GAP_THRESHOLD_PCT      = 0.008   # gap ≥ 0.8% entre níveis = gap relevante

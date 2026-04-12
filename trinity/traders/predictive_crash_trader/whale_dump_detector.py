@@ -37,8 +37,7 @@ log = logging.getLogger(__name__)
 SELL_PRESSURE_HIGH      = 0.65   # acima de 65% de pressão vendedora → alto
 SELL_PRESSURE_EXTREME   = 0.78   # acima de 78% → dump whale
 CVD_NEGATIVE_THRESHOLD  = -0.30  # CVD normalizado abaixo de -0.30 → negativo
-LARGE_TRADE_MULT        = 5.0    # trade > 5× avg_trade_size = "grande"
-MIN_LARGE_TRADE_USD     = 50_000 # mínimo $50K para considerar "whale"
+LARGE_TRADE_MULT        = 5.0    # trade > 5× avg_trade_size = "grande" (relativo)
 
 
 def detect_whale_dump(coin_data: dict) -> dict:
@@ -89,7 +88,7 @@ def detect_whale_dump(coin_data: dict) -> dict:
                 tprice = float(t.get("p", price))
                 is_sell = bool(t.get("m", False))
                 usd_val = qty * tprice
-                if is_sell and usd_val >= max(MIN_LARGE_TRADE_USD, avg_size * LARGE_TRADE_MULT):
+                if is_sell and avg_size > 0 and usd_val >= avg_size * LARGE_TRADE_MULT:
                     whale_sells    += 1
                     total_dump_usd += usd_val
             except (ValueError, TypeError):
@@ -102,7 +101,7 @@ def detect_whale_dump(coin_data: dict) -> dict:
     cvd_score = _calc_cvd_from_klines(klines)
 
     # ── Indicadores ───────────────────────────────────────────────────────
-    large_sell_detected = whale_sells >= 2 or total_dump_usd >= MIN_LARGE_TRADE_USD * 5
+    large_sell_detected = whale_sells >= 2
     cvd_negative        = cvd_score < CVD_NEGATIVE_THRESHOLD
 
     # ── Risk Score ────────────────────────────────────────────────────────
@@ -184,12 +183,8 @@ def _calc_risk(
     if cvd < 0:
         score += min(30.0, abs(cvd) * 30)
 
-    # Fator 3: Whale sells (0-20 pts)
-    score += min(20.0, whale_count * 5.0)
-
-    # Fator 4: Volume de dump (0-10 pts)
-    if dump_usd > MIN_LARGE_TRADE_USD:
-        score += min(10.0, (dump_usd / (MIN_LARGE_TRADE_USD * 20)) * 10)
+    # Fator 3: Whale sells (0-30 pts)
+    score += min(30.0, whale_count * 5.0)  # até 6 whales = 30 pts
 
     return min(100.0, score)
 

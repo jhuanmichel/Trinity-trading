@@ -37,8 +37,7 @@ log = logging.getLogger(__name__)
 BUY_PRESSURE_HIGH    = 0.60   # acima de 60% compradora → pressão
 BUY_PRESSURE_STRONG  = 0.72   # acima de 72% → acumulação forte
 CVD_POSITIVE_THRESH  = 0.25   # CVD > +0.25 = acumulação
-LARGE_TRADE_MULT     = 5.0    # trade > 5× avg = "whale"
-MIN_WHALE_USD        = 50_000  # mínimo $50K para whale
+LARGE_TRADE_MULT     = 5.0    # trade > 5× avg = "whale" (threshold relativo)
 
 
 def detect_whale_accumulation(coin_data: dict) -> dict:
@@ -74,7 +73,7 @@ def detect_whale_accumulation(coin_data: dict) -> dict:
             tprice  = float(t.get("p", price))
             is_sell = bool(t.get("m", False))
             usd     = qty * tprice
-            if not is_sell and usd >= max(MIN_WHALE_USD, avg_size * LARGE_TRADE_MULT):
+            if not is_sell and avg_size > 0 and usd >= avg_size * LARGE_TRADE_MULT:
                 whale_buys    += 1
                 total_buy_usd += usd
         except (ValueError, TypeError):
@@ -84,7 +83,7 @@ def detect_whale_accumulation(coin_data: dict) -> dict:
     buy_pressure_ratio  = buy_vol / total_vol if total_vol > 0 else 0.5
     cvd_score           = _calc_cvd(klines)
 
-    large_buy_detected  = whale_buys >= 2 or total_buy_usd >= MIN_WHALE_USD * 5
+    large_buy_detected  = whale_buys >= 2
     cvd_positive        = cvd_score > CVD_POSITIVE_THRESH
     whale_accumulation  = large_buy_detected or (cvd_positive and buy_pressure_ratio >= BUY_PRESSURE_HIGH)
 
@@ -125,9 +124,7 @@ def _calc_strength(ratio: float, cvd: float, whales: int, buy_usd: float) -> flo
         score += min(40.0, (ratio - 0.5) / 0.5 * 40)
     if cvd > 0:
         score += min(30.0, cvd * 30)
-    score += min(20.0, whales * 5.0)
-    if buy_usd > MIN_WHALE_USD:
-        score += min(10.0, (buy_usd / (MIN_WHALE_USD * 20)) * 10)
+    score += min(30.0, whales * 5.0)  # até 6 whales = 30 pts
     return min(100.0, score)
 
 
