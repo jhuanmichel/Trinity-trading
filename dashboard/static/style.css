@@ -2440,14 +2440,14 @@ body {
 
 .fms-row {
   display: grid;
-  grid-template-columns: 1fr 52px 48px 48px;
+  grid-template-columns: 1fr 46px 34px 54px 48px;
   align-items: center;
   padding: 6px 8px;
   border-radius: 4px;
   border: 1px solid var(--border-dim);
   background: var(--surface);
   font-size: 11px;
-  gap: 6px;
+  gap: 5px;
   transition: background 0.15s;
 }
 .fms-row:hover { background: var(--surface2); }
@@ -2461,7 +2461,14 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.fms-symbol .fms-accel { color: #FFB800; font-size: 10px; margin-left: 4px; }
+
+.fms-tier {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: left;
+  white-space: nowrap;
+}
 
 .fms-score-pump  { color: #00C864; font-weight: 700; font-family: 'JetBrains Mono', monospace; font-size: 12px; text-align: right; }
 .fms-score-crash { color: #FF3C3C; font-weight: 700; font-family: 'JetBrains Mono', monospace; font-size: 12px; text-align: right; }
@@ -2471,8 +2478,9 @@ body {
   font-family: 'JetBrains Mono', monospace;
   text-align: right;
 }
-.fms-fr.neg { color: #00C864; }
-.fms-fr.pos { color: #FF3C3C; }
+/* funding negativo → vermelho (pressão short squeeze); positivo → verde (pressão crash) */
+.fms-fr.neg { color: #FF3C3C; }
+.fms-fr.pos { color: #00C864; }
 .fms-fr.neu { color: var(--text-muted); }
 
 .fms-chg {

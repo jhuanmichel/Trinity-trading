@@ -2020,36 +2020,46 @@ clockTick();
 const FMS_REFRESH_MS = 95_000;
 
 function _fmsTierClass(score) {
-  if (score >= 82) return 'CRÍTICO';
-  if (score >= 67) return 'ALTO';
-  if (score >= 52) return 'MÉDIO';
+  if (score >= 85) return 'CRÍTICO';
+  if (score >= 72) return 'ALTO';
+  if (score >= 60) return 'MÉDIO';
   return '';
 }
 
-function _renderFmsList(items, listId, scoreKey, scoreClass) {
+function _renderFmsList(items, listId, scoreKey) {
   const el = document.getElementById(listId);
   if (!el) return;
   if (!items || !items.length) {
     el.innerHTML = '<div class="fms-empty">Sem candidatos no último scan</div>';
     return;
   }
-  el.innerHTML = items.slice(0, 5).map(r => {
-    const score = (r[scoreKey] || 0).toFixed(0);
-    const fr    = parseFloat(r.funding_rate || 0);
-    const chg   = parseFloat(r.rise_fall || 0);
-    const sym   = (r.symbol || '').replace('_USDT', '');
+  // ordenar por score desc no frontend (defensive)
+  const sorted = [...items].sort((a, b) => (b[scoreKey] || 0) - (a[scoreKey] || 0));
+  el.innerHTML = sorted.slice(0, 5).map(r => {
+    const scoreVal = parseFloat(r[scoreKey] || 0);
+    const score    = scoreVal.toFixed(0);
+    const fr       = parseFloat(r.funding_rate || 0);
+    const chg      = parseFloat(r.rise_fall || 0);
+    const sym      = (r.symbol || '').replace('_USDT', '');
+    const tier     = _fmsTierClass(scoreVal);
 
-    const frClass = fr < -0.001 ? 'neg' : fr > 0.001 ? 'pos' : 'neu';
-    const chgClass = chg > 0.01 ? 'pos' : chg < -0.01 ? 'neg' : 'neu';
-    const frTxt  = (fr * 100).toFixed(4) + '%';
-    const chgTxt = (chg >= 0 ? '+' : '') + (chg * 100).toFixed(1) + '%';
+    // cor do score por faixa
+    const scoreColor = scoreVal >= 72 ? '#00FF88'
+                     : scoreVal >= 60 ? '#00C864'
+                     : '#888888';
 
-    const tier = _fmsTierClass(parseFloat(score));
-    const tierTag = tier ? ` <span style="font-size:9px;opacity:0.7">${tier}</span>` : '';
+    // funding: negativo → vermelho (pressão short squeeze), positivo → verde (pressão crash)
+    const frClass  = fr < -0.001 ? 'neg' : fr > 0.001 ? 'pos' : 'neu';
+    const frTxt    = (fr * 100).toFixed(4) + '%';
+
+    // variação: positiva → verde, negativa → vermelho
+    const chgClass = chg > 0 ? 'pos' : chg < 0 ? 'neg' : 'neu';
+    const chgTxt   = (chg >= 0 ? '+' : '') + (chg * 100).toFixed(1) + '%';
 
     return `<div class="fms-row">
-      <span class="fms-symbol">${sym}${tierTag}</span>
-      <span class="${scoreClass}">${score}</span>
+      <span class="fms-symbol">${sym}</span>
+      <span class="fms-tier">${tier}</span>
+      <span style="font-weight:700;font-family:'JetBrains Mono',monospace;font-size:12px;text-align:right;color:${scoreColor}">${score}</span>
       <span class="fms-fr ${frClass}">${frTxt}</span>
       <span class="fms-chg ${chgClass}">${chgTxt}</span>
     </div>`;
@@ -2085,8 +2095,8 @@ async function updateFmsScanner() {
     }
 
     // listas
-    _renderFmsList(d.top_pump,  'fmsPumpList',  'pump_score',  'fms-score-pump');
-    _renderFmsList(d.top_crash, 'fmsCrashList', 'crash_score', 'fms-score-crash');
+    _renderFmsList(d.top_pump,  'fmsPumpList',  'pump_score');
+    _renderFmsList(d.top_crash, 'fmsCrashList', 'crash_score');
 
   } catch (_) {}
 }

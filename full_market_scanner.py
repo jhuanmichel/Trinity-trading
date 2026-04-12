@@ -234,7 +234,7 @@ class QuickTriageScanner:
         'GOOGLE', 'GOOGL', 'META', 'MSTR', 'COIN', 'COINBASE', 'MSFT',
         'MICROSOFT', 'NETFLIX', 'NFLX', 'AMD', 'INTEL', 'INTC', 'BABA',
         'OIL', 'CRUDE', 'NATGAS', 'WHEAT', 'CORN', 'PLATINUM', 'PALLADIUM',
-        'EWY', 'SPX', 'NDX', 'DJI', 'VIX', 'PIPPI', 'STABLE', 'RIVER',
+        'EWY', 'SPX', 'NDX', 'DJI', 'VIX', 'BULLA', 'INX',
     ]
 
     def __init__(self, memory: MarketMemory):
@@ -242,8 +242,10 @@ class QuickTriageScanner:
         self._last_total = 0   # total de contratos examinados no último run()
 
     def _is_synthetic(self, symbol: str) -> bool:
-        """True se o símbolo é stock sintética, ETF ou commodity — deve ser excluído."""
-        return any(kw in symbol for kw in self.EXCLUDED_KEYWORDS)
+        """True se o símbolo é stock sintética, ETF ou commodity — deve ser excluído.
+        Usa .upper() para garantir match independente de capitalização."""
+        symbol_upper = symbol.upper()
+        return any(kw in symbol_upper for kw in self.EXCLUDED_KEYWORDS)
 
     def get_active_symbols(self) -> list:
         """
