@@ -80,9 +80,16 @@ _DNA_MAP: dict = {
 }
 
 _TACTICAL_NOTES: dict = {
-    "CRÍTICO": "Setup de alta convicção. Monitorar price action de perto.",
-    "ALTO":    "Setup válido com confirmação. Usar tamanho padrão.",
-    "MÉDIO":   "Setup preliminar. Aguardar confirmação adicional.",
+    "PUMP": {
+        "CRÍTICO": "Entrada imediata com gestão de risco definida",
+        "ALTO":    "Aguardar confirmação de vela antes de entrar",
+        "MÉDIO":   "Setup preliminar. Aguardar confirmação adicional.",
+    },
+    "CRASH": {
+        "CRÍTICO": "Fechar longs. Considerar short com confirmação",
+        "ALTO":    "Reduzir exposição. Monitorar próximos 10min",
+        "MÉDIO":   "Setup preliminar. Aguardar confirmação adicional.",
+    },
 }
 
 
@@ -222,8 +229,12 @@ class QuickTriageScanner:
 
     # Ações sintéticas, ETFs e commodities — excluídos por não serem crypto spot/perp
     EXCLUDED_KEYWORDS = [
-        "STOCK", "ETF", "US30", "ALUMINUM", "COPPER", "GOLD", "SILVER",
-        "USOIL", "UKOIL", "XAUT", "XAGUSD",
+        'STOCK', 'ETF', 'US30', 'ALUMINUM', 'COPPER', 'GOLD', 'SILVER',
+        'NVIDIA', 'NVDA', 'TESLA', 'TSLA', 'APPLE', 'AAPL', 'AMAZON', 'AMZN',
+        'GOOGLE', 'GOOGL', 'META', 'MSTR', 'COIN', 'COINBASE', 'MSFT',
+        'MICROSOFT', 'NETFLIX', 'NFLX', 'AMD', 'INTEL', 'INTC', 'BABA',
+        'OIL', 'CRUDE', 'NATGAS', 'WHEAT', 'CORN', 'PLATINUM', 'PALLADIUM',
+        'EWY', 'SPX', 'NDX', 'DJI', 'VIX', 'PIPPI', 'STABLE', 'RIVER',
     ]
 
     def __init__(self, memory: MarketMemory):
@@ -791,9 +802,9 @@ class DeepAnalysisEngine:
 # AlertDispatcher — formata e envia alertas Telegram
 # ══════════════════════════════════════════════════════════════════════════════
 class AlertDispatcher:
-    PUMP_TIERS  = {"CRÍTICO": 82, "ALTO": 67, "MÉDIO": 52}
-    CRASH_TIERS = {"CRÍTICO": 82, "ALTO": 67, "MÉDIO": 52}
-    ACCEL_MIN   = 18    # alerta por aceleração mesmo sem score >= 52
+    PUMP_TIERS  = {"CRÍTICO": 85, "ALTO": 72, "MÉDIO": 60}
+    CRASH_TIERS = {"CRÍTICO": 85, "ALTO": 72, "MÉDIO": 60}
+    ACCEL_MIN   = 22    # alerta por aceleração — threshold mínimo
     COOLDOWNS   = {"CRÍTICO": 10, "ALTO": 20, "MÉDIO": 35}   # minutos
 
     def __init__(self, memory: MarketMemory):
@@ -817,9 +828,9 @@ class AlertDispatcher:
         Retorna (bool, tier, motivo).
 
         C1 — Lógica corrigida:
-          - Score >= 52 (tier direto): alerta imediato via score_threshold.
-          - Score < 52 (tier None):    aceleração SÓ dispara se dom_score >= 42
-                                       AND streak >= 2 AND acceleration >= 20.
+          - Score >= 60 (tier direto): alerta imediato via score_threshold.
+          - Score < 60 (tier None):    aceleração SÓ dispara se dom_score >= 45
+                                       AND streak >= 3 AND acceleration >= 22.
           Elimina alertas espúrios (ex: score 26 + accel 26 não dispara mais).
         """
         dominant_type  = result["dominant_type"]
@@ -829,7 +840,7 @@ class AlertDispatcher:
 
         if tier is not None:
             motivo = "score_threshold"
-        elif dominant_score >= 42 and streak >= 2 and acceleration >= 20:
+        elif dominant_score >= 45 and streak >= 3 and acceleration >= 22:
             tier   = "MÉDIO"
             motivo = "acceleration"
         else:
@@ -843,8 +854,8 @@ class AlertDispatcher:
     def _format_message(self, symbol: str, result: dict, tier: str,
                         acceleration: float, streak: int) -> str:
         """
-        C4 — Formato rico: DNA label, níveis de trade, probabilidade,
-             componentes 6×25, notas táticas.
+        Formato Telegram rico: header, separador, DNA, níveis de trade
+        com percentuais, detectores, linha de aceleração e nota tática.
         """
         dominant_type  = result["dominant_type"]
         dominant_score = result["dominant_score"]
@@ -859,15 +870,15 @@ class AlertDispatcher:
         levels   = calculate_trade_levels(price, dominant_type, tier)
         prob     = levels["prob_pct"]
         move_pct = levels["move_pct"]
-        tactical = _TACTICAL_NOTES.get(tier, "")
+        tactical = _TACTICAL_NOTES.get(dominant_type, {}).get(tier, "")
 
-        header_emoji = "🚀" if is_pump else "⚠️"
-        arrow        = "▲" if is_pump else "▼"
+        header_emoji  = "🚀" if is_pump else "⚠️"
+        price_emoji   = "📈" if is_pump else "📉"
 
         def _s(det_key: str) -> int:
             """Score de um detector para o tipo dominante."""
             d = dets.get(det_key, {})
-            if "score" in d:                   # D3, D6 (agnósticos)
+            if "score" in d:
                 return int(d["score"])
             key = "pump" if is_pump else "crash"
             v = d.get(key, 0)
@@ -876,36 +887,52 @@ class AlertDispatcher:
         def _fmt_p(p: float) -> str:
             """Formata preço com precisão adequada."""
             if p >= 1000:
-                return f"${p:,.2f}"
+                return f"{p:,.2f}"
             elif p >= 1:
-                return f"${p:,.4f}"
-            return f"${p:.6f}"
+                return f"{p:,.4f}"
+            return f"{p:.6f}"
+
+        def _pct(base: float, target: float) -> str:
+            """Percentual relativo ao entry."""
+            if base == 0:
+                return "0.00%"
+            diff = (target - base) / base * 100
+            return f"{diff:+.2f}%"
+
+        entry = levels['entry']
+        stop  = levels['stop']
+        tp1   = levels['tp1']
+        tp2   = levels['tp2']
+        tp3   = levels['tp3']
 
         lines = [
-            f"{header_emoji} {dominant_type} SETUP — {symbol} [{tier}]",
-            f"DNA: {dna}   {arrow} Score: {dominant_score:.0f}/100",
+            f"{header_emoji} {dominant_type} SETUP — {symbol}",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"Tier: {tier} · Score: {dominant_score:.0f}/100",
+            f"DNA: {dna}",
             "",
-            f"Entry:  {_fmt_p(levels['entry'])}   Stop: {_fmt_p(levels['stop'])}",
-            f"TP1:    {_fmt_p(levels['tp1'])}",
-            f"TP2:    {_fmt_p(levels['tp2'])}",
-            f"TP3:    {_fmt_p(levels['tp3'])}   Move: ~{move_pct:.1f}%",
-            f"Prob:   {prob}%",
+            "💰 NÍVEIS DE TRADE",
+            f"Entry:  ${_fmt_p(entry)}",
+            f"Stop:   ${_fmt_p(stop)} ({_pct(entry, stop)})",
+            f"TP1:    ${_fmt_p(tp1)} ({_pct(entry, tp1)})",
+            f"TP2:    ${_fmt_p(tp2)} ({_pct(entry, tp2)})",
+            f"TP3:    ${_fmt_p(tp3)} ({_pct(entry, tp3)})",
+            f"Move:   ~{move_pct:.1f}% · Prob: {prob}%",
             "",
-            f"Preço:   {_fmt_p(price)}   Var24h: {rfr:+.1%}",
+            "📊 DETECTORES (x/25)",
+            f"Funding: {_s('d1')}  OI Accel: {_s('d2')}",
+            f"Volume:  {_s('d3')}  CVD:      {_s('d4')}",
+            f"Liquidez:{_s('d5')}  Compressão:{_s('d6')}",
             "",
-            "Detectores (×/25):",
-            f"  Funding:   {_s('d1')}   OI Accel: {_s('d2')}",
-            f"  Volume:    {_s('d3')}   CVD:      {_s('d4')}",
-            f"  Liquidez:  {_s('d5')}   Compressão: {_s('d6')}",
+            f"{price_emoji} Preço: ${_fmt_p(price)} · Var24h: {rfr * 100:+.2f}%",
         ]
 
-        if acceleration >= 12:
-            lines.append("")
+        if acceleration >= 15:
             lines.append(
                 f"⚡ Aceleração: +{acceleration:.0f} pts · Streak: {streak} scans"
             )
 
-        lines += ["", tactical]
+        lines += ["", f"💡 {tactical}"]
         return "\n".join(lines)
 
     def dispatch(self, symbol: str, result: dict) -> bool:
