@@ -2001,6 +2001,47 @@ async function applyOptimizedWeights() {
   }
 }
 
+// ── News Sentinel — indicador macro no header ─────────────────────────────────
+async function updateMacroIndicator() {
+  const dot  = document.getElementById('macroDot');
+  const text = document.getElementById('macroText');
+  if (!dot || !text) return;
+  try {
+    const data = await fetch('/api/news-status').then(r => r.json());
+    const locked    = !!data.locked;
+    const sentiment = (data.current_sentiment || 'NEUTRAL').toUpperCase();
+
+    // Remove classes anteriores
+    dot.className  = 'macro-dot';
+    text.className = 'macro-text';
+
+    if (locked) {
+      // Calcula minutos restantes de lock
+      let lockLabel = '';
+      if (data.locked_until) {
+        const diff = Math.max(0, Math.round((new Date(data.locked_until) - Date.now()) / 60000));
+        lockLabel  = ` · trava ${diff}min`;
+      }
+      dot.classList.add('locked');
+      text.classList.add('locked');
+      text.textContent = `Macro: Trava${lockLabel}`;
+    } else if (sentiment === 'BEARISH') {
+      dot.classList.add('bearish');
+      text.classList.add('bearish');
+      text.textContent = 'Macro: Bearish';
+    } else if (sentiment === 'BULLISH') {
+      dot.classList.add('bullish');
+      text.classList.add('bullish');
+      text.textContent = 'Macro: Bullish';
+    } else {
+      dot.classList.add('neutral');
+      text.textContent = 'Macro: Neutro';
+    }
+  } catch (_e) {
+    if (text) text.textContent = 'Macro: —';
+  }
+}
+
 // Init
 refresh();
 priceTick();
@@ -2012,6 +2053,7 @@ updateBacktestResults();                        // Backtest Performance — prim
 updateAltcoinRadar();                           // Altcoin Radar — primeiro carregamento
 updateWinRate();                                // Performance Real — primeiro carregamento
 updateOptimizationReport();                     // Otimização SMC — primeiro carregamento
+updateMacroIndicator();                         // News Sentinel — primeiro carregamento
 setInterval(refresh,                REFRESH_MS);
 setInterval(priceTick,              PRICE_MS);
 setInterval(clockTick,              1000);
@@ -2024,4 +2066,5 @@ setInterval(updateBacktestResults,  120_000);      // 2min — atualiza métrica
 setInterval(updateAltcoinRadar,     300_000);      // 5min — sincroniza com ciclo do scanner
 setInterval(updateWinRate,          300_000);      // 5min — sincroniza com ciclo do OutcomeTracker
 setInterval(updateOptimizationReport, 300_000);    // 5min — sincroniza com relatório de otimização
+setInterval(updateMacroIndicator,   120_000);      // 2min — sincroniza com ciclo do News Sentinel
 clockTick();

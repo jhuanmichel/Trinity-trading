@@ -293,6 +293,25 @@ def _quick_smc(df: pd.DataFrame, symbol: str, btc_bias: str = "NEUTRO") -> Optio
             else "noise"
         )
 
+        # ── F3: News Sentinel — trava should_alert se macro locked ─────────
+        _news_blocked    = False
+        _news_macro_ctx  = None
+        if should_alert:
+            try:
+                from news_sentinel import get_sentinel as _get_sea_ns
+                _ns_clearance = _get_sea_ns().check_signal_clearance(direction, score_s)
+                if not _ns_clearance["cleared"]:
+                    should_alert  = False
+                    _news_blocked = True
+                    log.debug(
+                        f"[NEWS] {symbol}: sinal bloqueado por macro_lock "
+                        f"até {_ns_clearance.get('locked_until')}"
+                    )
+                else:
+                    _news_macro_ctx = _ns_clearance.get("context")
+            except Exception as _ns_err:
+                log.debug(f"[NEWS] scanner sentinel falhou (fail-open): {_ns_err}")
+
         # Preço atual
         price = float(df["close"].iloc[-1])
 
@@ -360,6 +379,8 @@ def _quick_smc(df: pd.DataFrame, symbol: str, btc_bias: str = "NEUTRO") -> Optio
             "score_zone":        score_zone,          # C2: "signal"|"watch"|"noise"
             "struct_confirm":    struct_confirm,      # C5: label para o modal
             "session_info":      session_info,        # F2: info da sessão ativa
+            "news_blocked":      _news_blocked,       # F3: bloqueado por macro lock
+            "macro_context":     _news_macro_ctx,     # F3: contexto macro para alerta
         }
     except Exception as e:
         log.debug(f"[altcoin_scanner] SMC {symbol}: {e}")

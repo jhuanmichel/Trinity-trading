@@ -155,6 +155,8 @@ async def startup_event():
     asyncio.create_task(_altcoin_scan_loop())
     # Outcome Tracker — verifica pendentes a cada 15 min
     asyncio.create_task(_outcome_check_loop())
+    # News Sentinel — monitoramento de notícias macro a cada 2 min
+    asyncio.create_task(_news_sentinel_loop())
 
 
 async def _run_analysis_bg(force: bool = False):
@@ -452,6 +454,22 @@ async def _outcome_check_loop():
         await asyncio.sleep(900)   # 15 minutos
 
 
+async def _news_sentinel_loop():
+    """Loop de monitoramento de notícias — ciclo a cada 2 min (tier1 sempre)."""
+    import logging as _log
+    _nlog = _log.getLogger("news_sentinel")
+    await asyncio.sleep(90)   # offset para não competir com startup
+    while True:
+        try:
+            import sys as _sys
+            _sys.path.insert(0, str(BASE_DIR))
+            from news_sentinel import get_sentinel as _get_sentinel
+            await asyncio.to_thread(_get_sentinel().run_cycle)
+        except Exception as _e:
+            _nlog.error(f"[NEWS] Erro no loop: {_e}")
+        await asyncio.sleep(120)   # 2 minutos
+
+
 async def _altcoin_scan_loop():
     """Roda o altcoin scanner a cada 5 min em background."""
     import logging as _log
@@ -603,6 +621,71 @@ def get_seasonality_status():
             "top_combinations": [],
             "error":            str(e),
         })
+
+
+@app.get("/api/news-status")
+def get_news_status():
+    """
+    Estado atual do News Sentinel — sentimento macro, lock ativo e últimas notícias.
+    Campos: locked_until, lock_reason, current_sentiment, sentiment_score_adj,
+            multiplier, last_high_impact, last_checked, active_news (últimas 5).
+    """
+    try:
+        import sys as _sys
+        _sys.path.insert(0, str(BASE_DIR))
+        from news_sentinel import get_sentinel as _get_ns
+        _ns    = _get_ns()
+        _state = _ns.state_snapshot
+        return JSONResponse(content={
+            "locked":              _ns.is_locked(),
+            "locked_until":        _state.get("locked_until"),
+            "lock_reason":         _state.get("lock_reason"),
+            "current_sentiment":   _state.get("current_sentiment", "NEUTRAL"),
+            "sentiment_score_adj": _state.get("sentiment_score_adj", 0.0),
+            "multiplier":          _ns.get_score_multiplier(),
+            "last_high_impact":    _state.get("last_high_impact"),
+            "last_checked":        _state.get("last_checked"),
+            "active_news":         (_state.get("active_news") or [])[:5],
+        })
+    except Exception as e:
+        return JSONResponse(content={
+            "locked":            False,
+            "current_sentiment": "NEUTRAL",
+            "multiplier":        1.0,
+            "error":             str(e),
+        })
+
+
+@app.get("/api/news-feed")
+def get_news_feed():
+    """
+    Últimas 20 notícias HIGH e MEDIUM dos logs diários do News Sentinel.
+    Retorna lista ordenada por timestamp desc.
+    """
+    import glob as _glob
+    results = []
+    try:
+        files = sorted(
+            _glob.glob(str(LOGS_DIR / "news_*.jsonl")), reverse=True
+        )[:3]  # últimos 3 dias
+        for filepath in files:
+            try:
+                with open(filepath) as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        entry = json.loads(line)
+                        if entry.get("magnitude") in ("HIGH", "MEDIUM"):
+                            results.append(entry)
+            except Exception:
+                continue
+        # Ordena por timestamp desc e limita a 20
+        results.sort(key=lambda x: x.get("ts", ""), reverse=True)
+        results = results[:20]
+    except Exception as e:
+        return JSONResponse(content={"error": str(e), "items": []})
+    return JSONResponse(content={"items": results, "total": len(results)})
 
 
 @app.get("/api/optimization-report")

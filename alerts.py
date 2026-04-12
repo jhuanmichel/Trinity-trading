@@ -186,6 +186,7 @@ def send_institutional_signal(
     neural_data:    dict = None,
     funding_score:  int = None,
     seasonal_data:  dict = None,
+    news_context:   str = None,
 ) -> bool:
     """
     Envia alerta institucional no formato Smart Money com todos os detalhes das 7 camadas.
@@ -254,6 +255,8 @@ def send_institutional_signal(
                 f"({_mul.get('day_label', '')} · {_mul.get('hour_label', '')})"
             )
 
+    news_line = f"\n📰 {news_context}" if news_context else ""
+
     now = datetime.now().strftime("%d/%m %H:%M")
 
     msg = f"""
@@ -267,7 +270,7 @@ def send_institutional_signal(
 🏆 Score: <b>{score}/100</b>
 💡 Confiança: <b>{confidence_pct}%</b>
 ⚡ Força: <b>{strength_label}</b>
-🔗 Confluências: <b>{confluences}/6 camadas</b>{funding_line}{seasonal_line}
+🔗 Confluências: <b>{confluences}/6 camadas</b>{funding_line}{seasonal_line}{news_line}
 {mtf_line}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>📐 NÍVEIS DE TRADE:</b>

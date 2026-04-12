@@ -100,6 +100,37 @@ body {
   gap: 24px;
 }
 
+/* ── Macro Indicator (News Sentinel) ─────────────────────���───── */
+.macro-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+}
+.macro-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: background 0.4s, box-shadow 0.4s;
+}
+.macro-dot.neutral  { background: var(--text-dim); box-shadow: none; }
+.macro-dot.bearish  { background: var(--red);   box-shadow: 0 0 8px var(--red); }
+.macro-dot.bullish  { background: var(--green); box-shadow: 0 0 10px var(--green); animation: pulse 2.5s ease-in-out infinite; }
+.macro-dot.locked   { background: var(--red);   box-shadow: 0 0 12px var(--red); animation: pulse 1.2s ease-in-out infinite; }
+.macro-text {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  white-space: nowrap;
+  transition: color 0.4s;
+}
+.macro-text.bearish { color: var(--red); }
+.macro-text.bullish { color: var(--green); }
+.macro-text.locked  { color: var(--red); }
+
 .live-indicator {
   display: flex;
   align-items: center;

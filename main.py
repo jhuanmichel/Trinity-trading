@@ -902,6 +902,40 @@ def run_institutional_analysis():
         )
         log.info("💾 Estado salvo no dashboard.")
 
+        # ── News Sentinel (F3) — verifica clearance macro antes do Telegram ──
+        _news_clearance  = {"cleared": True, "multiplier": 1.0, "context": None, "locked_until": None}
+        _macro_context   = None
+        trinity_score_n  = trinity_score_s   # score final = seasonal × news
+        try:
+            from news_sentinel import get_sentinel as _get_sentinel
+            _news_clearance = _get_sentinel().check_signal_clearance(direction, trinity_score_s)
+            if not _news_clearance["cleared"]:
+                log.info(
+                    f"[NEWS] 🔒 Sinal bloqueado por macro_lock "
+                    f"até {_news_clearance['locked_until']} — não enviado ao Telegram"
+                )
+                alerts.send_status_update(
+                    price          = price,
+                    trinity_score  = trinity_score,
+                    neural_data    = neural_data,
+                    inst_data      = inst,
+                    pressure_data  = pressure_data,
+                    direction_data = direction_data,
+                    blocked_reason = "macro_lock",
+                    struct         = struct,
+                )
+                return
+            # Aplicar multiplicador macro ao score_final
+            _news_mult = _news_clearance["multiplier"]
+            trinity_score_n = round(trinity_score_s * _news_mult, 1)
+            if abs(_news_mult - 1.0) >= 0.05:
+                log.info(
+                    f"   📰 News multiplier: ×{_news_mult} → {trinity_score_s} → {trinity_score_n}"
+                )
+            _macro_context = _news_clearance.get("context")
+        except Exception as _news_e:
+            log.warning(f"[NEWS] Falha no check_signal_clearance (fail-open): {_news_e}")
+
         alerts.send_institutional_signal(
             price            = price,
             symbol           = SYMBOL,
@@ -930,6 +964,7 @@ def run_institutional_analysis():
             neural_data      = neural_data,
             funding_score    = funding_score,
             seasonal_data    = _seasonal_result_btc,
+            news_context     = _macro_context,
         )
         log.info("✅ Sinal institucional enviado ao Telegram.\n")
 
