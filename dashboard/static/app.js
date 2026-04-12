@@ -1827,8 +1827,9 @@ async function updateWinRate() {
     const avW    = d.avg_score_wins;
     const avL    = d.avg_score_losses;
     const bestD  = d.best_direction;
-    const high   = d.by_conviction?.HIGH;
-    const med    = d.by_conviction?.MEDIUM;
+    const high   = d.by_conviction_tier?.HIGH;
+    const med    = d.by_conviction_tier?.MEDIUM;
+    const optPrg = d.optimizer_progress ?? null;
 
     const fmtWR = v => v != null ? `${v.toFixed(1)}%` : '—';
     const fmtS  = v => v != null ? v.toFixed(1) : '—';
@@ -1869,16 +1870,19 @@ async function updateWinRate() {
       bdEl.className = 'perf-value ' + (bestD === 'LONG' ? 'bull' : bestD === 'SHORT' ? 'bear' : 'muted');
     }
 
-    const smEl = document.getElementById('pmSamples');
-    if (smEl) { smEl.textContent = `${total} / 30`; }
+    // Barra de progresso — prefere optimizer_progress se disponível
+    const opCollected = optPrg?.samples_collected ?? (wins + losses);
+    const opNeeded    = optPrg?.samples_needed    ?? 30;
+    const opPct       = optPrg?.pct_complete      ?? Math.min((wins + losses) / 30 * 100, 100);
+    const opReady     = optPrg?.ready             ?? false;
 
-    // Barra de progresso (meta: 30 amostras WIN+LOSS)
-    const usable = wins + losses;
-    const pct    = Math.min(usable / 30 * 100, 100);
-    const pBar   = document.getElementById('perfProgressBar');
-    const pTxt   = document.getElementById('perfProgressTxt');
-    if (pBar) pBar.style.width = pct.toFixed(1) + '%';
-    if (pTxt) pTxt.textContent = `${usable} / 30`;
+    const smEl = document.getElementById('pmSamples');
+    if (smEl) { smEl.textContent = `${opCollected} / ${opNeeded}`; }
+
+    const pBar = document.getElementById('perfProgressBar');
+    const pTxt = document.getElementById('perfProgressTxt');
+    if (pBar) pBar.style.width = opPct.toFixed ? opPct.toFixed(1) + '%' : opPct + '%';
+    if (pTxt) pTxt.textContent = `${opCollected} / ${opNeeded}`;
 
     const sub = document.getElementById('perfSubtitle');
     if (sub && d.updated_at) {

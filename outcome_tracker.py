@@ -23,6 +23,7 @@ WIN_RATE_FILE    = Path("dashboard/win_rate.json")
 MEXC_KLINES_URL  = "https://api.mexc.com/api/v3/klines"
 CHECK_AFTER_H    = [4, 24, 48]   # checkpoints em horas após o sinal
 EXPIRY_HOURS     = 48            # horas até expirar automaticamente
+MIN_SAMPLES_DISPLAY = 5         # mínimo de amostras WIN+LOSS para exibir win_rate
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
 _instance: Optional["OutcomeTracker"] = None
@@ -39,14 +40,16 @@ def get_tracker() -> "OutcomeTracker":
 class OutcomeTracker:
     """Registra e verifica outcomes de sinais SMC institucionais."""
 
-    def register_signal(self, signal: dict) -> str:
+    def register_signal(self, signal: dict) -> Optional[str]:
         """
         Salva sinal em pending_outcomes.jsonl.
-        Retorna signal_id gerado.
+        Retorna signal_id gerado, ou None se direction for NO_TRADE/NEUTRO.
         signal deve conter: direction, score, entry_price, stop_loss,
         tp1, tp2, symbol, timestamp (ISO 8601).
         Adiciona campo 'signal_id' (uuid4) e 'registered_at'.
         """
+        if signal.get("direction") in ("NO_TRADE", "NEUTRO"):
+            return None
         signal_id = str(uuid.uuid4())
         entry = {
             "signal_id":      signal_id,
@@ -293,28 +296,35 @@ class OutcomeTracker:
             best_dir = self._best_direction(outcomes)
 
             # Breakdown por conviction_tier
-            by_conviction: dict = {}
+            by_conviction_tier: dict = {}
             for tier in ("HIGH", "MEDIUM"):
                 tier_outs   = [o for o in outcomes if o.get("conviction_tier") == tier]
                 tier_wins   = sum(1 for o in tier_outs if o.get("status") == "WIN")
                 tier_losses = sum(1 for o in tier_outs if o.get("status") == "LOSS")
                 tier_wl     = tier_wins + tier_losses
-                by_conviction[tier] = {
+                by_conviction_tier[tier] = {
                     "win_rate_pct": round(tier_wins / tier_wl * 100, 1) if tier_wl >= 3 else None,
                     "count": len(tier_outs),
                 }
 
             cache = {
-                "updated_at":       datetime.now(timezone.utc).isoformat(),
-                "total_signals":    total,
-                "wins":             n_wins,
-                "losses":           n_loss,
-                "neutral":          n_neut,
-                "win_rate_pct":     wr,
-                "avg_score_wins":   avg_score_wins,
-                "avg_score_losses": avg_score_losses,
-                "best_direction":   best_dir,
-                "by_conviction":    by_conviction,
+                "updated_at":         datetime.now(timezone.utc).isoformat(),
+                "total_signals":      total,
+                "wins":               n_wins,
+                "losses":             n_loss,
+                "neutral":            n_neut,
+                "win_rate_pct":       wr,
+                "win_rate_display":   f"{wr:.1f}%" if wr is not None else "Dados insuficientes",
+                "avg_score_wins":     avg_score_wins,
+                "avg_score_losses":   avg_score_losses,
+                "best_direction":     best_dir,
+                "by_conviction_tier": by_conviction_tier,
+                "optimizer_progress": {
+                    "samples_collected": usable,
+                    "samples_needed":    30,
+                    "pct_complete":      round(min(usable / 30 * 100, 100)),
+                    "ready":             usable >= 30,
+                },
             }
 
             WIN_RATE_FILE.parent.mkdir(exist_ok=True)
@@ -368,18 +378,25 @@ class OutcomeTracker:
                 pass
         # Cria arquivo inicial zerado
         empty = {
-            "updated_at":       datetime.now(timezone.utc).isoformat(),
-            "total_signals":    0,
-            "wins":             0,
-            "losses":           0,
-            "neutral":          0,
-            "win_rate_pct":     None,
-            "avg_score_wins":   None,
-            "avg_score_losses": None,
-            "best_direction":   None,
-            "by_conviction": {
+            "updated_at":         datetime.now(timezone.utc).isoformat(),
+            "total_signals":      0,
+            "wins":               0,
+            "losses":             0,
+            "neutral":            0,
+            "win_rate_pct":       None,
+            "win_rate_display":   "Dados insuficientes",
+            "avg_score_wins":     None,
+            "avg_score_losses":   None,
+            "best_direction":     None,
+            "by_conviction_tier": {
                 "HIGH":   {"win_rate_pct": None, "count": 0},
                 "MEDIUM": {"win_rate_pct": None, "count": 0},
+            },
+            "optimizer_progress": {
+                "samples_collected": 0,
+                "samples_needed":    30,
+                "pct_complete":      0,
+                "ready":             False,
             },
         }
         try:

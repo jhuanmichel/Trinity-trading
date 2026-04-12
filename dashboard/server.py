@@ -541,8 +541,9 @@ def get_pump_scan():
 def get_win_rate():
     """
     Métricas de acerto real do bot — geradas automaticamente pelo OutcomeTracker.
-    Campos: total_signals, wins, losses, neutral, win_rate_pct, avg_score_wins,
-            avg_score_losses, best_direction, by_conviction.
+    Campos: total_signals, wins, losses, neutral, win_rate_pct, win_rate_display,
+            avg_score_wins, avg_score_losses, best_direction,
+            by_conviction_tier, optimizer_progress.
     """
     if WIN_RATE_FILE.exists():
         try:
@@ -552,11 +553,17 @@ def get_win_rate():
     # Nunca gerado ainda — retorna estrutura vazia
     return JSONResponse(content={
         "updated_at": None, "total_signals": 0, "wins": 0, "losses": 0,
-        "neutral": 0, "win_rate_pct": None, "avg_score_wins": None,
-        "avg_score_losses": None, "best_direction": None,
-        "by_conviction": {
+        "neutral": 0, "win_rate_pct": None, "win_rate_display": "Dados insuficientes",
+        "avg_score_wins": None, "avg_score_losses": None, "best_direction": None,
+        "by_conviction_tier": {
             "HIGH":   {"win_rate_pct": None, "count": 0},
             "MEDIUM": {"win_rate_pct": None, "count": 0},
+        },
+        "optimizer_progress": {
+            "samples_collected": 0,
+            "samples_needed":    30,
+            "pct_complete":      0,
+            "ready":             False,
         },
     })
 

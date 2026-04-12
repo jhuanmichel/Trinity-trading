@@ -430,6 +430,27 @@ def run_altcoin_scan() -> dict:
 
     candidates.sort(key=sort_key, reverse=True)
 
+    # ── OutcomeTracker: registra sinais aprovados LONG/SHORT ──────────────────
+    try:
+        from outcome_tracker import get_tracker as _get_ot
+        _ot = _get_ot()
+        for _c in candidates:
+            if _c.get("direction") in ("LONG", "SHORT") and _c.get("entry"):
+                _sig = {
+                    "direction":      _c["direction"],
+                    "score":          _c["smc_score"],
+                    "entry_price":    _c["entry"],
+                    "stop_loss":      _c.get("stop"),
+                    "tp1":            _c.get("tp1"),
+                    "tp2":            _c.get("tp2"),
+                    "symbol":         _c["symbol"],   # ex: "LINK" → normalizado em _fetch_candles_since
+                    "timestamp":      datetime.now(timezone.utc).isoformat(),
+                    "conviction_tier": _c.get("conviction", "MEDIUM"),
+                }
+                _ot.register_signal(_sig)
+    except Exception as _ot_err:
+        log.warning(f"[altcoin_scanner] OutcomeTracker register falhou: {_ot_err}")
+
     result = {
         "scan_ts":         datetime.now(timezone.utc).isoformat(),
         "coins_scanned":   raw_count,
