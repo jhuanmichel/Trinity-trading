@@ -121,9 +121,19 @@ class QuickTriageScanner:
     MIN_VOLUME_USD    = 300_000   # excluir sem liquidez mínima
     ANOMALY_THRESHOLD = 12        # score mínimo para passar ao Estágio 2
 
+    # Ações sintéticas, ETFs e commodities — excluídos por não serem crypto spot/perp
+    EXCLUDED_KEYWORDS = [
+        "STOCK", "ETF", "US30", "ALUMINUM", "COPPER", "GOLD", "SILVER",
+        "USOIL", "UKOIL", "XAUT", "XAGUSD",
+    ]
+
     def __init__(self, memory: MarketMemory):
         self.memory      = memory
         self._last_total = 0   # total de contratos examinados no último run()
+
+    def _is_synthetic(self, symbol: str) -> bool:
+        """True se o símbolo é stock sintética, ETF ou commodity — deve ser excluído."""
+        return any(kw in symbol for kw in self.EXCLUDED_KEYWORDS)
 
     def get_active_symbols(self) -> list:
         """
@@ -229,6 +239,8 @@ class QuickTriageScanner:
 
         candidates = []
         for symbol in symbol_set:
+            if self._is_synthetic(symbol):
+                continue
             ticker = tickers.get(symbol)
             if not ticker:
                 continue
@@ -257,10 +269,16 @@ class QuickTriageScanner:
 
 class FundingExtremeDetector:
     """
-    D1 — Funding extremo.
-    Fonte: ticker['fundingRate'] — sem request extra.
+    D1 — Funding extremo com contexto r30/r7.
+    Fonte: ticker['fundingRate'] + ticker['riseFallRates'] — sem request extra.
+
     fr < 0 = shorts sobrecarregados = pump iminente
     fr > 0 = longs sobrecarregados  = crash iminente
+
+    Multiplicador de contexto (pump_score):
+      r30 < -0.20 + funding negativo → squeeze clássico       → ×1.3
+      r30 > +0.50 + funding negativo → rally estrutural, não squeeze → ×0.6
+      demais                                                   → ×1.0
     """
 
     def detect(self, ticker: dict, **_) -> dict:
@@ -268,6 +286,11 @@ class FundingExtremeDetector:
             fr  = float(ticker.get("fundingRate", 0) or 0)
             afr = abs(fr)
 
+            rates = ticker.get("riseFallRates") or {}
+            r30   = float(rates.get("r30") or 0)
+            r7    = float(rates.get("r7")  or 0)
+
+            # score base (0–25)
             if   fr < -0.008: pump_score  = 25
             elif fr < -0.005: pump_score  = 18
             elif fr < -0.003: pump_score  = 12
@@ -280,10 +303,26 @@ class FundingExtremeDetector:
             elif fr >  0.001: crash_score = 5
             else:             crash_score = 0
 
+            # multiplicador de contexto para pump_score
+            if r30 < -0.20 and fr < -0.003:
+                context_mult = 1.3   # caiu muito + shorts excessivos = squeeze clássico
+            elif r30 > 0.50 and fr < -0.003:
+                context_mult = 0.6   # já subiu muito + funding negativo = estrutural
+            else:
+                context_mult = 1.0
+
+            pump_score = min(25, round(pump_score * context_mult))
+
             return {
                 "pump":    pump_score,
                 "crash":   crash_score,
-                "details": {"funding_rate": fr, "extreme": afr > 0.003},
+                "details": {
+                    "funding_rate":   fr,
+                    "extreme":        afr > 0.003,
+                    "r30":            r30,
+                    "r7":             r7,
+                    "context_mult":   context_mult,
+                },
             }
         except Exception as e:
             return {"pump": 0, "crash": 0, "details": {"error": str(e)}}
