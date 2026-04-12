@@ -736,6 +736,25 @@ def run_institutional_analysis():
             f"neural({neural_val:.1f})*0.20"
         )
 
+        # ── Seasonality Engine — aplica multiplicador antes dos thresholds ──
+        _seasonal_result_btc = None
+        trinity_score_s = trinity_score   # score para threshold (ajustado sazonalmente)
+        try:
+            from seasonality_engine import get_seasonality_engine as _get_sea_btc
+            _sea_res_btc     = _get_sea_btc().apply_to_score(trinity_score)
+            trinity_score_s  = _sea_res_btc["score_adjusted"]
+            _seasonal_result_btc = _sea_res_btc
+            _sea_adj = _sea_res_btc["adjustment_pct"]
+            if abs(_sea_adj) >= 10:
+                log.info(
+                    f"   🌐 Sazonalidade: {_sea_adj:+.1f}% "
+                    f"({_sea_res_btc['multiplier']['day_label']} · "
+                    f"{_sea_res_btc['multiplier']['hour_label']}) "
+                    f"→ {trinity_score} → {trinity_score_s}"
+                )
+        except Exception as _sea_e:
+            log.warning(f"[SEASONALITY] Falha ao aplicar multiplicador: {_sea_e}")
+
         # Filtro IPM (Cap. 4): se pressão < 40, entra no Invincible Mode
         # mas ainda salva estado para o dashboard
         ipm_blocked  = valid and not ipm_ok and not lateral
@@ -746,7 +765,7 @@ def run_institutional_analysis():
         )
 
         # ── Invincible Mode ────────────────────────────────────────────────
-        if not valid or lateral or (trinity_score < INST_SCORE_THRESHOLD):
+        if not valid or lateral or (trinity_score_s < INST_SCORE_THRESHOLD):
             # Mesmo sem sinal, salva estado para o dashboard exibir
             atr_ns = regime_data.get("atr", price * 0.005)
             e_ns, s_ns, t1_ns, t2_ns, t3_ns = _calc_levels(price, inst.get("direction", "LONG"), atr_ns)
@@ -831,7 +850,7 @@ def run_institutional_analysis():
         conviction_tier = "BLOCKED"
         try:
             _hcf        = _get_hcf()
-            _hcf_signal = {"direction": direction, "score": trinity_score}
+            _hcf_signal = {"direction": direction, "score": trinity_score_s}
             _hcf_eval   = _hcf.evaluate(_hcf_signal, smc_signal or {})
             conviction_tier = _hcf_eval.get("conviction_tier", "BLOCKED")
             log.info(
@@ -910,6 +929,7 @@ def run_institutional_analysis():
             direction_data   = direction_data,
             neural_data      = neural_data,
             funding_score    = funding_score,
+            seasonal_data    = _seasonal_result_btc,
         )
         log.info("✅ Sinal institucional enviado ao Telegram.\n")
 

@@ -10,6 +10,27 @@ import logging
 log = logging.getLogger(__name__)
 
 
+def run_seasonality_recalc():
+    """Recalcula dados sazonais (roda mensalmente). Atualiza singleton em memória."""
+    try:
+        import subprocess
+        log.info("[SEASONALITY] Iniciando recalculo mensal de dados sazonais...")
+        result = subprocess.run(
+            ["python", "scripts/calculate_seasonality.py"],
+            timeout=300,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            from seasonality_engine import get_seasonality_engine
+            get_seasonality_engine().reload()
+            log.info("[SEASONALITY] Dados sazonais atualizados com sucesso")
+        else:
+            log.error(f"[SEASONALITY] Script retornou erro: {result.stderr[:200]}")
+    except Exception as e:
+        log.error(f"[SEASONALITY] Erro no recalculo mensal: {e}")
+
+
 def _run_scheduler():
     import schedule
     from main import run_analysis_summary, run_analysis_signal, run_institutional_analysis, run_pump_radar
@@ -22,6 +43,8 @@ def _run_scheduler():
     schedule.every(30).minutes.do(run_pump_radar)
     # Relatório de otimização de pesos — gerado uma vez por dia às 00:05 UTC
     schedule.every().day.at("00:05").do(run_optimization_report)
+    # Recalculo mensal de sazonalidade (dados históricos Binance)
+    schedule.every(30).days.do(run_seasonality_recalc)
 
     log.info("Bot scheduler iniciado.")
     run_institutional_analysis()   # roda imediatamente ao subir

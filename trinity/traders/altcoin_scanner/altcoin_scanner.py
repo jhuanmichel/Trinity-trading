@@ -210,10 +210,21 @@ def _quick_smc(df: pd.DataFrame, symbol: str, btc_bias: str = "NEUTRO") -> Optio
         bias      = ms.get("bias", "NEUTRO")
         structure = ms.get("structure", "?")
 
-        # Direção baseada no score e bias
-        if   score >= 60 and bias == "BULLISH": direction = "LONG"
-        elif score <= 40 and bias == "BEARISH": direction = "SHORT"
-        else:                                    direction = "NEUTRO"
+        # ── Seasonality — ajusta score antes dos thresholds ────────────────
+        _seasonal_result_alt = None
+        score_s = score   # score para threshold (ajustado sazonalmente)
+        try:
+            from seasonality_engine import get_seasonality_engine as _get_sea_alt
+            _sea_res_alt         = _get_sea_alt().apply_to_score(score)
+            score_s              = _sea_res_alt["score_adjusted"]
+            _seasonal_result_alt = _sea_res_alt
+        except Exception as _sea_alt_e:
+            log.debug(f"[SEASONALITY] Falha no scanner: {_sea_alt_e}")
+
+        # Direção baseada no score sazonal ajustado e bias
+        if   score_s >= 60 and bias == "BULLISH": direction = "LONG"
+        elif score_s <= 40 and bias == "BEARISH": direction = "SHORT"
+        else:                                      direction = "NEUTRO"
 
         # ── C1: Validação estrutural obrigatória ───────────────────────────
         filtered_reason = None
@@ -271,14 +282,14 @@ def _quick_smc(df: pd.DataFrame, symbol: str, btc_bias: str = "NEUTRO") -> Optio
             ms
         )
 
-        # ── C2: should_alert — C1 passou E score >= telegram ──────────────
+        # ── C2: should_alert — C1 passou E score_s >= telegram ────────────
         should_alert = (
             direction in ("LONG", "SHORT")
-            and score >= SCORE_THRESHOLDS["telegram"]
+            and score_s >= SCORE_THRESHOLDS["telegram"]
         )
         score_zone = (
-            "signal"      if score >= SCORE_THRESHOLDS["telegram"]
-            else "watch"  if score >= SCORE_THRESHOLDS["display"]
+            "signal"      if score_s >= SCORE_THRESHOLDS["telegram"]
+            else "watch"  if score_s >= SCORE_THRESHOLDS["display"]
             else "noise"
         )
 
@@ -323,6 +334,13 @@ def _quick_smc(df: pd.DataFrame, symbol: str, btc_bias: str = "NEUTRO") -> Optio
             # score_raw preserva o valor original para logs e cálculos internos
             "display_score": None if filtered_reason in ("no_structural_confirmation", "out_of_session") else round(score, 1),
             "score_raw":    round(score, 1),
+            # Seasonality: score ajustado sazonalmente e contexto
+            "score_seasonal":   round(score_s, 1),
+            "seasonal_context": (
+                _seasonal_result_alt["multiplier"]["context"]
+                if _seasonal_result_alt and _seasonal_result_alt["multiplier"]["data_available"]
+                else None
+            ),
             "direction":    direction,
             "bias":         bias,
             "structure":    structure,
@@ -401,8 +419,9 @@ def run_altcoin_scan() -> dict:
         result = _quick_smc(df, sym, btc_bias=btc_bias)
         if result:
             raw_count += 1
-            # C2: oculta ruído — score abaixo de display threshold não vai ao dashboard
-            if result["smc_score"] < SCORE_THRESHOLDS["display"]:
+            # C2: oculta ruído — score sazonal abaixo de display threshold não vai ao dashboard
+            _display_score_check = result.get("score_seasonal", result["smc_score"])
+            if _display_score_check < SCORE_THRESHOLDS["display"]:
                 log.debug(
                     f"[altcoin_scanner] {sym}: score={result['smc_score']} < {SCORE_THRESHOLDS['display']} "
                     f"— descartado (ruído)"

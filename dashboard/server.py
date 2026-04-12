@@ -575,6 +575,36 @@ def get_win_rate():
     })
 
 
+@app.get("/api/seasonality-status")
+def get_seasonality_status():
+    """
+    Estado atual do Seasonality Engine — multiplicadores para agora (UTC).
+    Campos: current, data_available, generated_at, top_combinations.
+    """
+    try:
+        from seasonality_engine import get_seasonality_engine as _get_sea
+        _sea = _get_sea()
+        return JSONResponse(content={
+            "current":          _sea.get_multiplier(),
+            "data_available":   _sea.data_available,
+            "generated_at":     _sea.generated_at,
+            "top_combinations": _sea.top_combinations,
+        })
+    except Exception as e:
+        return JSONResponse(content={
+            "current": {
+                "day_multiplier": 1.0, "hour_multiplier": 1.0,
+                "combined_multiplier": 1.0, "day_label": "—",
+                "hour_label": "—", "context": "Dados não disponíveis",
+                "data_available": False,
+            },
+            "data_available":   False,
+            "generated_at":     None,
+            "top_combinations": [],
+            "error":            str(e),
+        })
+
+
 @app.get("/api/optimization-report")
 def get_optimization_report():
     """

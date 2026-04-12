@@ -1767,6 +1767,10 @@ function openAltModal(symbol) {
       ${metricRow('Order Blocks', coin.ob_count ?? 0)}
       ${metricRow('FVGs', coin.fvg_count || 0)}
       ${metricRow('Convicção', `${(coin.conviction || 0).toFixed(1)} pts`)}
+      ${coin.seasonal_context
+        ? metricRow('Contexto sazonal',
+            `<span style="font-size:10px;color:var(--text-dim)">${coin.seasonal_context}</span>`)
+        : ''}
     </div>
 
     <!-- Níveis — só para sinais aprovados por C1 -->
