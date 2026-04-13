@@ -224,8 +224,9 @@ class QuickTriageScanner:
     Filtra 300–850 contratos para 20–50 candidatos em < 30s
     usando apenas o endpoint de ticker (retorna todos em um único request).
     """
-    MIN_VOLUME_USD    = 300_000   # excluir sem liquidez mínima
-    ANOMALY_THRESHOLD = 12        # score mínimo para passar ao Estágio 2
+    MIN_VOLUME_USD          = 300_000  # excluir sem liquidez mínima
+    PUMP_ANOMALY_THRESHOLD  = 12       # score mínimo para PUMP (funding dominante)
+    CRASH_ANOMALY_THRESHOLD = 8        # threshold reduzido: crashes têm funding neutral
 
     # Ações sintéticas, ETFs e commodities — excluídos por não serem crypto spot/perp
     EXCLUDED_KEYWORDS = [
@@ -281,7 +282,8 @@ class QuickTriageScanner:
 
     def _anomaly_score(self, ticker: dict, symbol: str) -> dict:
         """
-        Score rápido 0–36 usando apenas campos do ticker.
+        Score rápido 0–40 usando apenas campos do ticker.
+        funding(0–12) + volume(0–12) + price(0–16, com bônus r7) = máx 40.
         Sem requests extras.
         """
         try:
@@ -308,16 +310,30 @@ class QuickTriageScanner:
                 # sem histórico: usar variação de preço como proxy
                 volume_score = 6 if abs(rfr) > 0.08 else 0
 
-            # price_score (0–12)
-            if   abs(rfr) > 0.20: price_score = 12
-            elif abs(rfr) > 0.10: price_score = 8
-            elif abs(rfr) > 0.04: price_score = 4
-            else:                 price_score  = 0
+            # price_score (0–16) — ajuste 1: captura movimentos extremos
+            abs_change = abs(rfr)
+            if   abs_change > 0.50: price_score = 16
+            elif abs_change > 0.30: price_score = 14
+            elif abs_change > 0.20: price_score = 12
+            elif abs_change > 0.10: price_score = 8
+            elif abs_change > 0.04: price_score = 4
+            else:                   price_score = 0
 
-            # direction_hint
-            if   fr < -0.002: direction_hint = "PUMP"    # shorts excessivos
-            elif fr >  0.002: direction_hint = "CRASH"   # longs excessivos
-            else:             direction_hint = "UNKNOWN"
+            # ajuste 2: bônus r7 — movimento semanal sustentado confirma anomalia extrema
+            rates = ticker.get("riseFallRates") or {}
+            r7    = float(rates.get("r7") or 0)
+            if abs_change > 0.30 and abs(r7) > 1.0:
+                price_score = min(price_score + 4, 16)
+
+            # direction_hint — ajuste 2: r7 refina CRASH por overextension semanal
+            if fr < -0.002:
+                direction_hint = "PUMP"    # shorts excessivos → pressão compradora
+            elif fr > 0.002:
+                direction_hint = "CRASH"   # longs excessivos → risco de liquidação
+            elif rfr > 0.30 and (r7 > 1.0 or r7 < -0.50):
+                direction_hint = "CRASH"   # overextension semanal com spike diário
+            else:
+                direction_hint = "UNKNOWN"
 
             return {
                 "anomaly_score":  funding_score + volume_score + price_score,
@@ -360,7 +376,11 @@ class QuickTriageScanner:
             if vol_usd < self.MIN_VOLUME_USD:
                 continue
             anomaly = self._anomaly_score(ticker, symbol)
-            if anomaly["anomaly_score"] < self.ANOMALY_THRESHOLD:
+            # ajuste 3: threshold diferenciado por direção
+            threshold = (self.CRASH_ANOMALY_THRESHOLD
+                         if anomaly["direction_hint"] == "CRASH"
+                         else self.PUMP_ANOMALY_THRESHOLD)
+            if anomaly["anomaly_score"] < threshold:
                 continue
             candidates.append({"symbol": symbol, "ticker": ticker, "anomaly": anomaly})
 
