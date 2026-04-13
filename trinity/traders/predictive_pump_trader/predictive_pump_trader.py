@@ -45,8 +45,8 @@ log = logging.getLogger(__name__)
 # ── Config ────────────────────────────────────────────────────────────────────
 SCAN_INTERVAL_S    = 60
 TOP_RESULTS        = 5         # top N oportunidades institucionais
-OPP_THRESHOLD      = 55        # opportunity_score mínimo para incluir (calibrado Gate.io)
-ALERT_THRESHOLD    = 55        # opp_score mínimo para alerta Telegram
+OPP_THRESHOLD      = 30        # opportunity_score mínimo para incluir
+ALERT_THRESHOLD    = 30        # opp_score mínimo para alerta Telegram
 LAUNCH_THRESHOLD   = 80        # opp_score para alerta urgente
 BASE_DIR           = Path(__file__).parent.parent.parent.parent
 SCAN_OUTPUT_FILE   = BASE_DIR / "dashboard" / "pump_scan_latest.json"

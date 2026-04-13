@@ -171,6 +171,10 @@ def fetch_coin_data(symbol: str) -> Optional[dict]:
         funding_final = fund_multi if fund_multi is not None else funding_single
         spot_futures  = round(vol_futures / spot_vol, 2) if spot_vol > 0 else 1.0
 
+        # Pseudo L/S ratio via trades quando CoinGlass indisponível
+        if ls_ratio == 1.0 and trades:
+            ls_ratio = _derive_ls_from_trades(trades)
+
         # pct_change: riseFallRate é decimal (0.05 = +5%)
         pct_change = float(ticker.get("riseFallRate", 0)) * 100.0
 
@@ -580,3 +584,37 @@ def _estimate_oi_change(symbol: str, current_oi_usd: float) -> float:
         return 0.0
 
     return round((current_oi_usd - oldest_oi) / oldest_oi * 100, 2)
+
+
+def _derive_ls_from_trades(trades: list) -> float:
+    """
+    Deriva pseudo L/S ratio a partir do buy/sell volume dos trades recentes.
+    Só usado quando CoinGlass retorna fallback 1.0.
+
+    buy_vol / sell_vol ≈ proxy de long/short ratio.
+    Exemplos:
+      70% sell, 30% buy → 0.43 → short_heavy (squeeze fuel)
+      50/50             → 1.00 → neutro
+      30% sell, 70% buy → 2.33 → long_heavy
+    """
+    buy_vol  = 0.0
+    sell_vol = 0.0
+
+    for t in trades:
+        try:
+            qty   = float(t.get("q", 0))
+            price = float(t.get("p", 0))
+            usd   = qty * price
+            if t.get("m", False):   # m=True → sell
+                sell_vol += usd
+            else:
+                buy_vol  += usd
+        except (ValueError, TypeError):
+            continue
+
+    if sell_vol <= 0:
+        return 2.0  # sem sells → longs dominam totalmente
+
+    ratio = buy_vol / sell_vol
+    # Clamp entre 0.2 e 5.0 para evitar extremos por amostra pequena
+    return round(max(0.2, min(5.0, ratio)), 4)

@@ -55,8 +55,8 @@ ACTIONS = {
     "WATCH":    "Manter vigilância — sinais emergentes",
 }
 
-MIN_SCORE_VALID  = 50.0
-MIN_COMPONENTS   = 2      # mínimo de 2 componentes >= 12.5/25
+MIN_SCORE_VALID  = 30.0
+MIN_COMPONENTS   = 1      # mínimo de 1 componente >= 10/25
 
 
 def score_crash(
@@ -112,8 +112,8 @@ def score_crash(
         "volatility": round(vol_score, 1),
     }
 
-    components_above_half = sum(1 for v in component_scores.values() if v >= 12.5)
-    signal_valid = crash_score_val >= MIN_SCORE_VALID and components_above_half >= MIN_COMPONENTS
+    components_above_threshold = sum(1 for v in component_scores.values() if v >= 10.0)
+    signal_valid = crash_score_val >= MIN_SCORE_VALID and components_above_threshold >= MIN_COMPONENTS
 
     # ── Top sinais detectados ─────────────────────────────────────────────
     top_signals = _extract_top_signals(

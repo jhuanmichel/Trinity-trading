@@ -53,8 +53,8 @@ ACTIONS = {
     "WATCH":  "Acumulação silenciosa — observar próximas 15min",
 }
 
-MIN_SCORE_VALID  = 50.0
-MIN_COMPONENTS   = 2      # mínimo de 2 componentes >= 12.5/25
+MIN_SCORE_VALID  = 30.0
+MIN_COMPONENTS   = 1      # mínimo de 1 componente >= 10/25
 
 
 def score_pump(
@@ -110,8 +110,8 @@ def score_pump(
         "breakout":   round(breakout_score, 1),
     }
 
-    components_above_half = sum(1 for v in component_scores.values() if v >= 12.5)
-    signal_valid = pump_score >= MIN_SCORE_VALID and components_above_half >= MIN_COMPONENTS
+    components_above_threshold = sum(1 for v in component_scores.values() if v >= 10.0)
+    signal_valid = pump_score >= MIN_SCORE_VALID and components_above_threshold >= MIN_COMPONENTS
 
     # ── Preço alvo ────────────────────────────────────────────────────────
     pump_target = float(gravity_result.get("target_price", 0))
