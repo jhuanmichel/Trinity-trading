@@ -45,17 +45,17 @@ log = logging.getLogger(__name__)
 # ── Config ────────────────────────────────────────────────────────────────────
 SCAN_INTERVAL_S    = 60
 TOP_RESULTS        = 5         # top N oportunidades institucionais
-OPP_THRESHOLD      = 30        # opportunity_score mínimo para incluir
-ALERT_THRESHOLD    = 30        # opp_score mínimo para alerta Telegram
-LAUNCH_THRESHOLD   = 80        # opp_score para alerta urgente
+OPP_THRESHOLD      = 35        # mínimo para aparecer no dashboard
+ALERT_THRESHOLD    = 55        # mínimo para disparar alerta Telegram
+LAUNCH_THRESHOLD   = 75        # alerta urgente (cooldown reduzido)
 BASE_DIR           = Path(__file__).parent.parent.parent.parent
 SCAN_OUTPUT_FILE   = BASE_DIR / "dashboard" / "pump_scan_latest.json"
 
 _alert_cooldown:   dict = {}    # {symbol: last_alert_ts}
 _alert_last_score: dict = {}    # {symbol: último opportunity_score alertado}
 _alert_last_class: dict = {}    # {symbol: último move_classification alertado}
-ALERT_COOLDOWN_S    = 1800      # 30min entre alertas do mesmo símbolo
-LAUNCH_COOLDOWN_S   = 600       # 10min para alertas urgentes (score >= LAUNCH_THRESHOLD)
+ALERT_COOLDOWN_S    = 3600      # 60min entre alertas do mesmo símbolo
+LAUNCH_COOLDOWN_S   = 1800      # 30min para alertas urgentes (score >= LAUNCH_THRESHOLD)
 
 
 # ── Dataclass de resultado por coin ───────────────────────────────────────────
@@ -284,7 +284,7 @@ def run_pump_cycle() -> dict:
             last_cls   = _alert_last_class.get(symbol, "")
             last_score = _alert_last_score.get(symbol, 0.0)
             tier_up    = _tier_rank(cls) > _tier_rank(last_cls)
-            score_up   = (score - last_score) >= 8.0
+            score_up   = (score - last_score) >= 15.0
             if not tier_up and not score_up:
                 continue
 
@@ -387,11 +387,11 @@ async def _send_telegram_alerts(candidates: list):
         cooldown   = LAUNCH_COOLDOWN_S if score >= LAUNCH_THRESHOLD else ALERT_COOLDOWN_S
 
         if (now - last_alert) < cooldown:
-            # Dentro do cooldown: re-alerta só se tier subiu ou score saltou >= 8pts
+            # Dentro do cooldown: re-alerta só se tier subiu ou score saltou >= 15pts
             last_cls   = _alert_last_class.get(symbol, "")
             last_score = _alert_last_score.get(symbol, 0.0)
             tier_up    = _tier_rank(cls) > _tier_rank(last_cls)
-            score_up   = (score - last_score) >= 8.0
+            score_up   = (score - last_score) >= 15.0
             if not tier_up and not score_up:
                 continue
 

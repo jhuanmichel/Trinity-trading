@@ -47,9 +47,9 @@ log = logging.getLogger(__name__)
 # ── Config ────────────────────────────────────────────────────────────────────
 SCAN_INTERVAL_S      = 60       # ciclo de scan em segundos
 TOP_RESULTS          = 5        # top N oportunidades institucionais
-OPP_THRESHOLD        = 30       # opportunity_score mínimo para incluir
-ALERT_THRESHOLD      = 30       # opp_score mínimo para alerta Telegram
-CRITICAL_THRESHOLD   = 80       # opp_score para alerta crítico repetido
+OPP_THRESHOLD        = 35        # mínimo para aparecer no dashboard
+ALERT_THRESHOLD      = 55        # mínimo para disparar alerta Telegram
+CRITICAL_THRESHOLD   = 75        # alerta urgente (cooldown reduzido)
 BASE_DIR             = Path(__file__).parent.parent.parent.parent  # raiz do projeto
 SCAN_OUTPUT_FILE     = BASE_DIR / "dashboard" / "crash_scan_latest.json"
 
@@ -57,8 +57,8 @@ SCAN_OUTPUT_FILE     = BASE_DIR / "dashboard" / "crash_scan_latest.json"
 _alert_cooldown:   dict = {}    # {symbol: last_alert_ts}
 _alert_last_score: dict = {}    # {symbol: último opportunity_score alertado}
 _alert_last_class: dict = {}    # {symbol: último move_classification alertado}
-ALERT_COOLDOWN_S    = 1800      # 30min entre alertas do mesmo símbolo
-CRITICAL_COOLDOWN_S = 600       # 10min para alertas críticos (score >= CRITICAL_THRESHOLD)
+ALERT_COOLDOWN_S    = 3600      # 60min entre alertas do mesmo símbolo
+CRITICAL_COOLDOWN_S = 1800      # 30min para alertas urgentes (score >= CRITICAL_THRESHOLD)
 
 
 # ── Dataclass de resultado por coin ───────────────────────────────────────────
@@ -318,7 +318,7 @@ def run_crash_cycle() -> dict:
             last_cls   = _alert_last_class.get(symbol, "")
             last_score = _alert_last_score.get(symbol, 0.0)
             tier_up    = _tier_rank(cls) > _tier_rank(last_cls)
-            score_up   = (score - last_score) >= 8.0
+            score_up   = (score - last_score) >= 15.0
             if not tier_up and not score_up:
                 continue
 
@@ -426,11 +426,11 @@ async def _send_telegram_alerts(candidates: list):
         cooldown   = CRITICAL_COOLDOWN_S if score >= CRITICAL_THRESHOLD else ALERT_COOLDOWN_S
 
         if (now - last_alert) < cooldown:
-            # Dentro do cooldown: re-alerta só se tier subiu ou score saltou >= 8pts
+            # Dentro do cooldown: re-alerta só se tier subiu ou score saltou >= 15pts
             last_cls   = _alert_last_class.get(symbol, "")
             last_score = _alert_last_score.get(symbol, 0.0)
             tier_up    = _tier_rank(cls) > _tier_rank(last_cls)
-            score_up   = (score - last_score) >= 8.0
+            score_up   = (score - last_score) >= 15.0
             if not tier_up and not score_up:
                 continue
 
