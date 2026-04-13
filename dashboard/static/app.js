@@ -1841,6 +1841,168 @@ function closeAltModal(event) {
 }
 
 // ── Full Market Scanner Modal ─────────────────────────────────────────────────
+// ── FMS Modal: constrói o HTML institucional ──────────────────────────────
+function buildFmsModalHTML(item, dominantType) {
+  const isPump      = dominantType === 'PUMP';
+  const scoreVal    = isPump ? (item.pump_score || 0) : (item.crash_score || 0);
+  const price       = item.last_price || 0;
+  const fr          = item.funding_rate || 0;
+  const chg         = item.rise_fall || 0;
+  const dna         = item.dna || '—';
+  const levels      = item.levels || null;
+  const dets        = item.detectors || null;
+  const symbol      = item.symbol || '';
+
+  const accentColor = isPump ? 'var(--bull)' : 'var(--bear)';
+  const dirLabel    = isPump ? 'LONG' : 'SHORT';
+  const setupLabel  = isPump ? '🚀 PUMP SETUP' : '⚠️ CRASH SETUP';
+
+  const scoreColor  = scoreVal >= 72 ? '#00FF88' : scoreVal >= 60 ? '#00C864' : '#888888';
+  const frColor     = fr < -0.001 ? 'var(--bear)' : fr > 0.001 ? 'var(--bull)' : 'var(--text-muted)';
+  const frTxt       = (fr >= 0 ? '+' : '') + (fr * 100).toFixed(4) + '%';
+  const chgColor    = chg > 0 ? 'var(--bull)' : chg < 0 ? 'var(--bear)' : 'var(--text-muted)';
+  const chgTxt      = (chg >= 0 ? '+' : '') + (chg * 100).toFixed(2) + '%';
+
+  const pctRel = (base, target) => {
+    if (!base) return '0.00%';
+    const d = (target - base) / base * 100;
+    return (d >= 0 ? '+' : '') + d.toFixed(2) + '%';
+  };
+
+  // ROE estimado (20–60%)
+  const roe    = Math.min(Math.max(Math.round(30 + (scoreVal - 52) * 0.8), 20), 60);
+  const roeBar = `<div class="fms-roe-bar"><div class="fms-roe-fill" style="width:${roe}%;background:${accentColor}"></div></div>`;
+
+  // Liquidação estimada 5× ISO (~20% move)
+  const entryRef = levels ? levels.entry : price;
+  const liqPrice = isPump ? entryRef * 0.80 : entryRef * 1.20;
+
+  // ── Plano de entrada ────────────────────────────────────────────────────
+  const entryHtml = levels
+    ? `<div class="fms-plan-row"><span class="fms-plan-label">Plano A:</span><span class="fms-plan-value" style="color:var(--yellow)">$${_fmtAltPrice(levels.entry)}</span></div>
+       <div class="fms-plan-row"><span class="fms-plan-label">Plano B:</span><span class="fms-plan-value">Fechamento acima</span></div>
+       <div class="fms-plan-note">Move esperado: ~${(+(levels.expected_move ?? levels.move_pct ?? 0)).toFixed(1)}%</div>`
+    : `<div class="fms-plan-row" style="color:var(--text-muted);font-size:11px">Níveis indisponíveis</div>`;
+
+  // ── Colunas de níveis ───────────────────────────────────────────────────
+  let levelsHtml;
+  if (levels) {
+    const tp1Pct  = levels.tp1_pct  != null ? (+levels.tp1_pct).toFixed(2)  : pctRel(levels.entry, levels.tp1).replace(/^[+-]/,'');
+    const tp2Pct  = levels.tp2_pct  != null ? (+levels.tp2_pct).toFixed(2)  : pctRel(levels.entry, levels.tp2).replace(/^[+-]/,'');
+    const tp3Pct  = levels.tp3_pct  != null ? (+levels.tp3_pct).toFixed(2)  : pctRel(levels.entry, levels.tp3).replace(/^[+-]/,'');
+    const stopPct = levels.stop_pct != null ? (+levels.stop_pct).toFixed(2) : pctRel(levels.entry, levels.stop).replace('+','');
+    const prob    = levels.probability != null ? levels.probability : (levels.prob_pct != null ? levels.prob_pct : '—');
+    const move    = +(levels.expected_move ?? levels.move_pct ?? 0);
+
+    levelsHtml = `
+      <div class="fms-levels-col">
+        <div class="fms-levels-head" style="color:var(--bull)">ALVOS TÉCNICOS</div>
+        <div class="fms-level-row"><span class="fms-lv-label">TP1</span><span class="fms-lv-val" style="color:var(--bull)">$${_fmtAltPrice(levels.tp1)}</span><span class="fms-lv-pct">+${tp1Pct}%</span></div>
+        <div class="fms-level-row"><span class="fms-lv-label">TP2</span><span class="fms-lv-val" style="color:var(--bull)">$${_fmtAltPrice(levels.tp2)}</span><span class="fms-lv-pct">+${tp2Pct}%</span></div>
+        <div class="fms-level-row"><span class="fms-lv-label">TP3</span><span class="fms-lv-val" style="color:var(--bull)">$${_fmtAltPrice(levels.tp3)}</span><span class="fms-lv-pct">+${tp3Pct}%</span></div>
+      </div>
+      <div class="fms-levels-col">
+        <div class="fms-levels-head" style="color:var(--bear)">STOP LOSS</div>
+        <div class="fms-level-row"><span class="fms-lv-label">Preço</span><span class="fms-lv-val" style="color:var(--bear)">$${_fmtAltPrice(levels.stop)}</span></div>
+        <div class="fms-level-row"><span class="fms-lv-label">Distância</span><span class="fms-lv-val" style="color:var(--bear)">${stopPct}%</span></div>
+        <div class="fms-level-row"><span class="fms-lv-label">Move</span><span class="fms-lv-val">~${move.toFixed(1)}%</span></div>
+        <div class="fms-level-row"><span class="fms-lv-label">Prob.</span><span class="fms-lv-val" style="color:var(--green)">${prob}%</span></div>
+      </div>
+      <div class="fms-levels-col">
+        <div class="fms-levels-head" style="color:var(--yellow)">LIQUIDAÇÃO (5×)</div>
+        <div class="fms-level-row"><span class="fms-lv-label">Preço</span><span class="fms-lv-val" style="color:var(--yellow)">$${_fmtAltPrice(liqPrice)}</span></div>
+        <div class="fms-level-row"><span class="fms-lv-label">Modo</span><span class="fms-lv-val">5× ISO</span></div>
+        <div class="fms-level-row"><span class="fms-lv-label">~Distância</span><span class="fms-lv-val" style="color:var(--yellow)">20%</span></div>
+      </div>`;
+  } else {
+    levelsHtml = `
+      <div class="fms-levels-col" style="grid-column:1/-1;text-align:center;color:var(--text-muted);font-size:11px;padding:8px 0">
+        Níveis indisponíveis — aguardando próximo scan
+      </div>`;
+  }
+
+  // ── Cards de detectores ─────────────────────────────────────────────────
+  const detKey  = isPump ? 'pump' : 'crash';
+  const detDefs = [
+    { key: 'd1_funding',    label: 'Funding',  icon: '💰' },
+    { key: 'd2_oi',         label: 'OI Accel', icon: '📈' },
+    { key: 'd3_volume',     label: 'Volume',   icon: '📊' },
+    { key: 'd4_cvd',        label: 'CVD',      icon: '⚖️'  },
+    { key: 'd5_liquidity',  label: 'Liquidez', icon: '💧' },
+    { key: 'd6_volatility', label: 'Compr.',   icon: '🔥' },
+  ];
+
+  let totalDetScore = 0;
+  let detCards = '';
+  detDefs.forEach(d => {
+    const det   = dets ? (dets[d.key] || {}) : {};
+    const sc    = det[detKey] != null ? det[detKey] : (det.score != null ? det.score : null);
+    const scNum = sc != null ? +sc : null;
+    if (scNum != null) totalDetScore += scNum;
+    const scColor = scNum == null ? 'var(--text-dim)'
+      : scNum >= 4 ? 'var(--bull)' : scNum >= 2.5 ? 'var(--yellow)' : 'var(--bear)';
+    const scTxt = scNum != null ? scNum.toFixed(1) : '—';
+    detCards += `
+      <div class="fms-det-item">
+        <div class="fms-det-icon">${d.icon}</div>
+        <div class="fms-det-label">${d.label}</div>
+        <div class="fms-det-score" style="color:${scColor}">${scTxt}</div>
+      </div>`;
+  });
+  const detTotalTxt = dets ? `${totalDetScore.toFixed(0)}/25` : '—/25';
+
+  // ── HTML final ──────────────────────────────────────────────────────────
+  return `
+    <div class="fms-modal-header">
+      <div class="fms-modal-title">
+        <span class="fms-modal-setup-label" style="color:${accentColor}">${setupLabel}</span>
+        <span class="fms-modal-symbol">${symbol}</span>
+      </div>
+      <button class="adm-close" onclick="closeFmsModal()">✕</button>
+    </div>
+
+    <div class="fms-modal-top">
+      <div class="fms-modal-direction">
+        <div class="fms-dir-big" style="color:${accentColor}">${dirLabel}</div>
+        <div class="fms-dir-lev">5×</div>
+        <div class="fms-dir-score">Score: <b style="color:${scoreColor}">${scoreVal.toFixed(0)}/100</b></div>
+        <div class="fms-dir-dna">DNA: <span style="color:var(--text-muted)">${dna}</span></div>
+      </div>
+      <div class="fms-modal-entry">
+        <div class="fms-entry-title">ENTRADA SUGERIDA</div>
+        ${entryHtml}
+      </div>
+    </div>
+
+    <div class="fms-modal-levels">
+      ${levelsHtml}
+    </div>
+
+    <div class="fms-modal-detectors">
+      <div class="fms-det-header">
+        <span class="fms-det-title">DETECTORES</span>
+        <span class="fms-det-total" style="color:${accentColor}">${detTotalTxt}</span>
+      </div>
+      <div class="fms-det-grid">
+        ${detCards}
+      </div>
+    </div>
+
+    <div class="fms-modal-risk">
+      <div class="fms-risk-roe">
+        <span class="fms-risk-label">AJUSTE DE RISCO MATEMÁTICO</span>
+        <span class="fms-risk-roe-val" style="color:${accentColor}">${roe}% ROE</span>
+        ${roeBar}
+      </div>
+      <div class="fms-risk-footer">
+        <span>Preço: <b>$${_fmtAltPrice(price)}</b></span>
+        <span>Funding: <span style="color:${frColor}">${frTxt}</span></span>
+        <span>Var24h: <span style="color:${chgColor}">${chgTxt}</span></span>
+      </div>
+    </div>
+  `;
+}
+
 function openFmsModal(symbol, dominantType) {
   const item = _fmsItems[symbol + '_' + dominantType];
   if (!item) return;
@@ -1849,82 +2011,7 @@ function openFmsModal(symbol, dominantType) {
   const box   = document.getElementById('fmsModalBox');
   if (!modal || !box) return;
 
-  const isPump     = dominantType === 'PUMP';
-  const scoreVal   = isPump ? (item.pump_score || 0) : (item.crash_score || 0);
-  const tier       = _fmsTierClass(scoreVal);
-  const price      = item.last_price || 0;
-  const fr         = item.funding_rate || 0;
-  const chg        = item.rise_fall || 0;
-  const dna        = item.dna || '—';
-  const levels     = item.levels || null;
-
-  const scoreColor = scoreVal >= 72 ? '#00FF88' : scoreVal >= 60 ? '#00C864' : '#888888';
-  const frColor    = fr < -0.001 ? '#FF3C3C' : fr > 0.001 ? '#00C864' : 'var(--text-muted)';
-  const chgColor   = chg > 0 ? 'var(--bull)' : chg < 0 ? 'var(--bear)' : 'var(--text-muted)';
-  const chgTxt     = (chg >= 0 ? '+' : '') + (chg * 100).toFixed(2) + '%';
-  const frTxt      = (fr * 100).toFixed(4) + '%';
-
-  const hdrEmoji   = isPump ? '🚀' : '⚠️';
-  const dirColor   = isPump ? 'var(--bull)' : 'var(--bear)';
-
-  const row = (label, value, color = '') =>
-    `<div class="adm-row">
-       <span class="adm-label">${label}</span>
-       <span class="adm-value"${color ? ` style="color:${color}"` : ''}>${value ?? '—'}</span>
-     </div>`;
-
-  const pctRel = (base, target) => {
-    if (!base) return '0.00%';
-    const d = (target - base) / base * 100;
-    return (d >= 0 ? '+' : '') + d.toFixed(2) + '%';
-  };
-
-  // ── Seção NÍVEIS ─────────────────────────────────────────────────────────
-  let levelsHtml;
-  if (levels) {
-    levelsHtml = `
-    <div class="adm-section-title" style="margin-top:10px">NÍVEIS DE TRADE</div>
-    <div class="adm-grid">
-      ${row('Entry',  '$' + _fmtAltPrice(levels.entry), 'var(--yellow)')}
-      ${row('Stop',   '$' + _fmtAltPrice(levels.stop)  + ' (' + pctRel(levels.entry, levels.stop)  + ')', 'var(--bear)')}
-      ${row('TP1',    '$' + _fmtAltPrice(levels.tp1)   + ' (' + pctRel(levels.entry, levels.tp1)   + ')', 'var(--bull)')}
-      ${row('TP2',    '$' + _fmtAltPrice(levels.tp2)   + ' (' + pctRel(levels.entry, levels.tp2)   + ')', 'var(--bull)')}
-      ${row('TP3',    '$' + _fmtAltPrice(levels.tp3)   + ' (' + pctRel(levels.entry, levels.tp3)   + ')', 'var(--bull)')}
-      ${row('Move esperado', '~' + (levels.move_pct || 0).toFixed(1) + '%')}
-      ${row('Probabilidade', (levels.prob_pct ?? '—') + '%', 'var(--green)')}
-    </div>`;
-  } else {
-    levelsHtml = `
-    <div class="adm-section-title" style="margin-top:10px">NÍVEIS DE TRADE</div>
-    <div style="padding:8px 4px;font-size:11px;color:var(--text-muted)">Níveis indisponíveis</div>`;
-  }
-
-  box.innerHTML = `
-    <div class="adm-header">
-      <div>
-        <div class="adm-symbol">${symbol}<span class="adm-usdt">/USDT</span></div>
-        <div class="adm-price">$${_fmtAltPrice(price)}
-          <span style="color:${chgColor};font-size:12px;margin-left:6px">${chgTxt}</span>
-        </div>
-      </div>
-      <div style="text-align:right">
-        <div class="adm-dir" style="color:${dirColor}">${hdrEmoji} ${dominantType}</div>
-        <div style="font-size:11px;color:var(--text-muted)">Tier: ${tier || '—'}</div>
-        <button class="adm-close" onclick="closeFmsModal()">✕</button>
-      </div>
-    </div>
-
-    <div class="adm-section-title">SETUP</div>
-    <div class="adm-grid">
-      ${row('Score',       '<b style="color:' + scoreColor + '">' + scoreVal.toFixed(0) + '/100</b>')}
-      ${row('DNA',         dna)}
-      ${row('Funding',     '<span style="color:' + frColor + '">' + frTxt + '</span>')}
-      ${row('Variação 24h','<span style="color:' + chgColor + '">' + chgTxt + '</span>')}
-    </div>
-
-    ${levelsHtml}
-  `;
-
+  box.innerHTML = buildFmsModalHTML(item, dominantType);
   modal.style.display = 'flex';
 }
 
