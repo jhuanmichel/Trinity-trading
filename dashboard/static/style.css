@@ -2757,3 +2757,128 @@ body {
   color: var(--text);
   font-family: var(--mono);
 }
+
+/* ── FMS MODAL REDESIGN v2 ──────────────────────────────────────────────── */
+
+.fms-modal-box {
+  padding: 0 !important;
+  max-width: 640px !important;
+}
+.fms-modal-header {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.fms-modal-title { display: flex; flex-direction: column; gap: 2px; }
+.fms-title-label {
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.fms-modal-symbol {
+  font-size: 18px; font-weight: 700;
+  font-family: var(--mono); color: var(--text);
+}
+.fms-modal-close {
+  background: none; border: none;
+  color: var(--text-muted); font-size: 22px;
+  cursor: pointer; padding: 4px 8px;
+  border-radius: 6px; line-height: 1;
+  transition: background 0.15s;
+}
+.fms-modal-close:hover { background: var(--surface2); color: var(--text); }
+
+.fms-modal-top {
+  display: grid; grid-template-columns: 160px 1fr;
+  border-bottom: 1px solid var(--border);
+}
+.fms-modal-direction {
+  padding: 20px 16px;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.fms-dir-label {
+  font-size: 32px; font-weight: 800;
+  letter-spacing: -0.02em; line-height: 1;
+}
+.fms-dir-leverage {
+  font-size: 13px; font-weight: 600;
+  color: var(--text-muted); background: var(--surface2);
+  display: inline-block; padding: 2px 8px;
+  border-radius: 4px; width: fit-content;
+}
+.fms-dir-score { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.fms-dir-dna   { font-size: 10px; color: var(--text-dim); font-family: var(--mono); }
+
+.fms-modal-entry {
+  padding: 16px 20px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.fms-entry-title {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-dim); margin-bottom: 4px;
+}
+.fms-entry-plan  { font-size: 10px; color: var(--text-dim); text-transform: uppercase; }
+.fms-entry-plan em { font-style: normal; color: var(--text-muted); }
+.fms-entry-desc  { font-size: 12px; color: var(--text-muted); }
+.fms-entry-note  {
+  font-size: 10px; color: var(--text-dim); line-height: 1.5;
+  border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px;
+}
+
+.fms-modal-levels {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  border-bottom: 1px solid var(--border);
+}
+.fms-levels-col {
+  padding: 16px 20px;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.fms-levels-col:last-child { border-right: none; }
+.fms-levels-title {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-dim); margin-bottom: 4px;
+}
+.fms-level-row  { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.fms-level-tag  { font-size: 10px; font-weight: 700; font-family: var(--mono); min-width: 28px; }
+.fms-level-pct  { font-size: 10px; margin-left: auto; font-family: var(--mono); color: var(--text-muted); }
+.fms-level-meta { font-size: 11px; color: var(--text-muted); }
+.fms-stop-price { font-size: 20px; font-weight: 700; font-family: var(--mono); line-height: 1; }
+.fms-liq-price  { font-size: 20px; font-weight: 700; font-family: var(--mono); line-height: 1; }
+.fms-unavailable { font-size: 11px; color: var(--text-dim); font-style: italic; }
+
+.fms-modal-detectors { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.fms-det-title {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-dim); margin-bottom: 12px;
+}
+.fms-det-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+.fms-det-item {
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--surface2); border-radius: 6px; padding: 8px 12px;
+}
+.fms-det-label { font-size: 11px; color: var(--text-muted); }
+.fms-det-value { font-size: 16px; font-weight: 700; font-family: var(--mono); }
+
+.fms-modal-risk { padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; }
+.fms-risk-header {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim);
+}
+.fms-risk-bar { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+.fms-risk-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; opacity: 0.8; }
+.fms-risk-footer { display: flex; gap: 20px; font-size: 11px; color: var(--text-muted); flex-wrap: wrap; }
+
+@media (max-width: 600px) {
+  .fms-modal-top      { grid-template-columns: 1fr; }
+  .fms-modal-direction { border-right: none; border-bottom: 1px solid var(--border); }
+  .fms-modal-levels   { grid-template-columns: 1fr; }
+  .fms-levels-col     { border-right: none; border-bottom: 1px solid var(--border); }
+  .fms-det-grid       { grid-template-columns: repeat(2,1fr); }
+  .fms-risk-footer    { flex-direction: column; gap: 4px; }
+}

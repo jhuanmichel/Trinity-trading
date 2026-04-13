@@ -1844,161 +1844,167 @@ function closeAltModal(event) {
 }
 
 // ── Full Market Scanner Modal ─────────────────────────────────────────────────
-// ── FMS Modal: constrói o HTML institucional ──────────────────────────────
+// ── FMS Modal: layout institucional v2 ───────────────────────────────────
 function buildFmsModalHTML(item, dominantType) {
-  const isPump      = dominantType === 'PUMP';
-  const scoreVal    = isPump ? (item.pump_score || 0) : (item.crash_score || 0);
-  const price       = item.last_price || 0;
-  const fr          = item.funding_rate || 0;
-  const chg         = item.rise_fall || 0;
-  const dna         = item.dna || '—';
-  const levels      = item.levels || null;
-  const dets        = item.detectors || null;
-  const symbol      = item.symbol || '';
+  const isPump    = dominantType === 'PUMP';
+  const score     = isPump ? (item.pump_score ?? 0) : (item.crash_score ?? 0);
+  const color     = isPump ? 'var(--bull)' : 'var(--bear)';
+  const direction = isPump ? 'LONG' : 'SHORT';
+  const dna       = item.dna || '—';
+  const levels    = item.levels || null;
+  const det       = item.detectors || {};
+  const price     = item.last_price || 0;
+  const funding   = item.funding_rate || 0;
+  const change    = item.rise_fall || 0;
+  const symbol    = item.symbol || '';
+  const setupLabel = isPump ? '🚀 PUMP SETUP' : '⚠️ CRASH SETUP';
 
-  const accentColor = isPump ? 'var(--bull)' : 'var(--bear)';
-  const dirLabel    = isPump ? 'LONG' : 'SHORT';
-  const setupLabel  = isPump ? '🚀 PUMP SETUP' : '⚠️ CRASH SETUP';
+  // Cores
+  const scoreColor = score >= 72 ? '#00FF88' : score >= 60 ? '#00C864' : '#888888';
+  const frColor    = funding < -0.001 ? 'var(--bear)' : funding > 0.001 ? 'var(--bull)' : 'var(--text-muted)';
+  const frTxt      = (funding >= 0 ? '+' : '') + (funding * 100).toFixed(4) + '%';
+  const chgColor   = change > 0 ? 'var(--bull)' : change < 0 ? 'var(--bear)' : 'var(--text-muted)';
+  const chgTxt     = (change >= 0 ? '+' : '') + (change * 100).toFixed(2) + '%';
 
-  const scoreColor  = scoreVal >= 72 ? '#00FF88' : scoreVal >= 60 ? '#00C864' : '#888888';
-  const frColor     = fr < -0.001 ? 'var(--bear)' : fr > 0.001 ? 'var(--bull)' : 'var(--text-muted)';
-  const frTxt       = (fr >= 0 ? '+' : '') + (fr * 100).toFixed(4) + '%';
-  const chgColor    = chg > 0 ? 'var(--bull)' : chg < 0 ? 'var(--bear)' : 'var(--text-muted)';
-  const chgTxt      = (chg >= 0 ? '+' : '') + (chg * 100).toFixed(2) + '%';
+  // ROE dinâmico (20–60%) e largura da barra
+  const roeCapped = Math.min(Math.max(Math.round(30 + (score - 52) * 0.8), 20), 60);
+  const barWidth  = Math.round((roeCapped / 60) * 100);
 
+  // pctRel helper
   const pctRel = (base, target) => {
     if (!base) return '0.00%';
     const d = (target - base) / base * 100;
     return (d >= 0 ? '+' : '') + d.toFixed(2) + '%';
   };
 
-  // ROE estimado (20–60%)
-  const roe    = Math.min(Math.max(Math.round(30 + (scoreVal - 52) * 0.8), 20), 60);
-  const roeBar = `<div class="fms-roe-bar"><div class="fms-roe-fill" style="width:${roe}%;background:${accentColor}"></div></div>`;
+  // Planos de entrada
+  const entryA      = levels ? '$' + _fmtAltPrice(levels.entry) : '—';
+  const entryBVal   = levels
+    ? (isPump ? '$' + _fmtAltPrice(levels.entry * 1.01) : '$' + _fmtAltPrice(levels.entry * 0.99))
+    : '—';
+  const entryBLabel = isPump ? 'Fechamento acima de' : 'Fechamento abaixo de';
 
-  // Liquidação estimada 5× ISO (~20% move)
-  const entryRef = levels ? levels.entry : price;
-  const liqPrice = isPump ? entryRef * 0.80 : entryRef * 1.20;
-
-  // ── Plano de entrada ────────────────────────────────────────────────────
-  const entryHtml = levels
-    ? `<div class="fms-plan-row"><span class="fms-plan-label">Plano A:</span><span class="fms-plan-value" style="color:var(--yellow)">$${_fmtAltPrice(levels.entry)}</span></div>
-       <div class="fms-plan-row"><span class="fms-plan-label">Plano B:</span><span class="fms-plan-value">Fechamento acima</span></div>
-       <div class="fms-plan-note">Move esperado: ~${(+(levels.expected_move ?? levels.move_pct ?? 0)).toFixed(1)}%</div>`
-    : `<div class="fms-plan-row" style="color:var(--text-muted);font-size:11px">Níveis indisponíveis</div>`;
+  // Liquidação 5× ISO (~20% de distância)
+  const liqPrice = levels ? (isPump ? levels.entry * 0.80 : levels.entry * 1.20) : null;
 
   // ── Colunas de níveis ───────────────────────────────────────────────────
-  let levelsHtml;
+  let tpColHtml, stopColHtml, liqColHtml;
   if (levels) {
-    const tp1Pct  = levels.tp1_pct  != null ? (+levels.tp1_pct).toFixed(2)  : pctRel(levels.entry, levels.tp1).replace(/^[+-]/,'');
-    const tp2Pct  = levels.tp2_pct  != null ? (+levels.tp2_pct).toFixed(2)  : pctRel(levels.entry, levels.tp2).replace(/^[+-]/,'');
-    const tp3Pct  = levels.tp3_pct  != null ? (+levels.tp3_pct).toFixed(2)  : pctRel(levels.entry, levels.tp3).replace(/^[+-]/,'');
-    const stopPct = levels.stop_pct != null ? (+levels.stop_pct).toFixed(2) : pctRel(levels.entry, levels.stop).replace('+','');
-    const prob    = levels.probability != null ? levels.probability : (levels.prob_pct != null ? levels.prob_pct : '—');
-    const move    = +(levels.expected_move ?? levels.move_pct ?? 0);
+    const move = +(levels.expected_move ?? levels.move_pct ?? 0);
+    const prob = levels.probability ?? levels.prob_pct ?? '—';
 
-    levelsHtml = `
-      <div class="fms-levels-col">
-        <div class="fms-levels-head" style="color:var(--bull)">ALVOS TÉCNICOS</div>
-        <div class="fms-level-row"><span class="fms-lv-label">TP1</span><span class="fms-lv-val" style="color:var(--bull)">$${_fmtAltPrice(levels.tp1)}</span><span class="fms-lv-pct">+${tp1Pct}%</span></div>
-        <div class="fms-level-row"><span class="fms-lv-label">TP2</span><span class="fms-lv-val" style="color:var(--bull)">$${_fmtAltPrice(levels.tp2)}</span><span class="fms-lv-pct">+${tp2Pct}%</span></div>
-        <div class="fms-level-row"><span class="fms-lv-label">TP3</span><span class="fms-lv-val" style="color:var(--bull)">$${_fmtAltPrice(levels.tp3)}</span><span class="fms-lv-pct">+${tp3Pct}%</span></div>
+    tpColHtml = `
+      <div class="fms-levels-title" style="color:var(--bull)">ALVOS TÉCNICOS</div>
+      <div class="fms-level-row">
+        <span class="fms-level-tag" style="color:var(--bull)">TP1</span>
+        <span style="font-family:var(--mono);font-weight:600;color:var(--bull)">$${_fmtAltPrice(levels.tp1)}</span>
+        <span class="fms-level-pct">${pctRel(levels.entry, levels.tp1)}</span>
       </div>
-      <div class="fms-levels-col">
-        <div class="fms-levels-head" style="color:var(--bear)">STOP LOSS</div>
-        <div class="fms-level-row"><span class="fms-lv-label">Preço</span><span class="fms-lv-val" style="color:var(--bear)">$${_fmtAltPrice(levels.stop)}</span></div>
-        <div class="fms-level-row"><span class="fms-lv-label">Distância</span><span class="fms-lv-val" style="color:var(--bear)">${stopPct}%</span></div>
-        <div class="fms-level-row"><span class="fms-lv-label">Move</span><span class="fms-lv-val">~${move.toFixed(1)}%</span></div>
-        <div class="fms-level-row"><span class="fms-lv-label">Prob.</span><span class="fms-lv-val" style="color:var(--green)">${prob}%</span></div>
+      <div class="fms-level-row">
+        <span class="fms-level-tag" style="color:var(--bull)">TP2</span>
+        <span style="font-family:var(--mono);font-weight:600;color:var(--bull)">$${_fmtAltPrice(levels.tp2)}</span>
+        <span class="fms-level-pct">${pctRel(levels.entry, levels.tp2)}</span>
       </div>
-      <div class="fms-levels-col">
-        <div class="fms-levels-head" style="color:var(--yellow)">LIQUIDAÇÃO (5×)</div>
-        <div class="fms-level-row"><span class="fms-lv-label">Preço</span><span class="fms-lv-val" style="color:var(--yellow)">$${_fmtAltPrice(liqPrice)}</span></div>
-        <div class="fms-level-row"><span class="fms-lv-label">Modo</span><span class="fms-lv-val">5× ISO</span></div>
-        <div class="fms-level-row"><span class="fms-lv-label">~Distância</span><span class="fms-lv-val" style="color:var(--yellow)">20%</span></div>
+      <div class="fms-level-row">
+        <span class="fms-level-tag" style="color:var(--bull)">TP3</span>
+        <span style="font-family:var(--mono);font-weight:600;color:var(--bull)">$${_fmtAltPrice(levels.tp3)}</span>
+        <span class="fms-level-pct">${pctRel(levels.entry, levels.tp3)}</span>
       </div>`;
+
+    stopColHtml = `
+      <div class="fms-levels-title" style="color:var(--bear)">STOP LOSS</div>
+      <div class="fms-stop-price" style="color:var(--bear)">$${_fmtAltPrice(levels.stop)}</div>
+      <div class="fms-level-meta">${pctRel(levels.entry, levels.stop)}</div>
+      <div class="fms-level-meta">Move: ~${move.toFixed(1)}%</div>
+      <div class="fms-level-meta">Prob: ${prob}%</div>`;
+
+    liqColHtml = `
+      <div class="fms-levels-title" style="color:var(--yellow)">LIQUIDAÇÃO (5×)</div>
+      <div class="fms-liq-price" style="color:var(--yellow)">$${_fmtAltPrice(liqPrice)}</div>
+      <div class="fms-level-meta" style="margin-top:4px">5× ISO — ~20%</div>`;
   } else {
-    levelsHtml = `
-      <div class="fms-levels-col" style="grid-column:1/-1;text-align:center;color:var(--text-muted);font-size:11px;padding:8px 0">
-        Níveis indisponíveis — aguardando próximo scan
-      </div>`;
+    tpColHtml   = `<div class="fms-levels-title" style="color:var(--bull)">ALVOS TÉCNICOS</div><div class="fms-unavailable">Níveis indisponíveis</div>`;
+    stopColHtml = `<div class="fms-levels-title" style="color:var(--bear)">STOP LOSS</div><div class="fms-unavailable">Indisponível</div>`;
+    liqColHtml  = `<div class="fms-levels-title" style="color:var(--yellow)">LIQUIDAÇÃO (5×)</div><div class="fms-unavailable">Indisponível</div>`;
   }
 
-  // ── Cards de detectores ─────────────────────────────────────────────────
-  const detKey  = isPump ? 'pump' : 'crash';
-  const detDefs = [
-    { key: 'd1_funding',    label: 'Funding',  icon: '💰' },
-    { key: 'd2_oi',         label: 'OI Accel', icon: '📈' },
-    { key: 'd3_volume',     label: 'Volume',   icon: '📊' },
-    { key: 'd4_cvd',        label: 'CVD',      icon: '⚖️'  },
-    { key: 'd5_liquidity',  label: 'Liquidez', icon: '💧' },
-    { key: 'd6_volatility', label: 'Compr.',   icon: '🔥' },
-  ];
+  // ── Detectores ────────────────────────────────────────────────────────
+  const detKey    = isPump ? 'pump' : 'crash';
+  const getDetVal = (obj) => {
+    const v = obj?.[detKey] ?? obj?.score;
+    return v != null ? +v : null;
+  };
+  const detColor = (v) => v == null ? 'var(--text-muted)' : v >= 18 ? 'var(--bull)' : v >= 10 ? 'var(--yellow)' : 'var(--text-muted)';
+  const detFmt   = (v) => v != null ? String(Math.round(v)) : '—';
 
-  let totalDetScore = 0;
-  let detCards = '';
-  detDefs.forEach(d => {
-    const det   = dets ? (dets[d.key] || {}) : {};
-    const sc    = det[detKey] != null ? det[detKey] : (det.score != null ? det.score : null);
-    const scNum = sc != null ? +sc : null;
-    if (scNum != null) totalDetScore += scNum;
-    const scColor = scNum == null ? 'var(--text-dim)'
-      : scNum >= 4 ? 'var(--bull)' : scNum >= 2.5 ? 'var(--yellow)' : 'var(--bear)';
-    const scTxt = scNum != null ? scNum.toFixed(1) : '—';
-    detCards += `
-      <div class="fms-det-item">
-        <div class="fms-det-icon">${d.icon}</div>
-        <div class="fms-det-label">${d.label}</div>
-        <div class="fms-det-score" style="color:${scColor}">${scTxt}</div>
-      </div>`;
-  });
-  const detTotalTxt = dets ? `${totalDetScore.toFixed(0)}/25` : '—/25';
+  const d1 = getDetVal(det.d1_funding);
+  const d2 = getDetVal(det.d2_oi);
+  const d3 = det.d3_volume?.score != null ? +det.d3_volume.score : null;
+  const d4 = getDetVal(det.d4_cvd);
+  const d5 = getDetVal(det.d5_liquidity);
+  const d6 = det.d6_volatility?.score != null ? +det.d6_volatility.score : null;
+
+  const hasDetectors = Object.keys(det).length > 0;
+  const totalDet     = [d1,d2,d3,d4,d5,d6].filter(v => v != null).reduce((a,b) => a+b, 0);
+  const totalDetTxt  = hasDetectors ? String(Math.round(totalDet)) + '/25' : '—/25';
 
   // ── HTML final ──────────────────────────────────────────────────────────
   return `
     <div class="fms-modal-header">
       <div class="fms-modal-title">
-        <span class="fms-modal-setup-label" style="color:${accentColor}">${setupLabel}</span>
+        <span class="fms-title-label" style="color:${color}">${setupLabel}</span>
         <span class="fms-modal-symbol">${symbol}</span>
       </div>
-      <button class="adm-close" onclick="closeFmsModal()">✕</button>
+      <button class="fms-modal-close" onclick="closeFmsModal()">✕</button>
     </div>
 
     <div class="fms-modal-top">
       <div class="fms-modal-direction">
-        <div class="fms-dir-big" style="color:${accentColor}">${dirLabel}</div>
-        <div class="fms-dir-lev">5×</div>
-        <div class="fms-dir-score">Score: <b style="color:${scoreColor}">${scoreVal.toFixed(0)}/100</b></div>
-        <div class="fms-dir-dna">DNA: <span style="color:var(--text-muted)">${dna}</span></div>
+        <div class="fms-dir-label" style="color:${color}">${direction}</div>
+        <div class="fms-dir-leverage">5×</div>
+        <div class="fms-dir-score">Score: <b style="color:${scoreColor}">${score.toFixed(0)}/100</b></div>
+        <div class="fms-dir-dna">DNA: ${dna}</div>
       </div>
       <div class="fms-modal-entry">
         <div class="fms-entry-title">ENTRADA SUGERIDA</div>
-        ${entryHtml}
+        <div>
+          <div class="fms-entry-plan">PLANO A <em>mercado</em></div>
+          <div class="fms-entry-desc" style="color:var(--yellow)">${entryA}</div>
+        </div>
+        <div>
+          <div class="fms-entry-plan">PLANO B <em>confirmado</em></div>
+          <div class="fms-entry-desc">${entryBLabel} <b style="font-family:var(--mono)">${entryBVal}</b> com reteste</div>
+        </div>
+        <div class="fms-entry-note">Antecipação captura momentum imediato. Confirmado reduz risco de falso sinal.</div>
       </div>
     </div>
 
     <div class="fms-modal-levels">
-      ${levelsHtml}
+      <div class="fms-levels-col">${tpColHtml}</div>
+      <div class="fms-levels-col">${stopColHtml}</div>
+      <div class="fms-levels-col">${liqColHtml}</div>
     </div>
 
     <div class="fms-modal-detectors">
-      <div class="fms-det-header">
-        <span class="fms-det-title">DETECTORES</span>
-        <span class="fms-det-total" style="color:${accentColor}">${detTotalTxt}</span>
-      </div>
+      <div class="fms-det-title">DETECTORES <span style="color:${color};margin-left:8px;font-family:var(--mono)">${totalDetTxt}</span></div>
       <div class="fms-det-grid">
-        ${detCards}
+        <div class="fms-det-item"><span class="fms-det-label">Funding</span>    <span class="fms-det-value" style="color:${detColor(d1)}">${detFmt(d1)}</span></div>
+        <div class="fms-det-item"><span class="fms-det-label">OI Accel</span>   <span class="fms-det-value" style="color:${detColor(d2)}">${detFmt(d2)}</span></div>
+        <div class="fms-det-item"><span class="fms-det-label">Volume</span>     <span class="fms-det-value" style="color:${detColor(d3)}">${detFmt(d3)}</span></div>
+        <div class="fms-det-item"><span class="fms-det-label">CVD</span>        <span class="fms-det-value" style="color:${detColor(d4)}">${detFmt(d4)}</span></div>
+        <div class="fms-det-item"><span class="fms-det-label">Liquidez</span>   <span class="fms-det-value" style="color:${detColor(d5)}">${detFmt(d5)}</span></div>
+        <div class="fms-det-item"><span class="fms-det-label">Compressão</span> <span class="fms-det-value" style="color:${detColor(d6)}">${detFmt(d6)}</span></div>
       </div>
     </div>
 
     <div class="fms-modal-risk">
-      <div class="fms-risk-roe">
-        <span class="fms-risk-label">AJUSTE DE RISCO MATEMÁTICO</span>
-        <span class="fms-risk-roe-val" style="color:${accentColor}">${roe}% ROE</span>
-        ${roeBar}
+      <div class="fms-risk-header">
+        <span>AJUSTE DE RISCO MATEMÁTICO</span>
+        <span style="color:${color}">${roeCapped}% ROE</span>
       </div>
+      <div class="fms-risk-bar"><div class="fms-risk-fill" style="width:${barWidth}%;background:${color}"></div></div>
       <div class="fms-risk-footer">
-        <span>Preço: <b>$${_fmtAltPrice(price)}</b></span>
+        <span>Preço: <b style="font-family:var(--mono);color:var(--text)">$${_fmtAltPrice(price)}</b></span>
         <span>Funding: <span style="color:${frColor}">${frTxt}</span></span>
         <span>Var24h: <span style="color:${chgColor}">${chgTxt}</span></span>
       </div>
