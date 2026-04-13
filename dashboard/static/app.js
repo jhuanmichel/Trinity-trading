@@ -109,7 +109,8 @@ function renderGauge(score) {
   const sc = scoreColor(score);
   const glowColor = score >= 60 ? '#0FA' : score <= 40 ? '#F55' : '#FC3';
 
-  // Chama animação depois do render
+  // Reseta posição atual para o início visual (50) e anima para o valor real
+  _gaugeCurScore = 50;
   setTimeout(() => animateGaugeTo(score), 30);
 
   return `<div class="gauge-outer">
@@ -1733,7 +1734,9 @@ function openAltModal(symbol) {
   const box   = document.getElementById('altModalBox');
   if (!modal || !box) return;
 
-  const rawScore = coin.smc_score || 50;
+  const rawScore   = coin.smc_score != null ? +coin.smc_score : 0;  // para zoneInfo
+  // gauge usa conviction; fallback 0 (nunca 50 — 50 é score real, não placeholder)
+  const gaugeScore = coin.conviction != null ? Math.min(100, Math.max(0, +coin.conviction)) : 0;
   // F1: display_score=null para no_structural_confirmation — exibe "—" na linha de score do modal
   const dispScore = (coin.display_score !== null && coin.display_score !== undefined) ? coin.display_score : null;
   // hideScore: belt-and-suspenders — cobre tanto display_score=null quanto filtered_reason direto
@@ -1797,7 +1800,7 @@ function openAltModal(symbol) {
 
     <!-- Gauge mini -->
     <div style="text-align:center;margin:12px 0 8px">
-      ${renderGauge(rawScore)}
+      ${renderGauge(gaugeScore)}
     </div>
 
     <!-- SMC Layers -->
@@ -1832,7 +1835,7 @@ function openAltModal(symbol) {
   `;
 
   modal.style.display = 'flex';
-  setTimeout(() => animateGaugeTo(rawScore), 50);
+  setTimeout(() => animateGaugeTo(gaugeScore), 50);
 }
 
 function closeAltModal(event) {
