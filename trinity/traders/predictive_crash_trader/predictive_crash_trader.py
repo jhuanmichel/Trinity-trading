@@ -563,6 +563,27 @@ def _send_crash_telegram(c: dict):
             },
             timeout=8,
         )
+
+        # Registrar sinal no OutcomeTracker para tracking de win rate
+        try:
+            from datetime import datetime, timezone as _tz
+            from outcome_tracker import get_tracker
+            conviction = "HIGH" if move_cls in ("STRONG", "EXTREME") else "MEDIUM"
+            get_tracker().register_signal({
+                "direction":       "SHORT",
+                "score":           opp_score,
+                "entry_price":     entry,
+                "stop_loss":       stop,
+                "tp1":             tp1,
+                "tp2":             tp2,
+                "symbol":          symbol,
+                "timestamp":       datetime.now(_tz.utc).isoformat(),
+                "conviction_tier": conviction,
+                "layer_scores":    comp,
+            })
+            log.info(f"[CrashTrader] OutcomeTracker: sinal SHORT registrado — {symbol} score={opp_score:.0f}")
+        except Exception as _oe:
+            log.debug(f"[CrashTrader] OutcomeTracker register_signal falhou: {_oe}")
     except Exception as e:
         log.warning(f"[CrashTrader] Telegram error: {e}")
 
