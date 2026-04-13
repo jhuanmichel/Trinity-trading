@@ -40,6 +40,7 @@ log = logging.getLogger(__name__)
 MEXC_FUTURES         = "https://contract.mexc.com/api/v1/contract"
 MEXC_SPOT            = "https://api.mexc.com/api/v3"
 CG_BASE              = "https://open-api-v3.coinglass.com/api"
+BINANCE_FAPI         = "https://fapi.binance.com"
 
 UNIVERSE_CACHE_TTL   = 300
 HOT_SCAN_TOP_N       = 200           # varredura completa (mesmo escopo do FMS)
@@ -163,8 +164,8 @@ def fetch_coin_data(symbol: str) -> Optional[dict]:
         high_24h, low_24h = _calc_high_low_from_klines(klines, price)
 
         # ── Enriquecimento multi-fonte ──────────────────────────────────────
+        ls_ratio   = _get_ls_ratio_binance(symbol)
         key        = _cg_key()
-        ls_ratio   = _get_ls_ratio_cg(symbol, key)
         fund_multi = _get_funding_multi_cg(symbol, key)
         spot_vol   = _get_spot_volume_mexc(symbol)
 
@@ -215,37 +216,45 @@ def fetch_batch(symbols: List[str], max_workers: int = MAX_WORKERS) -> List[dict
 
 # ── Enriquecimento multi-fonte ────────────────────────────────────────────────
 
-def _get_ls_ratio_cg(symbol: str, key: str) -> float:
+def _get_ls_ratio_binance(symbol: str) -> float:
+    """
+    L/S ratio via Binance Futures público (sem API key).
+    Endpoint: /futures/data/globalLongShortAccountRatio
+    Retorna ratio long/short. Ex: 0.55 long, 0.45 short → ratio = 1.22
+    Fallback: 1.0 (neutro) — coberto por _derive_ls_from_trades
+    """
     now = time.time()
     cached = _ls_cache.get(symbol)
     if cached and (now - cached["ts"]) < ENRICH_CACHE_TTL:
         return cached["v"]
-    if not key:
-        return 1.0
-    coin = _to_cg(symbol)
+
+    # Binance usa "BTCUSDT" sem underscore
+    binance_sym = symbol.replace("_", "") if "_" in symbol else symbol
+    if not binance_sym.endswith("USDT"):
+        binance_sym = binance_sym + "USDT"
+
     try:
         r = requests.get(
-            f"{CG_BASE}/futures/longShort/aggregatedAccountsRatio",
-            params={"symbol": coin, "timeframe": "5m", "limit": 1},
-            headers={"CG-API-KEY": key},
+            f"{BINANCE_FAPI}/futures/data/globalLongShortAccountRatio",
+            params={"symbol": binance_sym, "period": "5m", "limit": 1},
+            headers=_HEADERS,
             timeout=8,
         )
         if r.status_code == 429:
             return _ls_cache.get(symbol, {}).get("v", 1.0)
         if r.status_code != 200:
             return 1.0
-        data = r.json().get("data", [])
-        item = (data[0] if isinstance(data, list) and data else
-                data   if isinstance(data, dict) else None)
-        if item:
-            long_pct  = float(item.get("longAccount",  item.get("longRatio",  0.5)))
-            short_pct = float(item.get("shortAccount", item.get("shortRatio", 0.5)))
+        data = r.json()
+        if isinstance(data, list) and data:
+            item      = data[0]
+            long_pct  = float(item.get("longAccount", 0.5))
+            short_pct = float(item.get("shortAccount", 0.5))
             if short_pct > 0:
                 ratio = round(long_pct / short_pct, 4)
                 _ls_cache[symbol] = {"v": ratio, "ts": now}
                 return ratio
     except Exception as e:
-        log.debug(f"[PumpScanner] CoinGlass L/S error {symbol}: {e}")
+        log.debug(f"[PumpScanner] Binance L/S error {symbol}: {e}")
     return 1.0
 
 
