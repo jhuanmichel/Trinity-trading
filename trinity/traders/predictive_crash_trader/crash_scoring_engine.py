@@ -156,20 +156,27 @@ def score_crash(
     if base_dd < 4.0 and daily_range_pct > 8.0:
         expected_move_pct = max(expected_move_pct, daily_range_pct * 0.55)
 
+    # ── Floor adicional baseado em score dos componentes ──────────────────
+    if opportunity_score_raw >= 40 and expected_move_pct < 4.0:
+        expected_move_pct = max(expected_move_pct, daily_range_pct * 0.40)
+    if opportunity_score_raw >= 60 and expected_move_pct < 6.0:
+        expected_move_pct = max(expected_move_pct, 6.0)
+
     expected_move_pct   = round(min(35.0, expected_move_pct), 1)
     move_classification = _classify_expected_move(expected_move_pct)
-    tradeable           = expected_move_pct >= 6.0
+    tradeable           = expected_move_pct >= 4.0  # baixado de 6% para 4%
 
     # ── Opportunity Score final ────────────────────────────────────────────
+    # ORDEM CORRETA: penalidade PRIMEIRO, depois bônus DNA
     opportunity_score = opportunity_score_raw
 
-    # DNA bonus: eleva o score se padrão confirmado
-    if dna_pattern:
-        opportunity_score = min(100.0, opportunity_score * 1.20)
-
-    # Penalidade (não zero) se expected_move < 6%
+    # 1. Penalidade (×0.70) se expected_move < 4% — aplicar ANTES do DNA
     if not tradeable:
-        opportunity_score *= 0.5
+        opportunity_score *= 0.70
+
+    # 2. Bônus DNA: eleva o score se padrão institucional confirmado — DEPOIS
+    if dna_pattern:
+        opportunity_score = min(100.0, opportunity_score * 1.25)
 
     opportunity_score = round(min(100.0, opportunity_score), 1)
 

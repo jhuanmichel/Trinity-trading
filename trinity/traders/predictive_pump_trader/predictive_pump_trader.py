@@ -43,7 +43,7 @@ from typing import Dict, List, Optional
 log = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-SCAN_INTERVAL_S    = 30
+SCAN_INTERVAL_S    = 60
 TOP_RESULTS        = 5         # top N oportunidades institucionais
 OPP_THRESHOLD      = 55        # opportunity_score mínimo para incluir (calibrado Gate.io)
 ALERT_THRESHOLD    = 55        # opp_score mínimo para alerta Telegram

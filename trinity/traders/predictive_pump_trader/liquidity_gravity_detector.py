@@ -28,12 +28,12 @@ import logging
 log = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-BID_WALL_BAND_PCT    = 1.5    # analisa bids até 1.5% abaixo do preço
+BID_WALL_BAND_PCT    = 2.0    # analisa bids até 2.0% abaixo do preço
 ASK_BAND_PCT         = 5.0    # analisa asks até 5% acima do preço
-BID_WALL_RATIO       = 2.5    # bids/asks > 2.5 = bid wall forte
-ASK_CLUSTER_BAND_PCT = 3.0    # cluster de asks entre 1% e 5% acima
-MIN_CLUSTER_USD      = 10_000   # cluster mínimo para ser relevante ($10K, Gate.io altcoins)
-GRAVITY_STRONG       = 70.0   # strength >= 70 = efeito ímã forte
+BID_WALL_RATIO       = 2.0    # bids/asks > 2.0 = bid wall forte (MEXC altcoins)
+ASK_CLUSTER_BAND_PCT = 4.0    # cluster de asks entre 1% e 4% acima
+MIN_CLUSTER_USD      = 2_000  # cluster mínimo ($2K — permite altcoins com book fino)
+GRAVITY_STRONG       = 60.0   # strength >= 60 = efeito ímã forte (calibrado MEXC)
 PRICE_BAND_PCT       = 0.005  # 0.5% por banda de análise
 
 
@@ -166,7 +166,7 @@ def _calc_gravity_strength(
     # Fator 1: Ratio bids/asks (0-30 pts) — suporte vs resistência
     if bid_ask_ratio >= BID_WALL_RATIO:
         score += 30.0
-    elif bid_ask_ratio >= 1.5:
+    elif bid_ask_ratio >= 1.3:
         score += min(30.0, (bid_ask_ratio / BID_WALL_RATIO) * 20)
 
     # Fator 2: Bid wall de suporte (0-20 pts)
@@ -175,8 +175,8 @@ def _calc_gravity_strength(
 
     # Fator 3: Cluster de asks = stops de shorts como ímã (0-25 pts)
     if ask_cluster:
-        cluster_m = cluster_usd / 1_000_000  # em milhões
-        score += min(25.0, cluster_m * 5)
+        cluster_k = cluster_usd / 1_000     # em K (escala MEXC altcoins)
+        score += min(25.0, cluster_k * 2.5)
 
     # Fator 4: Caminho limpo até o cluster (0-15 pts)
     score += clear_path * 0.15

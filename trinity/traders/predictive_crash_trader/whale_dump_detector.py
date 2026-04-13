@@ -97,8 +97,11 @@ def detect_whale_dump(coin_data: dict) -> dict:
     total_vol           = buy_vol + sell_vol
     sell_pressure_ratio = sell_vol / total_vol if total_vol > 0 else 0.5
 
-    # ── CVD de velas ──────────────────────────────────────────────────────
-    cvd_score = _calc_cvd_from_klines(klines)
+    # ── CVD: prioriza trades reais (MEXC deals) sobre klines ─────────────
+    if recent_trades:
+        cvd_score = _calc_cvd_from_recent(recent_trades)
+    else:
+        cvd_score = _calc_cvd_from_klines(klines)
 
     # ── Indicadores ───────────────────────────────────────────────────────
     large_sell_detected = whale_sells >= 2
@@ -133,6 +136,40 @@ def detect_whale_dump(coin_data: dict) -> dict:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _calc_cvd_from_recent(trades: list) -> float:
+    """
+    CVD normalizado [-1, +1] a partir de trades recentes (MEXC deals).
+
+    Usa o campo 'm' normalizado pelo scanner:
+      m=False → buy (taker comprou)
+      m=True  → sell (taker vendeu)
+
+    CVD = (buy_usd - sell_usd) / total_usd  →  negativo = pressão vendedora
+    """
+    if not trades:
+        return 0.0
+
+    buy_usd = sell_usd = 0.0
+    for t in trades:
+        try:
+            p       = float(t.get("p", 0))
+            q       = float(t.get("q", 0))
+            is_sell = bool(t.get("m", False))
+            usd_val = p * q
+            if is_sell:
+                sell_usd += usd_val
+            else:
+                buy_usd  += usd_val
+        except (ValueError, TypeError):
+            continue
+
+    total_usd = buy_usd + sell_usd
+    if total_usd == 0:
+        return 0.0
+
+    return max(-1.0, min(1.0, (buy_usd - sell_usd) / total_usd))
+
 
 def _calc_cvd_from_klines(klines: list) -> float:
     """

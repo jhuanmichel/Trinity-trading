@@ -163,20 +163,36 @@ def score_pump(
     if ls_ratio < 0.85 and daily_range_pct > 8.0:
         base_move = max(base_move, daily_range_pct * 0.60)
 
+    # ── Floor baseado em score dos componentes ─────────────────────────────
+    # Garante que sinais fortes não gerem expected_move irrisório
+    component_avg = opportunity_score_raw / 4.0
+    if component_avg >= 15.0 and base_move < daily_range_pct * 0.70:
+        base_move = max(base_move, daily_range_pct * 0.70)
+    elif component_avg >= 10.0 and base_move < daily_range_pct * 0.50:
+        base_move = max(base_move, daily_range_pct * 0.50)
+    elif component_avg >= 6.0 and base_move < daily_range_pct * 0.30:
+        base_move = max(base_move, daily_range_pct * 0.30)
+
+    # Floor absoluto: score >= 40 e move < 4% = forçar mínimo
+    if opportunity_score_raw >= 40 and base_move < 4.0:
+        base_move = 4.0
+
     expected_move_pct   = round(min(40.0, base_move * squeeze_mult), 1)
     move_classification = _classify_expected_move(expected_move_pct)
-    tradeable           = expected_move_pct >= 6.0
+    tradeable           = expected_move_pct >= 4.0  # baixado de 6% para 4%
 
     # ── Opportunity Score final ────────────────────────────────────────────
+    # ORDEM CORRETA: penalidade PRIMEIRO, depois bônus DNA
+    # (evita que a penalidade seja aplicada sobre o score já bonificado)
     opportunity_score = opportunity_score_raw
 
-    # DNA bonus: eleva o score se padrão confirmado
-    if dna_pattern:
-        opportunity_score = min(100.0, opportunity_score * 1.20)
-
-    # Penalidade (não zero) se expected_move < 6%
+    # 1. Penalidade (×0.70) se expected_move < 4% — aplicar ANTES do DNA
     if not tradeable:
-        opportunity_score *= 0.5
+        opportunity_score *= 0.70
+
+    # 2. Bônus DNA: eleva o score se padrão institucional confirmado — DEPOIS
+    if dna_pattern:
+        opportunity_score = min(100.0, opportunity_score * 1.25)
 
     opportunity_score = round(min(100.0, opportunity_score), 1)
 

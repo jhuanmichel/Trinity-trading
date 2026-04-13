@@ -49,10 +49,11 @@ def detect_silent_accumulation(coin_data: dict) -> dict:
     Returns:
         dict com score (0-25) e detalhes
     """
-    funding_rate = float(coin_data.get("funding_rate", 0.0))
-    oi_change    = float(coin_data.get("oi_change_pct", 0.0))
-    price_change = float(coin_data.get("price_change_pct", 0.0))
-    klines       = coin_data.get("klines_15m", [])
+    funding_rate  = float(coin_data.get("funding_rate", 0.0))
+    oi_change     = float(coin_data.get("oi_change_pct", 0.0))
+    price_change  = float(coin_data.get("price_change_pct", 0.0))
+    klines        = coin_data.get("klines_15m", [])
+    recent_trades = coin_data.get("recent_trades", [])
 
     # ── Componente 1: Funding Score (0-8) ─────────────────────────────────
     f_score = _calc_funding_score(funding_rate)
@@ -62,8 +63,12 @@ def detect_silent_accumulation(coin_data: dict) -> dict:
     oi_s = _calc_oi_score(oi_change, price_change)
 
     # ── Componente 3: CVD Score (0-9) ─────────────────────────────────────
-    cvd_value = _calc_cvd_from_klines(klines)
-    cvd_s     = _calc_cvd_score(cvd_value)
+    # Prioridade: CVD de trades reais (MEXC deals) > CVD de klines
+    if recent_trades:
+        cvd_value = _calc_cvd_from_trades(recent_trades)
+    else:
+        cvd_value = _calc_cvd_from_klines(klines)
+    cvd_s = _calc_cvd_score(cvd_value)
 
     total = round(f_score + oi_s + cvd_s, 2)
     total = min(25.0, total)
@@ -154,6 +159,40 @@ def _calc_cvd_score(cvd_value: float) -> float:
         return round(4.0 + ratio * 5.0, 2)
     # CVD entre 0 e 0.15: contribuição mínima
     return round((cvd_value / CVD_POSITIVE_THRESH) * 4.0, 2)
+
+
+def _calc_cvd_from_trades(trades: list) -> float:
+    """
+    CVD normalizado [-1, +1] a partir de trades recentes (MEXC deals).
+
+    Usa o campo 'm' normalizado pelo scanner:
+      m=False → buy (taker comprou)
+      m=True  → sell (taker vendeu)
+
+    CVD = (buy_usd - sell_usd) / total_usd
+    """
+    if not trades:
+        return 0.0
+
+    buy_usd = sell_usd = 0.0
+    for t in trades:
+        try:
+            p      = float(t.get("p", 0))
+            q      = float(t.get("q", 0))
+            is_sell = bool(t.get("m", False))
+            usd_val = p * q
+            if is_sell:
+                sell_usd += usd_val
+            else:
+                buy_usd  += usd_val
+        except (ValueError, TypeError):
+            continue
+
+    total_usd = buy_usd + sell_usd
+    if total_usd == 0:
+        return 0.0
+
+    return max(-1.0, min(1.0, (buy_usd - sell_usd) / total_usd))
 
 
 def _calc_cvd_from_klines(klines: list) -> float:
