@@ -33,6 +33,24 @@
   --yellow:     #F0B429;
   --blue:       #3B82F6;
 
+  /* Aliases semânticos (trading) */
+  --bull:        #00FFB2;              /* = --green  — direcional LONG/bullish */
+  --bear:        #FF4D4F;              /* = --red    — direcional SHORT/bearish */
+
+  /* Background de cards */
+  --card-bg:     #11161D;              /* = --surface */
+
+  /* Bordas extras */
+  --border-dim:  rgba(26, 34, 45, 0.5);   /* mais suave que --border */
+  --border-hover:#212B38;             /* = --border-md — estado hover */
+
+  /* Texto semântico */
+  --text-primary:   #E6EDF3;          /* = --text */
+  --text-secondary: #8B98A5;          /* = --text-muted */
+
+  /* Dim amarelo */
+  --yellow-dim:  rgba(240, 180, 41, 0.08);
+
   /* Fonts */
   --font:  'Inter', -apple-system, sans-serif;
   --mono:  'JetBrains Mono', 'Fira Code', monospace;
