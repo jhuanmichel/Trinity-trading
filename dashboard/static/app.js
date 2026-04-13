@@ -1591,6 +1591,9 @@ function _fmtAltPrice(p) {
 let _allAltCandidates = [];  // todos os candidatos do último scan
 let _altFilter        = 'all'; // 'all' | 'LONG' | 'SHORT'
 
+// ── Estado Full Market Scanner ────────────────────────────────────────────────
+let _fmsItems = {};  // cache items FMS — chave: symbol+'_'+dominant_type
+
 // F2: renderiza o indicador de sessão institucional no cabeçalho
 function renderSessionIndicator(sessionState) {
   const el = document.getElementById('altSessionIndicator');
@@ -1837,6 +1840,99 @@ function closeAltModal(event) {
   document.getElementById('altDetailModal').style.display = 'none';
 }
 
+// ── Full Market Scanner Modal ─────────────────────────────────────────────────
+function openFmsModal(symbol, dominantType) {
+  const item = _fmsItems[symbol + '_' + dominantType];
+  if (!item) return;
+
+  const modal = document.getElementById('fmsDetailModal');
+  const box   = document.getElementById('fmsModalBox');
+  if (!modal || !box) return;
+
+  const isPump     = dominantType === 'PUMP';
+  const scoreVal   = isPump ? (item.pump_score || 0) : (item.crash_score || 0);
+  const tier       = _fmsTierClass(scoreVal);
+  const price      = item.last_price || 0;
+  const fr         = item.funding_rate || 0;
+  const chg        = item.rise_fall || 0;
+  const dna        = item.dna || '—';
+  const levels     = item.levels || null;
+
+  const scoreColor = scoreVal >= 72 ? '#00FF88' : scoreVal >= 60 ? '#00C864' : '#888888';
+  const frColor    = fr < -0.001 ? '#FF3C3C' : fr > 0.001 ? '#00C864' : 'var(--text-muted)';
+  const chgColor   = chg > 0 ? 'var(--bull)' : chg < 0 ? 'var(--bear)' : 'var(--text-muted)';
+  const chgTxt     = (chg >= 0 ? '+' : '') + (chg * 100).toFixed(2) + '%';
+  const frTxt      = (fr * 100).toFixed(4) + '%';
+
+  const hdrEmoji   = isPump ? '🚀' : '⚠️';
+  const dirColor   = isPump ? 'var(--bull)' : 'var(--bear)';
+
+  const row = (label, value, color = '') =>
+    `<div class="adm-row">
+       <span class="adm-label">${label}</span>
+       <span class="adm-value"${color ? ` style="color:${color}"` : ''}>${value ?? '—'}</span>
+     </div>`;
+
+  const pctRel = (base, target) => {
+    if (!base) return '0.00%';
+    const d = (target - base) / base * 100;
+    return (d >= 0 ? '+' : '') + d.toFixed(2) + '%';
+  };
+
+  // ── Seção NÍVEIS ─────────────────────────────────────────────────────────
+  let levelsHtml;
+  if (levels) {
+    levelsHtml = `
+    <div class="adm-section-title" style="margin-top:10px">NÍVEIS DE TRADE</div>
+    <div class="adm-grid">
+      ${row('Entry',  '$' + _fmtAltPrice(levels.entry), 'var(--yellow)')}
+      ${row('Stop',   '$' + _fmtAltPrice(levels.stop)  + ' (' + pctRel(levels.entry, levels.stop)  + ')', 'var(--bear)')}
+      ${row('TP1',    '$' + _fmtAltPrice(levels.tp1)   + ' (' + pctRel(levels.entry, levels.tp1)   + ')', 'var(--bull)')}
+      ${row('TP2',    '$' + _fmtAltPrice(levels.tp2)   + ' (' + pctRel(levels.entry, levels.tp2)   + ')', 'var(--bull)')}
+      ${row('TP3',    '$' + _fmtAltPrice(levels.tp3)   + ' (' + pctRel(levels.entry, levels.tp3)   + ')', 'var(--bull)')}
+      ${row('Move esperado', '~' + (levels.move_pct || 0).toFixed(1) + '%')}
+      ${row('Probabilidade', (levels.prob_pct ?? '—') + '%', 'var(--green)')}
+    </div>`;
+  } else {
+    levelsHtml = `
+    <div class="adm-section-title" style="margin-top:10px">NÍVEIS DE TRADE</div>
+    <div style="padding:8px 4px;font-size:11px;color:var(--text-muted)">Níveis indisponíveis</div>`;
+  }
+
+  box.innerHTML = `
+    <div class="adm-header">
+      <div>
+        <div class="adm-symbol">${symbol}<span class="adm-usdt">/USDT</span></div>
+        <div class="adm-price">$${_fmtAltPrice(price)}
+          <span style="color:${chgColor};font-size:12px;margin-left:6px">${chgTxt}</span>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div class="adm-dir" style="color:${dirColor}">${hdrEmoji} ${dominantType}</div>
+        <div style="font-size:11px;color:var(--text-muted)">Tier: ${tier || '—'}</div>
+        <button class="adm-close" onclick="closeFmsModal()">✕</button>
+      </div>
+    </div>
+
+    <div class="adm-section-title">SETUP</div>
+    <div class="adm-grid">
+      ${row('Score',       '<b style="color:' + scoreColor + '">' + scoreVal.toFixed(0) + '/100</b>')}
+      ${row('DNA',         dna)}
+      ${row('Funding',     '<span style="color:' + frColor + '">' + frTxt + '</span>')}
+      ${row('Variação 24h','<span style="color:' + chgColor + '">' + chgTxt + '</span>')}
+    </div>
+
+    ${levelsHtml}
+  `;
+
+  modal.style.display = 'flex';
+}
+
+function closeFmsModal(event) {
+  if (event && event.target !== document.getElementById('fmsDetailModal')) return;
+  document.getElementById('fmsDetailModal').style.display = 'none';
+}
+
 async function updateAltcoinRadar() {
   try {
     const data = await fetch('/api/altcoin-scanner').then(r => r.json());
@@ -2033,6 +2129,10 @@ function _renderFmsList(items, listId, scoreKey) {
     el.innerHTML = '<div class="fms-empty">Sem candidatos no último scan</div>';
     return;
   }
+  // armazenar items para modal lookup
+  items.forEach(r => {
+    _fmsItems[(r.symbol || '') + '_' + (r.dominant_type || '')] = r;
+  });
   // ordenar por score desc no frontend (defensive)
   const sorted = [...items].sort((a, b) => (b[scoreKey] || 0) - (a[scoreKey] || 0));
   el.innerHTML = sorted.slice(0, 5).map(r => {
@@ -2056,7 +2156,7 @@ function _renderFmsList(items, listId, scoreKey) {
     const chgClass = chg > 0 ? 'pos' : chg < 0 ? 'neg' : 'neu';
     const chgTxt   = (chg >= 0 ? '+' : '') + (chg * 100).toFixed(1) + '%';
 
-    return `<div class="fms-row">
+    return `<div class="fms-row" style="cursor:pointer" onclick="openFmsModal('${r.symbol}','${r.dominant_type || ''}')">
       <span class="fms-symbol">${sym}</span>
       <span class="fms-tier">${tier}</span>
       <span style="font-weight:700;font-family:'JetBrains Mono',monospace;font-size:12px;text-align:right;color:${scoreColor}">${score}</span>
@@ -2103,3 +2203,12 @@ async function updateFmsScanner() {
 
 updateFmsScanner();
 setInterval(updateFmsScanner, FMS_REFRESH_MS);
+
+// ── Fechar modais com ESC ─────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const fms = document.getElementById('fmsDetailModal');
+  if (fms && fms.style.display !== 'none') { fms.style.display = 'none'; return; }
+  const alt = document.getElementById('altDetailModal');
+  if (alt && alt.style.display !== 'none') { alt.style.display = 'none'; }
+});
