@@ -207,6 +207,11 @@ def score_pump(
             f"⚡ CONTINUAÇÃO +{pct_change_pump:.0f}% 24h (boost ×{momentum_mult:.2f})")
 
     # ── Funding Extreme Analysis (motor 4D) ────────────────────────────────
+    # ANTI-DOUBLE-COUNTING: funding_rate JÁ entra no squeeze_score [0-25] via
+    # ShortSqueezeDetector (setup: funding + OI + LS ratio). O funding_extreme_mult
+    # aqui é um AMPLIFICADOR externo do opportunity_score FINAL — ele NÃO soma
+    # pontos ao score bruto, apenas multiplica o total quando o funding ultrapassa
+    # limiares extremos (>0.3%/8h). Não há contagem dupla: são camadas distintas.
     funding_analysis    = analyze_funding_extreme(coin_data or {}, direction="PUMP")
     funding_extreme_mult = funding_analysis["composite_mult"]
 

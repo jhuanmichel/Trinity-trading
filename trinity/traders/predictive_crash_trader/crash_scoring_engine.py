@@ -185,6 +185,11 @@ def score_crash(
         top_signals.insert(0, f"⚠️ OVEREXTENDED +{pct_change_24h:.0f}% 24h (boost ×{overext_mult:.2f})")
 
     # ── Funding Extreme Analysis (motor 4D) ────────────────────────────────
+    # ANTI-DOUBLE-COUNTING: funding_rate JÁ entra no cascade_score [0-25] via
+    # LiquidationCascadeDetector (setup: funding + OI + alavancagem). O
+    # funding_extreme_mult aqui é um AMPLIFICADOR externo do opportunity_score
+    # FINAL — multiplica o total apenas quando funding > 0.3%/8h (longs pagando).
+    # Não soma pontos ao score bruto, não há contagem dupla: camadas distintas.
     funding_analysis    = analyze_funding_extreme(coin_data or {}, direction="CRASH")
     funding_extreme_mult = funding_analysis["composite_mult"]
 

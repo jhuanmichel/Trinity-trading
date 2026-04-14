@@ -49,6 +49,14 @@ _funding_history: list  = []  # últimos 10 funding rates para detectar acelera�
 CACHE_TTL               = 30
 TRANSITION_MEMORY_S     = 300  # transição é "recente" por 5 minutos
 
+# ── Rate limit adaptativo ─────────────────────────────────────────────────
+# Após _API_MAX_ERRORS falhas consecutivas, o endpoint entra em backoff
+# de _API_BACKOFF_S segundos. Impede spam de requests durante instabilidade.
+_api_errors:        Dict[str, int]   = {}
+_api_backoff_until: Dict[str, float] = {}
+_API_MAX_ERRORS = 5    # falhas consecutivas para ativar backoff
+_API_BACKOFF_S  = 300  # silêncio de 5 min após max erros
+
 # ── FRED API (macro conditions) ───────────────────────────────────────────
 FRED_BASE      = "https://api.stlouisfed.org/fred/series/observations"
 _macro_cache: Dict = {"data": None, "ts": 0.0}
@@ -95,6 +103,13 @@ def get_btc_regime() -> dict:
     """
     now = time.time()
     if _regime_cache["data"] and (now - _regime_cache["ts"]) < CACHE_TTL:
+        # ── Stale data alert: avisa se o cache tem mais de 2 min ──────────
+        cache_age_s = now - _regime_cache["ts"]
+        if cache_age_s > 120:
+            log.warning(
+                f"[BTCRegime] Cache BTC com {cache_age_s:.0f}s — "
+                f"dados podem estar desatualizados (TTL={CACHE_TTL}s)"
+            )
         return _regime_cache["data"]
 
     try:
@@ -401,6 +416,8 @@ def _full_analysis() -> dict:
         "seasonality_month":    seasonality.get("month", 0),
         "seasonality_mult":     seasonality.get("multiplier", 1.0),
         "seasonality_season":   seasonality.get("season", "NEUTRAL"),
+        # ── Timestamp de geração — permite detectar stale data downstream ──
+        "last_updated_ts":      time.time(),
     }
 
 
@@ -483,9 +500,37 @@ def _track_funding_acceleration(current_funding: float) -> str:
     return "STABLE"
 
 
+# ── Rate limit helpers ────────────────────────────────────────────────────
+
+def _api_available(key: str) -> bool:
+    """Retorna False se o endpoint está em backoff por excesso de erros."""
+    backoff_until = _api_backoff_until.get(key, 0.0)
+    if time.time() < backoff_until:
+        return False
+    return True
+
+
+def _api_record(key: str, *, success: bool) -> None:
+    """Registra sucesso/falha de um endpoint e aciona backoff se necessário."""
+    if success:
+        _api_errors[key] = 0
+    else:
+        _api_errors[key] = _api_errors.get(key, 0) + 1
+        if _api_errors[key] >= _API_MAX_ERRORS:
+            _api_backoff_until[key] = time.time() + _API_BACKOFF_S
+            _api_errors[key] = 0
+            log.warning(
+                f"[BTCRegime] {key} — {_API_MAX_ERRORS} falhas consecutivas, "
+                f"backoff de {_API_BACKOFF_S}s ativado"
+            )
+
+
 # ── Helpers de dados ──────────────────────────────────────────────────────
 
 def _get_btc_ticker() -> dict:
+    if not _api_available("mexc_ticker"):
+        log.debug("[BTCRegime] mexc_ticker em backoff")
+        return {}
     try:
         r = requests.get(
             f"{MEXC_FUTURES}/api/v1/contract/ticker",
@@ -497,13 +542,19 @@ def _get_btc_ticker() -> dict:
         tickers = data.get("data", data) if isinstance(data, dict) else data
         for t in tickers:
             if t.get("symbol") == "BTC_USDT":
+                _api_record("mexc_ticker", success=True)
                 return t
+        _api_record("mexc_ticker", success=True)  # request ok, mas símbolo não encontrado
     except Exception as e:
+        _api_record("mexc_ticker", success=False)
         log.debug(f"[BTCRegime] Ticker error: {e}")
     return {}
 
 
 def _get_btc_ls_ratio() -> float:
+    if not _api_available("binance_ls"):
+        log.debug("[BTCRegime] binance_ls em backoff")
+        return 1.0
     try:
         r = requests.get(
             f"{BINANCE_FAPI}/futures/data/globalLongShortAccountRatio",
@@ -518,8 +569,13 @@ def _get_btc_ls_ratio() -> float:
                 long_pct = float(item.get("longAccount", 0.5))
                 short_pct = float(item.get("shortAccount", 0.5))
                 if short_pct > 0:
+                    _api_record("binance_ls", success=True)
                     return round(long_pct / short_pct, 4)
+            _api_record("binance_ls", success=True)
+        else:
+            _api_record("binance_ls", success=False)
     except Exception as e:
+        _api_record("binance_ls", success=False)
         log.debug(f"[BTCRegime] Binance L/S error: {e}")
     return 1.0
 
@@ -531,6 +587,9 @@ def _get_multi_tf_momentum() -> Tuple[float, float, float]:
 
     Returns: (momentum_15m, momentum_1h, momentum_4h) em %
     """
+    if not _api_available("mexc_klines"):
+        log.debug("[BTCRegime] mexc_klines em backoff")
+        return 0.0, 0.0, 0.0
     try:
         r = requests.get(
             f"{MEXC_FUTURES}/api/v1/contract/kline/BTC_USDT",
@@ -547,6 +606,7 @@ def _get_multi_tf_momentum() -> Tuple[float, float, float]:
             opens  = [float(o) for o in raw["open"]]
 
             if len(closes) < 2:
+                _api_record("mexc_klines", success=True)
                 return 0.0, 0.0, 0.0
 
             price_now = closes[-1]
@@ -563,9 +623,13 @@ def _get_multi_tf_momentum() -> Tuple[float, float, float]:
             price_4h = opens[-16] if len(opens) >= 16 else opens[0]
             m_4h = ((price_now - price_4h) / price_4h * 100) if price_4h > 0 else 0
 
+            _api_record("mexc_klines", success=True)
             return round(m_15m, 2), round(m_1h, 2), round(m_4h, 2)
 
+        _api_record("mexc_klines", success=True)
+
     except Exception as e:
+        _api_record("mexc_klines", success=False)
         log.debug(f"[BTCRegime] Klines error: {e}")
 
     return 0.0, 0.0, 0.0
@@ -781,6 +845,10 @@ def _get_macro_conditions() -> dict:
         log.debug("[BTCRegime] FRED key não configurada")
         return _default_macro()
 
+    if not _api_available("fred"):
+        log.debug("[BTCRegime] fred em backoff")
+        return _macro_cache["data"] or _default_macro()
+
     result = _default_macro()
 
     try:
@@ -818,6 +886,7 @@ def _get_macro_conditions() -> dict:
                 f"dir={nfci_direction} regime={nfci_regime}"
             )
     except Exception as e:
+        _api_record("fred", success=False)
         log.debug(f"[BTCRegime] NFCI fetch error: {e}")
 
     try:
@@ -851,7 +920,9 @@ def _get_macro_conditions() -> dict:
             m2_prev    = float(m2_data[1]["value"])
             result["m2_yoy_pct"]   = 0.0
             result["m2_direction"] = "EXPANDING" if m2_current > m2_prev else "CONTRACTING"
+        _api_record("fred", success=True)
     except Exception as e:
+        _api_record("fred", success=False)
         log.debug(f"[BTCRegime] M2 fetch error: {e}")
 
     # ── Macro bias combinado ──────────────────────────────────────────────
@@ -912,4 +983,5 @@ def _default_regime() -> dict:
         "bull_band_sma": 0, "bull_band_ema": 0,
         "bull_band_bias": "NEUTRAL", "bull_band_dist": 0,
         "seasonality_month": 0, "seasonality_mult": 1.0, "seasonality_season": "NEUTRAL",
+        "last_updated_ts": 0,
     }

@@ -71,6 +71,9 @@ _fund_cache:     dict = {}
 # OI history por símbolo — deque(maxlen=20) com (ts, oi_usd)
 _oi_history: Dict[str, deque] = {}
 
+# Contador de ciclos — para acionar cleanup periódico de cache
+_cycle_counter: int = 0
+
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; TradingBot/1.0)",
     "Accept": "application/json",
@@ -120,10 +123,54 @@ def _is_synthetic(symbol: str) -> bool:
     return False
 
 
+# ── Manutenção de cache ────────────────────────────────────────────────────────
+
+def _cleanup_caches() -> None:
+    """Remove entradas obsoletas dos caches por símbolo (ls, fund, oi_history).
+
+    Executado a cada 100 ciclos (~100 min). Evita crescimento ilimitado de memória
+    quando moedas saem do universo: _ls_cache e _fund_cache guardam dicts por symbol,
+    mas nunca removem símbolos que saíram do top. _oi_history acumula deques.
+    """
+    global _ls_cache, _fund_cache, _oi_history
+
+    now = time.time()
+    stale_threshold = 3600  # 1 hora sem atualização = obsoleto
+
+    # _ls_cache: {symbol: (valor, ts)}
+    stale_ls = [k for k, v in _ls_cache.items()
+                if isinstance(v, (list, tuple)) and len(v) >= 2 and (now - v[1]) > stale_threshold]
+    for k in stale_ls:
+        del _ls_cache[k]
+
+    # _fund_cache: {symbol: (valor, ts)}
+    stale_fund = [k for k, v in _fund_cache.items()
+                  if isinstance(v, (list, tuple)) and len(v) >= 2 and (now - v[1]) > stale_threshold]
+    for k in stale_fund:
+        del _fund_cache[k]
+
+    # _oi_history: {symbol: deque} — remove símbolos sem entradas recentes
+    stale_oi = [k for k, dq in _oi_history.items()
+                if not dq or (now - dq[-1][0]) > stale_threshold]
+    for k in stale_oi:
+        del _oi_history[k]
+
+    if stale_ls or stale_fund or stale_oi:
+        log.debug(
+            f"[PumpScanner] Cache cleanup: -{len(stale_ls)} ls, "
+            f"-{len(stale_fund)} fund, -{len(stale_oi)} oi_history"
+        )
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def scan_universe() -> List[dict]:
     """Retorna top 50 pump candidates filtrados (cache 5min)."""
+    global _cycle_counter
+    _cycle_counter += 1
+    if _cycle_counter % 100 == 0:
+        _cleanup_caches()
+
     now = time.time()
     if _universe_cache["data"] and (now - _universe_cache["ts"]) < UNIVERSE_CACHE_TTL:
         return _universe_cache["data"]

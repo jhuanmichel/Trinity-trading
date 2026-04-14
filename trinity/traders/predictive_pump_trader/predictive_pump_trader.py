@@ -177,14 +177,18 @@ class PredictivePumpTrader:
                 log.warning(f"[PumpTrader] Erro ao analisar {coin_data.get('symbol', '?')}: {e}")
 
         results.sort(key=lambda c: c.opportunity_score, reverse=True)
-        qualified = [c for c in results if c.opportunity_score >= OPP_THRESHOLD]
+        qualified   = [c for c in results if c.opportunity_score >= OPP_THRESHOLD]
+        alertables  = [c for c in results if c.opportunity_score >= ALERT_THRESHOLD]
         top = qualified[:TOP_RESULTS]
 
         duration = round(time.time() - t0, 2)
+        top3_summary = [(c.symbol, round(c.opportunity_score, 1), c.move_classification) for c in top[:3]]
         log.info(
-            f"[PumpTrader] Scan concluído em {duration}s — "
-            f"{len(qualified)} oportunidades >= {OPP_THRESHOLD} | "
-            f"top: {[(c.symbol, round(c.opportunity_score), c.move_classification) for c in top[:3]]}"
+            f"[PumpTrader] ✅ Scan em {duration}s — "
+            f"{len(coin_data_list)} coins | "
+            f"{len(qualified)} candidatos >= {OPP_THRESHOLD} | "
+            f"🔔 {len(alertables)} alertáveis >= {ALERT_THRESHOLD} | "
+            f"top3: {top3_summary}"
         )
 
         return {

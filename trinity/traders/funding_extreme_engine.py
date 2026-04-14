@@ -57,6 +57,21 @@ def analyze_funding_extreme(coin_data: dict, direction: str = "PUMP") -> dict:
     """
     try:
         funding_rate = float(coin_data.get("funding_rate", 0))
+
+        # ── Sanity check: exchange pode enviar em % em vez de decimal ─────
+        # Funding de 0.01%/8h vem como 0.0001 (decimal). Se veio > 0.5,
+        # provavelmente está em % (ex: 0.05 virou 5.0) — dividir por 100.
+        if abs(funding_rate) > 0.5:
+            funding_rate = funding_rate / 100.0
+            log.debug(f"[FundingEngine] funding_rate convertido de % para decimal: {funding_rate}")
+        # Funding > 10%/8h é fisicamente impossível nos mercados reais — dado corrompido
+        if abs(funding_rate) > 0.10:
+            log.warning(
+                f"[FundingEngine] funding_rate anômalo ({funding_rate:.6f}) "
+                f"para {coin_data.get('symbol', '?')} — ignorando"
+            )
+            return _normal_result(funding_rate, 0.0)
+
         pct_change   = float(coin_data.get("price_change_pct", 0))
         oi_usd       = float(coin_data.get("open_interest", 0))
         volume_24h   = float(coin_data.get("volume_24h", 0))
