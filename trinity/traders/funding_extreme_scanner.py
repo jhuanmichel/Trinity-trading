@@ -45,6 +45,27 @@ CRITICAL_COOLDOWN_S = 1800  # 30min para alertas CRITICAL
 
 MIN_VOLUME_USD      = 500_000   # filtro mínimo de liquidez
 
+# Símbolos a excluir: stocks sintéticos, commodities, índices, ETFs
+EXCLUDED_KEYWORDS = {
+    'STOCK', 'ETF', 'US30', 'ALUMINUM', 'COPPER', 'GOLD', 'SILVER',
+    'NVIDIA', 'NVDA', 'TESLA', 'TSLA', 'APPLE', 'AAPL', 'AMAZON', 'AMZN',
+    'GOOGLE', 'GOOGL', 'GOOGLSTOCK', 'META', 'MSTR', 'COINBASE', 'MSFT',
+    'MICROSOFT', 'NETFLIX', 'NFLX', 'AMD', 'INTEL', 'INTC', 'BABA',
+    'OIL', 'CRUDE', 'NATGAS', 'WHEAT', 'CORN', 'PLATINUM', 'PALLADIUM',
+    'EWY', 'EWJ', 'SPX', 'SPY', 'NDX', 'DJI', 'VIX', 'STABLE', 'RIVER',
+    'SNDK', 'PYPL', 'UBER', 'ABNB', 'PLTR', 'SNAP', 'SHOP',
+    'COIN', 'HOOD', 'SQ', 'ROKU', 'RBLX', 'PINS',
+    'USOIL', 'UKOIL', 'XAUUSD', 'XAGUSD',
+}
+
+def _is_excluded(symbol: str) -> bool:
+    """Retorna True se o símbolo é stock sintético, commodity ou índice."""
+    upper = symbol.upper().replace('_USDT', '').replace('USDT', '')
+    # Correspondência exata ou substring
+    if upper in EXCLUDED_KEYWORDS:
+        return True
+    return any(kw in upper for kw in EXCLUDED_KEYWORDS)
+
 TOP_LONGS  = 5   # top N shorts pagando longs
 TOP_SHORTS = 5   # top N longs pagando shorts
 
@@ -162,6 +183,15 @@ class FundingExtremeScanner:
             pct_change   = rise_fall * 100.0
 
             if price <= 0:
+                return None
+
+            # Filtro: excluir stocks sintéticos, commodities, índices, ETFs
+            if _is_excluded(symbol):
+                return None
+
+            # Filtro extra direto: padrões de índice/ETF no nome
+            sym_upper = symbol.upper()
+            if any(x in sym_upper for x in ['STOCK', 'SPX', 'NDX', 'DJI', 'EWJ', 'EWY', 'SPY']):
                 return None
 
             # Filtro de volume mínimo
@@ -291,20 +321,13 @@ class FundingExtremeScanner:
             log.warning(f"[FundingExtreme] Erro ao salvar: {e}")
 
     def _send_alerts(self, signals: List[FundingExtremeSignal]):
-        """Envia alertas Telegram para CRITICAL/HIGH com cooldown."""
-        now = time.time()
-        for s in sorted(signals, key=lambda x: x.composite_score, reverse=True):
-            if s.tier not in ("CRITICAL", "HIGH"):
-                continue
-            last = _alert_cooldown.get(s.symbol, 0)
-            cooldown = CRITICAL_COOLDOWN_S if s.tier == "CRITICAL" else ALERT_COOLDOWN_S
-            if (now - last) < cooldown:
-                continue
-            try:
-                _send_funding_telegram(s)
-                _alert_cooldown[s.symbol] = now
-            except Exception as e:
-                log.warning(f"[FundingExtreme] Telegram error {s.symbol}: {e}")
+        """
+        Funding extremo NÃO alerta sozinho via Telegram.
+        Dados ficam no dashboard (/api/funding-extreme) e alimentam
+        o Funding Extreme Engine nos scoring engines do pump/crash radar.
+        Alertas Telegram só saem via pump/crash radar (score >= 75).
+        """
+        pass
 
     def _empty_result(self, scan_ts: str) -> dict:
         return {

@@ -503,11 +503,28 @@ def get_crypto_bubbles():
         r    = _req.get("https://contract.mexc.com/api/v1/contract/ticker", timeout=8)
         data = r.json().get("data", [])
 
+        _BUBBLES_EXCLUDE = {
+            'STOCK', 'ETF', 'NVDA', 'TSLA', 'AAPL', 'AMZN', 'GOOGL', 'GOOGLSTOCK',
+            'META', 'MSTR', 'MSFT', 'NFLX', 'AMD', 'INTC', 'BABA', 'SNDK',
+            'PYPL', 'UBER', 'ABNB', 'PLTR', 'SNAP', 'SHOP', 'HOOD', 'RBLX', 'PINS',
+            'GOLD', 'SILVER', 'OIL', 'USOIL', 'UKOIL', 'COPPER', 'NATGAS',
+            'SPX', 'SPY', 'NDX', 'DJI', 'VIX', 'EWY', 'EWJ', 'US30',
+        }
+
+        def _is_bubble_excluded(sym_base: str) -> bool:
+            u = sym_base.upper()
+            if u in _BUBBLES_EXCLUDE:
+                return True
+            return any(kw in u for kw in ['STOCK', 'SPX', 'NDX', 'EWJ', 'EWY', 'GOOGLSTOCK'])
+
         bubbles = []
         for item in data:
             try:
                 sym      = item.get("symbol", "")
                 if not sym.endswith("_USDT"):
+                    continue
+                sym_base = sym.replace("_USDT", "")
+                if _is_bubble_excluded(sym_base):
                     continue
                 price    = float(item.get("lastPrice", 0) or 0)
                 rfr      = float(item.get("riseFallRate", 0) or 0)
@@ -518,7 +535,7 @@ def get_crypto_bubbles():
                     continue
                 oi_usd = hold_vol * price
                 bubbles.append({
-                    "symbol":        sym.replace("_USDT", ""),
+                    "symbol":        sym_base,
                     "price":         price,
                     "change_pct":    round(rfr * 100, 2),
                     "volume_usd":    round(amount24, 0),
