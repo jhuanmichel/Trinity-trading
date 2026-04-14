@@ -54,6 +54,17 @@ FRED_BASE      = "https://api.stlouisfed.org/fred/series/observations"
 _macro_cache: Dict = {"data": None, "ts": 0.0}
 MACRO_CACHE_TTL    = 3600  # 1 hora (dados são semanais — não precisa buscar a cada ciclo)
 
+# ── Bull Market Support Band ───────────────────────────────────────────────
+_bull_band_cache: Dict = {"data": None, "ts": 0.0}
+BULL_BAND_CACHE_TTL    = 3600  # 1h
+
+# ── Sazonalidade mensal BTC — média 2015-2025 ─────────────────────────────
+_MONTHLY_SEASONALITY = {
+    1: 1.12, 2: 1.08, 3: 1.03, 4: 1.06,
+    5: 0.92, 6: 0.87, 7: 0.90, 8: 0.91,
+    9: 0.86, 10: 1.12, 11: 1.14, 12: 1.08,
+}
+
 
 def get_btc_regime() -> dict:
     """
@@ -285,6 +296,38 @@ def _full_analysis() -> dict:
         bear_points += 5
         signals.append(f"M2 contraindo {m2_yoy:.1f}% YoY")
 
+    # ── CAMADA I: Bull Market Support Band (0-12 pts) ──────────────────────
+    bull_band = _get_bull_market_support_band()
+    bb_bias   = bull_band.get("bull_band_bias", "NEUTRAL")
+    bb_dist   = bull_band.get("distance_pct", 0)
+
+    if bb_bias == "BULL":
+        bull_points += 12
+        bull_confirmations += 1
+        signals.append(f"📈 BTC ACIMA do Bull Support Band ({bb_dist:+.1f}%) — bull market")
+    elif bb_bias == "BEAR":
+        bear_points += 12
+        bear_confirmations += 1
+        signals.append(f"📉 BTC ABAIXO do Bull Support Band ({bb_dist:+.1f}%) — bear market")
+    elif bb_bias == "TRANSITION":
+        if bb_dist > 0:
+            bull_points += 5
+            signals.append(f"↗️ BTC cruzando Bull Band pra cima ({bb_dist:+.1f}%)")
+        else:
+            bear_points += 5
+            signals.append(f"↘️ BTC cruzando Bull Band pra baixo ({bb_dist:+.1f}%)")
+
+    # ── CAMADA J: Sazonalidade mensal (0-8 pts) ───────────────────────────
+    seasonality = _get_monthly_seasonality()
+    season      = seasonality.get("season", "NEUTRAL")
+
+    if season == "STRONG":
+        bull_points += 8
+        signals.append(f"📅 {seasonality['description']}")
+    elif season == "WEAK":
+        bear_points += 8
+        signals.append(f"📅 {seasonality['description']}")
+
     # ── Direção e classificação ────────────────────────────────────────────
     net = bull_points - bear_points
     strength = min(100, max(bull_points, bear_points))
@@ -350,6 +393,14 @@ def _full_analysis() -> dict:
         "m2_direction":     macro.get("m2_direction", "STABLE"),
         "macro_bias":       macro.get("macro_bias", "NEUTRAL"),
         "macro_strength":   macro.get("macro_strength", 0),
+        # ── Campos Bull Band + Sazonalidade ──────────────────────────────
+        "bull_band_sma":        bull_band.get("sma_20w", 0),
+        "bull_band_ema":        bull_band.get("ema_21w", 0),
+        "bull_band_bias":       bull_band.get("bull_band_bias", "NEUTRAL"),
+        "bull_band_dist":       bull_band.get("distance_pct", 0),
+        "seasonality_month":    seasonality.get("month", 0),
+        "seasonality_mult":     seasonality.get("multiplier", 1.0),
+        "seasonality_season":   seasonality.get("season", "NEUTRAL"),
     }
 
 
@@ -518,6 +569,128 @@ def _get_multi_tf_momentum() -> Tuple[float, float, float]:
         log.debug(f"[BTCRegime] Klines error: {e}")
 
     return 0.0, 0.0, 0.0
+
+
+def _get_bull_market_support_band() -> dict:
+    """
+    Bull Market Support Band: 20-week SMA (140 dias) + 21-week EMA (147 dias).
+    Preço acima de ambas = bull market confirmado.
+    Preço abaixo = bear market.
+    Cruzando = transição (TRANSITION).
+    Cache 1h — não muda intraday.
+    """
+    now = time.time()
+    if _bull_band_cache["data"] and (now - _bull_band_cache["ts"]) < BULL_BAND_CACHE_TTL:
+        return _bull_band_cache["data"]
+
+    result = _default_bull_band()
+
+    try:
+        r = requests.get(
+            f"{MEXC_FUTURES}/api/v1/contract/kline/BTC_USDT",
+            params={"interval": "Day1", "limit": 200},
+            headers=_HEADERS,
+            timeout=15,
+        )
+        r.raise_for_status()
+        data = r.json()
+        raw  = data.get("data", data) if isinstance(data, dict) else data
+
+        closes = []
+        if isinstance(raw, dict) and "close" in raw:
+            closes = [float(c) for c in raw["close"] if c]
+        elif isinstance(raw, list):
+            closes = [float(k.get("c", k.get("close", 0))) for k in raw if isinstance(k, dict)]
+
+        if len(closes) < 147:
+            log.debug(f"[BTCRegime] Bull Band: insuficiente — {len(closes)} < 147 candles")
+            _bull_band_cache.update({"data": result, "ts": now})
+            return result
+
+        price = closes[-1]
+        if price <= 0:
+            _bull_band_cache.update({"data": result, "ts": now})
+            return result
+
+        # 20-week SMA (140 dias)
+        sma_20w = sum(closes[-140:]) / 140
+
+        # 21-week EMA (147 dias) — seed SMA dos primeiros 147, depois EMA real
+        ema_period = 147
+        multiplier = 2.0 / (ema_period + 1)
+        ema = sum(closes[:ema_period]) / ema_period
+        for c in closes[ema_period:]:
+            ema = (c - ema) * multiplier + ema
+        ema_21w = ema
+
+        band_mid     = (sma_20w + ema_21w) / 2
+        distance_pct = ((price - band_mid) / band_mid * 100) if band_mid > 0 else 0
+
+        if price > sma_20w and price > ema_21w:
+            position = "ABOVE"
+            bias     = "BULL"
+        elif price < sma_20w and price < ema_21w:
+            position = "BELOW"
+            bias     = "BEAR"
+        else:
+            position = "CROSSING"
+            bias     = "TRANSITION"
+
+        result = {
+            "sma_20w":        round(sma_20w, 2),
+            "ema_21w":        round(ema_21w, 2),
+            "price_vs_band":  position,
+            "bull_band_bias": bias,
+            "distance_pct":   round(distance_pct, 2),
+        }
+
+        log.info(
+            f"[BTCRegime] Bull Band: SMA20w=${sma_20w:,.0f} EMA21w=${ema_21w:,.0f} "
+            f"price=${price:,.0f} → {position} ({distance_pct:+.1f}%)"
+        )
+
+    except Exception as e:
+        log.debug(f"[BTCRegime] Bull Band error: {e}")
+
+    _bull_band_cache.update({"data": result, "ts": now})
+    return result
+
+
+def _default_bull_band() -> dict:
+    return {
+        "sma_20w": 0, "ema_21w": 0, "price_vs_band": "UNKNOWN",
+        "bull_band_bias": "NEUTRAL", "distance_pct": 0,
+    }
+
+
+def _get_monthly_seasonality() -> dict:
+    """
+    Sazonalidade mensal BTC — média histórica 2015-2025.
+    Não é regra absoluta — é contexto adicional (0-8 pts).
+
+    Returns:
+        {
+            "month":       int,
+            "multiplier":  float,
+            "season":      str,   # STRONG / NEUTRAL / WEAK
+            "description": str,
+        }
+    """
+    from datetime import datetime, timezone
+    month = datetime.now(timezone.utc).month
+    mult  = _MONTHLY_SEASONALITY.get(month, 1.0)
+
+    if mult >= 1.10:
+        season = "STRONG"
+        desc   = f"Mês {month} historicamente forte (×{mult:.2f})"
+    elif mult <= 0.91:
+        season = "WEAK"
+        desc   = f"Mês {month} historicamente fraco (×{mult:.2f})"
+    else:
+        season = "NEUTRAL"
+        desc   = f"Mês {month} neutro (×{mult:.2f})"
+
+    return {"month": month, "multiplier": mult, "season": season, "description": desc}
 
 
 def _get_fred_key() -> str:
@@ -736,4 +909,7 @@ def _default_regime() -> dict:
         "nfci_value": 0, "nfci_regime": "NEUTRAL", "nfci_direction": "STABLE",
         "m2_yoy_pct": 0, "m2_direction": "STABLE",
         "macro_bias": "NEUTRAL", "macro_strength": 0,
+        "bull_band_sma": 0, "bull_band_ema": 0,
+        "bull_band_bias": "NEUTRAL", "bull_band_dist": 0,
+        "seasonality_month": 0, "seasonality_mult": 1.0, "seasonality_season": "NEUTRAL",
     }

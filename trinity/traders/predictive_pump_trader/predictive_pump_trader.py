@@ -197,6 +197,16 @@ class PredictivePumpTrader:
     def _analyze_coin(self, coin_data: dict, scan_ts: str) -> Optional[PumpCandidate]:
         symbol = coin_data.get("symbol", "?")
 
+        # ── Manipulation check — fail-open ─────────────────────────────────
+        try:
+            from trinity.traders.manipulation_detector import check_manipulation
+            manip = check_manipulation(symbol, coin_data)
+            if manip["locked"]:
+                log.info(f"[PumpTrader] {symbol} SKIPPED (manipulação): {manip['reason']}")
+                return None
+        except Exception:
+            pass  # fail-open: qualquer erro não bloqueia a análise
+
         silent_result   = self._detect_silent(coin_data)
         squeeze_result  = self._detect_squeeze(coin_data)
         gravity_result  = self._detect_gravity(coin_data)
@@ -425,39 +435,6 @@ async def _send_telegram_alerts(candidates: list):
 
 
 def _send_pump_telegram(c: dict):
-    """
-    Formata e envia alerta Trinity Signal de pump para o Telegram.
-
-    Formato:
-    🚀 TRINITY SIGNAL — PUMP INSTITUCIONAL
-
-    ⚡ STRONG PUMP — SHORT SQUEEZE IGNITION + COMPRESSION LAUNCH
-    🪙 SOLUSDT | +1.2% | $145.80
-
-    🏆 Trinity Score: 82/100
-    📈 Expected Move: +11.5%
-    🎯 Probabilidade: 72%
-
-    📋 RAZÕES INSTITUCIONAIS:
-    🐋 Whale:    81/100
-    💧 Squeeze:  76/100
-    ⚡ Funding:  -180%/yr
-    📈 OI:       +15.0%
-
-    🔑 Sinais:
-    • Shorts presos: L/S 0.62x | Funding extremo
-    • Bid wall forte — rampa de liquidez ativa
-    • Compressão ativa (9 velas) — breakout iminente
-
-    📌 NÍVEIS DE TRADE:
-      Entry: $145.80
-      Stop:  $141.51  (-2.9%)
-      TP1:   $151.67  (+4.0%)
-      TP2:   $155.57  (+6.7%)
-      TP3:   $162.67  (+11.6%)
-
-    💡 LONG imediato — pump iniciando
-    """
     try:
         import sys
         sys.path.insert(0, str(BASE_DIR))
@@ -473,9 +450,6 @@ def _send_pump_telegram(c: dict):
         action      = c.get("recommended_action", "—")
         comp        = c.get("component_scores", {})
         signals     = c.get("top_signals", [])
-        funding     = c.get("funding_rate", 0)
-        ls_ratio    = c.get("long_short_ratio", 1.0)
-        oi_change   = c.get("oi_change_pct", 0)
         dna_pattern = c.get("dna_pattern", "")
         prob_pct    = c.get("probability_pct", 0)
         entry       = c.get("entry", price)
@@ -484,61 +458,52 @@ def _send_pump_telegram(c: dict):
         tp2         = c.get("tp2", 0)
         tp3         = c.get("tp3", 0)
 
-        cls_emoji = {
-            "EXTREME":   "🚀",
-            "STRONG":    "⚡",
-            "TRADEABLE": "📡",
-            "WEAK":      "👁",
-        }.get(move_cls, "⚡")
+        tier_map   = {"EXTREME": "🔥🔥🔥", "STRONG": "🔥🔥", "TRADEABLE": "🔥", "WEAK": "⚡", "MICRO": "👁"}
+        tier_emoji = tier_map.get(move_cls, "⚡")
+        header     = "🚀" if opp_score >= 75 else "📡"
+        pct_str    = f"+{pct_change:.1f}%" if pct_change >= 0 else f"{pct_change:.1f}%"
 
-        pct_str     = f"+{pct_change:.1f}%" if pct_change >= 0 else f"{pct_change:.1f}%"
-        funding_ann = funding * 3 * 365 * 100       # % anualizado (3 períodos/dia)
-        funding_str = f"{funding_ann:+.0f}%/yr"
-        oi_str      = f"{oi_change:+.1f}%"
+        def bar(val, mx=25):
+            filled = max(0, min(8, int(val / mx * 8)))
+            return "█" * filled + "░" * (8 - filled)
 
-        # Setup line: include DNA pattern if detected
-        setup_line = f"{cls_emoji} *{move_cls} PUMP*"
-        if dna_pattern:
-            setup_line += f" — {dna_pattern}"
-
-        signals_text = "\n".join(f"• {s}" for s in signals[:3]) if signals else "• Múltiplos sinais alinhados"
-
-        # Levels block
-        entry_str = _fmt_p(entry)
-        stop_str  = f"{_fmt_p(stop)}  {_pct_diff(stop,  entry, 'down')}"
-        tp1_str   = f"{_fmt_p(tp1)}  {_pct_diff(tp1,   entry, 'up')}"
-        tp2_str   = f"{_fmt_p(tp2)}  {_pct_diff(tp2,   entry, 'up')}"
-        tp3_str   = f"{_fmt_p(tp3)}  {_pct_diff(tp3,   entry, 'up')}"
+        # Sinais — máximo 4 para não estourar 4096 chars
+        sig_lines = ""
+        for s in signals[:4]:
+            sig_lines += f"\n• {s}"
 
         msg = (
-            f"🚀 *TRINITY SIGNAL — PUMP INSTITUCIONAL*\n\n"
-            f"{setup_line}\n"
-            f"🪙 *{symbol}*  |  {pct_str}  |  {_fmt_p(price)}\n\n"
-            f"🏆 Trinity Score: *{opp_score:.0f}/100*\n"
-            f"📈 Expected Move: *+{move_pct:.1f}%*\n"
-            f"🎯 Probabilidade: *{prob_pct:.0f}%*\n\n"
-            f"📋 *COMPONENTES (4×25):*\n"
-            f"🧘 Silent:   `{comp.get('silent_acc', 0):.1f}/25`\n"
-            f"💧 Squeeze:  `{comp.get('squeeze', 0):.1f}/25`\n"
-            f"🎯 Gravity:  `{comp.get('gravity', 0):.1f}/25`\n"
-            f"📊 Breakout: `{comp.get('breakout', 0):.1f}/25`\n\n"
-            f"🔑 *Sinais:*\n{signals_text}\n\n"
-            f"📌 *NÍVEIS DE TRADE:*\n"
-            f"`Entry: {entry_str}`\n"
-            f"`Stop:  {stop_str}`\n"
-            f"`TP1:   {tp1_str}`\n"
-            f"`TP2:   {tp2_str}`\n"
-            f"`TP3:   {tp3_str}`\n\n"
+            f"{header} *TRINITY — LONG SETUP*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{tier_emoji} *{move_cls}*"
+        )
+        if dna_pattern:
+            msg += f" — {dna_pattern}"
+        msg += (
+            f"\n🪙 `{symbol}` | {pct_str} | {_fmt_p(price)}\n\n"
+            f"🎯 *Score: {opp_score:.0f}* | Move: *+{move_pct:.1f}%* | Prob: *{prob_pct:.0f}%*\n\n"
+            f"📊 *DETECTORES:*\n"
+            f"  Silent:  `{bar(comp.get('silent_acc', 0))}` {comp.get('silent_acc', 0):.1f}\n"
+            f"  Squeeze: `{bar(comp.get('squeeze', 0))}` {comp.get('squeeze', 0):.1f}\n"
+            f"  Gravity: `{bar(comp.get('gravity', 0))}` {comp.get('gravity', 0):.1f}\n"
+            f"  Breakout:`{bar(comp.get('breakout', 0))}` {comp.get('breakout', 0):.1f}\n\n"
+            f"🔑 *SINAIS:*{sig_lines}\n\n"
+            f"📌 *TRADE PLAN:*\n"
+            f"  `LONG  {_fmt_p(entry)}`\n"
+            f"  `STOP  {_fmt_p(stop)}  {_pct_diff(stop, entry, 'down')}`\n"
+            f"  `TP1   {_fmt_p(tp1)}  {_pct_diff(tp1, entry, 'up')}`\n"
+            f"  `TP2   {_fmt_p(tp2)}  {_pct_diff(tp2, entry, 'up')}`\n"
+            f"  `TP3   {_fmt_p(tp3)}  {_pct_diff(tp3, entry, 'up')}`\n\n"
             f"💡 _{action}_"
         )
 
+        # Truncar se exceder limite Telegram (4096 chars)
+        if len(msg) > 4000:
+            msg = msg[:3950] + "\n\n_...truncado_"
+
         _req.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-            json={
-                "chat_id":    TELEGRAM_CHAT_ID,
-                "text":       msg,
-                "parse_mode": "Markdown",
-            },
+            json={"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "Markdown"},
             timeout=8,
         )
 
