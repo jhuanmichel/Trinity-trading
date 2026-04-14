@@ -80,7 +80,16 @@ def collect_all() -> dict:
 
         btc = next((t for t in tickers if t.get("symbol") == "BTC_USDT"), None)
         if btc:
-            price = float(btc.get("lastPrice", 0))
+            price    = float(btc.get("lastPrice", 0))
+            hold_vol = float(btc.get("holdVol", 0))
+
+            # MEXC BTC perpetual: 1 contrato = 0.0001 BTC (não 1 BTC)
+            # holdVol × price daria ~$68T — claramente errado.
+            # Com o fator correto: holdVol × 0.0001 × price ≈ $6-7B (realista).
+            oi_usd_raw = hold_vol * price
+            if oi_usd_raw > 1_000_000_000_000:  # > $1T → aplicar contract size BTC
+                oi_usd_raw = hold_vol * 0.0001 * price
+
             data["btc_market"] = {
                 "price": price,
                 "change_24h_pct": round(float(btc.get("riseFallRate", 0)) * 100, 2),
@@ -89,8 +98,8 @@ def collect_all() -> dict:
                 "volume_24h_usd": float(btc.get("amount24", 0)),
                 "funding_rate": float(btc.get("fundingRate", 0)),
                 "funding_ann": round(float(btc.get("fundingRate", 0)) * 3 * 365 * 100, 1),
-                "hold_vol": float(btc.get("holdVol", 0)),
-                "oi_usd": round(float(btc.get("holdVol", 0)) * price),
+                "hold_vol": hold_vol,
+                "oi_usd": round(oi_usd_raw),
             }
 
         eth = next((t for t in tickers if t.get("symbol") == "ETH_USDT"), None)

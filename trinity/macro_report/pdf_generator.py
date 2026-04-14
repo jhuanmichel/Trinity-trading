@@ -42,39 +42,25 @@ FONT  = "Helvetica"
 BOLD  = "Helvetica-Bold"
 
 
-class DarkBG(canvas.Canvas):
-    """Canvas com fundo escuro e header/footer em todas as páginas."""
-
-    def __init__(self, *a, **kw):
-        super().__init__(*a, **kw)
-        self._saved = []
-
-    def showPage(self):
-        self._saved.append(dict(self.__dict__))
-        super().showPage()
-
-    def save(self):
-        for i, p in enumerate(self._saved):
-            self.__dict__.update(p)
-            self.saveState()
-            # Fundo escuro
-            self.setFillColor(BG)
-            self.rect(0, 0, W, H, fill=True, stroke=False)
-            # Linha verde no topo
-            self.setStrokeColor(GREEN)
-            self.setLineWidth(0.4)
-            self.line(18 * mm, H - 14 * mm, W - 18 * mm, H - 14 * mm)
-            # Linha inferior
-            self.setStrokeColor(BORDER)
-            self.line(18 * mm, 13 * mm, W - 18 * mm, 13 * mm)
-            # Footer text
-            self.setFillColor(DIM)
-            self.setFont(FONT, 7)
-            self.drawString(18 * mm, 9 * mm, "TRINITY TRADING — Institutional Macro Report — CONFIDENCIAL")
-            self.drawRightString(W - 18 * mm, 9 * mm, f"p.{i + 1}")
-            self.restoreState()
-            super().showPage()
-        super().save()
+def _draw_bg(c, doc):
+    """Callback onPage: fundo dark + linha verde header + footer numerado."""
+    c.saveState()
+    # Fundo escuro
+    c.setFillColor(BG)
+    c.rect(0, 0, W, H, fill=True, stroke=False)
+    # Linha verde no topo
+    c.setStrokeColor(GREEN)
+    c.setLineWidth(0.4)
+    c.line(18 * mm, H - 14 * mm, W - 18 * mm, H - 14 * mm)
+    # Linha inferior
+    c.setStrokeColor(BORDER)
+    c.line(18 * mm, 13 * mm, W - 18 * mm, 13 * mm)
+    # Footer text
+    c.setFillColor(DIM)
+    c.setFont(FONT, 7)
+    c.drawString(18 * mm, 9 * mm, "TRINITY TRADING — Institutional Macro Report — CONFIDENCIAL")
+    c.drawRightString(W - 18 * mm, 9 * mm, f"p.{doc.page}")
+    c.restoreState()
 
 
 def _s() -> dict:
@@ -248,8 +234,9 @@ def generate_pdf(collected_data: dict, analysis: dict, output_path: str = None) 
         return f'<font color="{color}">{val}</font>'
 
     # Linha 1: BTC price, 24h change, NFCI, M2
-    nfci_val = macro.get("nfci_current", 0) or 0
-    m2_yoy   = macro.get("m2_yoy_pct", 0) or 0
+    # Fallback: se macro_fred não tiver o dado (FRED falhou), usa regime_trinity
+    nfci_val = macro.get("nfci_current") or regime.get("nfci_value", 0) or 0
+    m2_yoy   = macro.get("m2_yoy_pct") or regime.get("m2_yoy_pct", 0) or 0
 
     m1 = [
         [
@@ -412,6 +399,6 @@ def generate_pdf(collected_data: dict, analysis: dict, output_path: str = None) 
     # ─────────────────────────────────────────────────────────────────────
     # BUILD PDF
     # ─────────────────────────────────────────────────────────────────────
-    doc.build(story, canvasmaker=DarkBG)
+    doc.build(story, onFirstPage=_draw_bg, onLaterPages=_draw_bg)
     log.info(f"[MacroReport] PDF gerado: {output_path}")
     return output_path
