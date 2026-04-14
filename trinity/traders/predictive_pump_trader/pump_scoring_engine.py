@@ -59,6 +59,16 @@ ACTIONS = {
 MIN_SCORE_VALID  = 30.0
 MIN_COMPONENTS   = 1      # mínimo de 1 componente >= 10/25
 
+BLUE_CHIPS = {
+    "SOLUSDT", "SUIUSDT", "LINKUSDT", "ETHUSDT",
+    "AVAXUSDT", "DOTUSDT", "ADAUSDT", "MATICUSDT",
+    "NEARUSDT", "APTUSDT", "ARBUSDT", "OPUSDT",
+    "ATOMUSDT", "INJUSDT", "TIAUSDT", "SEIUSDT",
+    "DOGEUSDT", "XRPUSDT", "BNBUSDT", "LTCUSDT",
+    "PEPEUSDT", "WIFUSDT", "BONKUSDT", "JUPUSDT",
+    "ENAUSDT", "RENDERUSDT", "FETUSDT", "ONDOUSDT",
+}
+
 
 def score_pump(
     silent_result:   dict,
@@ -286,6 +296,11 @@ def score_pump(
 
     except Exception as e:
         log.debug(f"[PumpScore] BTC regime error: {e}")
+
+    # Blue Chip Boost — altcoins com liquidez institucional
+    _symbol = _cd.get("symbol", "")
+    if _symbol in BLUE_CHIPS:
+        opportunity_score = min(100.0, opportunity_score * 1.12)
 
     opportunity_score = round(min(100.0, opportunity_score), 1)
 
