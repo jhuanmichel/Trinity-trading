@@ -1,1 +1,28 @@
-{"total_signals": 0, "wins": 0, "losses": 0, "neutrals": 0, "win_rate": null, "avg_score_win": null, "avg_score_loss": null, "best_direction": null, "high_conviction_rate": null, "medium_conviction_rate": null, "win_rate_display": "Dados insuficientes", "optimizer_ready": false, "optimizer_progress": {"current": 0, "target": 30, "pct_complete": 0}}
+{
+  "updated_at": "2026-04-14T15:10:00.122129+00:00",
+  "total_signals": 1,
+  "wins": 0,
+  "losses": 1,
+  "neutral": 0,
+  "win_rate_pct": null,
+  "win_rate_display": "Dados insuficientes",
+  "avg_score_wins": null,
+  "avg_score_losses": 55.0,
+  "best_direction": null,
+  "by_conviction_tier": {
+    "HIGH": {
+      "win_rate_pct": null,
+      "count": 0
+    },
+    "MEDIUM": {
+      "win_rate_pct": null,
+      "count": 1
+    }
+  },
+  "optimizer_progress": {
+    "samples_collected": 1,
+    "samples_needed": 30,
+    "pct_complete": 3,
+    "ready": false
+  }
+}

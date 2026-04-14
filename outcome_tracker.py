@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 PENDING_FILE     = Path("logs/pending_outcomes.jsonl")
 OUTCOMES_DIR     = Path("logs")
 WIN_RATE_FILE    = Path("dashboard/win_rate.json")
-MEXC_KLINES_URL  = "https://api.mexc.com/api/v3/klines"
+MEXC_FUTURES_KLINES = "https://contract.mexc.com/api/v1/contract/kline"  # Futures (não spot)
 CHECK_AFTER_H    = [4, 24, 48]   # checkpoints em horas após o sinal
 EXPIRY_HOURS     = 48            # horas até expirar automaticamente
 MIN_SAMPLES_DISPLAY = 5         # mínimo de amostras WIN+LOSS para exibir win_rate
@@ -220,16 +220,20 @@ class OutcomeTracker:
         except Exception:
             return None
 
-    def _fetch_candles_since(self, symbol: str, since_ts: str, interval: str = "15m") -> list:
-        """Busca OHLCV do MEXC desde o timestamp do sinal até agora."""
+    def _fetch_candles_since(self, symbol: str, since_ts: str, interval: str = "Min15") -> list:
+        """Busca OHLCV do MEXC Futures desde o timestamp do sinal até agora.
+
+        Usa a API de futuros (contract.mexc.com) porque os símbolos scaneados
+        (WETUSDT, SOLUSDT, etc.) são contratos futuros — não existem no spot.
+        """
         import requests
         try:
             ts = self._parse_ts(since_ts)
             if ts is None:
                 return []
-            start_ms = int(ts.timestamp() * 1000)
+            start_s = int(ts.timestamp())  # Futures API usa segundos (não ms)
 
-            # Normaliza símbolo: "BTC/USDT:USDT" → "BTCUSDT"
+            # Normaliza → "WETUSDT" → "WET_USDT" (formato MEXC Futures)
             sym = (symbol
                    .replace("/USDT:USDT", "USDT")
                    .replace("/USDT", "USDT")
@@ -237,15 +241,44 @@ class OutcomeTracker:
                    .replace(":USDT", ""))
             if not sym.endswith("USDT"):
                 sym = sym + "USDT"
+            # Adiciona underscore se necessário: "WETUSDT" → "WET_USDT"
+            if "_" not in sym and sym.endswith("USDT"):
+                sym = sym[:-4] + "_USDT"
 
             r = requests.get(
-                MEXC_KLINES_URL,
-                params={"symbol": sym, "interval": interval,
-                        "startTime": start_ms, "limit": 200},
+                f"{MEXC_FUTURES_KLINES}/{sym}",
+                params={"interval": interval, "start": start_s, "count": 200},
                 timeout=5,
             )
             r.raise_for_status()
-            return r.json()
+            body = r.json()
+
+            if not body.get("success") or not body.get("data"):
+                log.debug(f"[OutcomeTracker] Futures kline vazia para {sym}: {body.get('message','')}")
+                return []
+
+            d      = body["data"]
+            times  = d.get("time",  [])
+            highs  = d.get("high",  [])
+            lows   = d.get("low",   [])
+            opens  = d.get("open",  [])
+            closes = d.get("close", [])
+
+            # Converte para formato candle: [time, open, high, low, close]
+            candles = []
+            for i in range(len(times)):
+                try:
+                    candles.append([
+                        times[i],
+                        float(opens[i]),
+                        float(highs[i]),
+                        float(lows[i]),
+                        float(closes[i]),
+                    ])
+                except (IndexError, ValueError, TypeError):
+                    continue
+            return candles
+
         except Exception as e:
             log.warning(f"[OutcomeTracker] OHLCV fetch falhou ({symbol}): {e}")
             return []
