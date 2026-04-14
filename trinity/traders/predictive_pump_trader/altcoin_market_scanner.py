@@ -337,32 +337,85 @@ def _fetch_universe() -> List[dict]:
 
 
 def _filter_pump_candidates(tickers: List[dict]) -> List[dict]:
-    """Filtra e classifica pump candidates."""
+    """
+    Filtra por sinais PRÉ-MOVIMENTO — seleciona pela CAUSA, não pelo efeito.
+
+    A hierarquia de sinais pré-pump (do mais forte ao mais fraco):
+    1. Funding negativo extremo → shorts pagando = squeeze iminente
+    2. Volume alto + preço flat → acumulação institucional silenciosa
+    3. OI alto/crescendo → posições abertas = combustível acumulado
+    4. Queda moderada recente → spring/compressão antes do pump
+    5. Momentum positivo leve → pump iniciando (ainda dá pra entrar)
+    6. Volume absoluto → liquidez para movimentar
+    """
     candidates = []
     for t in tickers:
         try:
             symbol     = _from_mexc(str(t.get("symbol", "")))
-            vol_usd    = float(t.get("amount24", 0))            # volume em USDT
-            # riseFallRate é decimal: 0.05 = +5%, -0.02 = -2%
-            pct_change = float(t.get("riseFallRate", 0)) * 100.0
+            vol_usd    = float(t.get("amount24", 0))
+            rise_fall  = float(t.get("riseFallRate", 0))
+            pct_change = rise_fall * 100
+            funding    = float(t.get("fundingRate", 0))
+            hold_vol   = float(t.get("holdVol", 0))
+            price      = float(t.get("lastPrice", 0))
 
             if vol_usd < MIN_VOLUME_24H_USD:
                 continue
             if pct_change > MAX_PRICE_CHANGE_PCT:
                 continue
-            if pct_change < -20.0:
+            if pct_change < -30.0:
                 continue
 
-            drop_score     = max(0, -pct_change) * 2.0
-            volume_score   = min(10.0, vol_usd / 10_000_000)   # escala MEXC: $10M = 10pts
-            pump_potential = drop_score + volume_score
+            funding_ann = funding * 3 * 365 * 100
+            oi_usd = hold_vol * price if price > 0 else 0
+            flat_price = abs(pct_change) < 3.0
+
+            # S1: Funding negativo (0-25) — squeeze fuel
+            if   funding_ann < -150: f_score = 25
+            elif funding_ann < -80:  f_score = 18
+            elif funding_ann < -30:  f_score = 10
+            elif funding_ann < -10:  f_score = 4
+            else:                    f_score = 0
+
+            # S2: Volume com preço flat = acumulação silenciosa (0-20)
+            if   flat_price and vol_usd > 10_000_000: acc_score = 20
+            elif flat_price and vol_usd > 5_000_000:  acc_score = 14
+            elif flat_price and vol_usd > 2_000_000:  acc_score = 8
+            elif flat_price and vol_usd > 500_000:    acc_score = 4
+            else:                                     acc_score = 0
+
+            # S3: OI como combustível (0-15)
+            if   oi_usd > 50_000_000: oi_score = 15
+            elif oi_usd > 20_000_000: oi_score = 10
+            elif oi_usd > 5_000_000:  oi_score = 6
+            elif oi_usd > 1_000_000:  oi_score = 3
+            else:                     oi_score = 0
+
+            # S4: Spring/compressão (0-15) — queda moderada = mola
+            if   -15.0 <= pct_change <= -5.0:  spring_score = 15
+            elif -5.0 < pct_change <= -2.0:    spring_score = 8
+            elif -20.0 <= pct_change < -15.0:  spring_score = 5
+            else:                              spring_score = 0
+
+            # S5: Momentum positivo leve (0-10)
+            if   1.0 <= pct_change <= 5.0:                     mom_score = 10
+            elif 0.3 <= pct_change < 1.0:                      mom_score = 5
+            elif 5.0 < pct_change <= MAX_PRICE_CHANGE_PCT:     mom_score = 3
+            else:                                              mom_score = 0
+
+            # S6: Volume absoluto (0-10)
+            vol_score = min(10.0, vol_usd / 20_000_000)
+
+            pump_potential = f_score + acc_score + oi_score + spring_score + mom_score + vol_score
 
             candidates.append({
                 "symbol":         symbol,
-                "price":          float(t.get("lastPrice", 0)),
+                "price":          price,
                 "price_change":   pct_change,
                 "volume_24h":     vol_usd,
-                "pump_potential": pump_potential,
+                "pump_potential": round(pump_potential, 1),
+                "funding_ann":    round(funding_ann, 1),
+                "oi_usd":         round(oi_usd),
             })
         except (ValueError, TypeError):
             continue

@@ -170,6 +170,22 @@ class PredictiveCrashTrader:
         coin_data_list = self._fetch_batch(symbols)
         log.info(f"[CrashTrader] {len(coin_data_list)}/{len(symbols)} coins com dados completos")
 
+        # ── BTC Regime context ─────────────────────────────────────────────
+        try:
+            from trinity.traders.btc_regime_monitor import get_btc_regime
+            btc_regime = get_btc_regime()
+            btc_dir    = btc_regime.get("direction", "?")
+            btc_str    = btc_regime.get("strength", 0)
+            btc_trans  = btc_regime.get("transition", "")
+            trans_info = f" | TRANSIÇÃO: {btc_trans}" if btc_trans else ""
+            log.info(
+                f"[CrashTrader] BTC: {btc_dir} (strength={btc_str:.0f}, "
+                f"confirmations={btc_regime.get('confirmations', 0)}, "
+                f"bias={btc_regime.get('bias', '?')}){trans_info}"
+            )
+        except Exception:
+            pass
+
         # 3. Análise de cada coin
         results: List[CrashCandidate] = []
         for coin_data in coin_data_list:

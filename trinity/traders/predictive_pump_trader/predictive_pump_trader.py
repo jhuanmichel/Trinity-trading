@@ -151,6 +151,22 @@ class PredictivePumpTrader:
         coin_data_list = self._fetch_batch(symbols)
         log.info(f"[PumpTrader] {len(coin_data_list)}/{len(symbols)} coins com dados")
 
+        # ── BTC Regime context ─────────────────────────────────────────────
+        try:
+            from trinity.traders.btc_regime_monitor import get_btc_regime
+            btc_regime = get_btc_regime()
+            btc_dir    = btc_regime.get("direction", "?")
+            btc_str    = btc_regime.get("strength", 0)
+            btc_trans  = btc_regime.get("transition", "")
+            trans_info = f" | TRANSIÇÃO: {btc_trans}" if btc_trans else ""
+            log.info(
+                f"[PumpTrader] BTC: {btc_dir} (strength={btc_str:.0f}, "
+                f"confirmations={btc_regime.get('confirmations', 0)}, "
+                f"bias={btc_regime.get('bias', '?')}){trans_info}"
+            )
+        except Exception:
+            pass
+
         results: List[PumpCandidate] = []
         for coin_data in coin_data_list:
             try:

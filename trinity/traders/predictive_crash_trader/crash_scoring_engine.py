@@ -31,6 +31,8 @@ crash_score [0-100]:
 import logging
 from typing import Tuple
 
+from trinity.traders.btc_regime_monitor import get_btc_regime
+
 log = logging.getLogger(__name__)
 
 # ── Limiares de classificação ──────────────────────────────────────────────────
@@ -177,6 +179,45 @@ def score_crash(
     # 2. Bônus DNA: eleva o score se padrão institucional confirmado — DEPOIS
     if dna_pattern:
         opportunity_score = min(100.0, opportunity_score * 1.25)
+
+    # ── BTC Regime Correlation Boost ───────────────────────────────────────
+    try:
+        btc = get_btc_regime()
+        btc_bias       = btc.get("bias", "NEUTRAL")
+        btc_strength   = btc.get("strength", 0)
+        btc_transition = btc.get("transition", "")
+        t_boost        = btc.get("transition_boost", 1.0)
+        confirmations  = btc.get("confirmations", 0)
+
+        if btc_bias == "CRASH":
+            # BTC bearish + alt crash = confluência de mercado
+            if btc_transition and t_boost > 1.0:
+                opportunity_score = min(100.0, opportunity_score * t_boost)
+                top_signals.append(f"🔄 {btc_transition}")
+            elif btc_strength >= 50 and confirmations >= 3:
+                opportunity_score = min(100.0, opportunity_score * 1.25)
+            elif btc_strength >= 30 and confirmations >= 2:
+                opportunity_score = min(100.0, opportunity_score * 1.15)
+            elif btc_strength >= 15:
+                opportunity_score = min(100.0, opportunity_score * 1.08)
+
+        elif btc_bias == "PUMP":
+            # BTC bullish contradiz crash — penalizar
+            if btc_strength >= 50 and confirmations >= 3:
+                opportunity_score *= 0.70
+            elif btc_strength >= 30:
+                opportunity_score *= 0.80
+            elif btc_strength >= 15:
+                opportunity_score *= 0.90
+
+        # Sinais BTC no Telegram
+        if btc.get("signals") and btc_strength >= 20:
+            for sig in btc["signals"][:2]:
+                top_signals.append(f"📊 {sig}")
+            top_signals = top_signals[:8]
+
+    except Exception as e:
+        log.debug(f"[CrashScore] BTC regime error: {e}")
 
     opportunity_score = round(min(100.0, opportunity_score), 1)
 

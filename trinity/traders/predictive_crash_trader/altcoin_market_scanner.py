@@ -339,33 +339,72 @@ def _fetch_universe() -> List[dict]:
 
 def _filter_hot_candidates(tickers: List[dict]) -> List[dict]:
     """
-    Filtra candidatos a crash: moedas que já subiram (overextended) ou
-    têm volume alto com queda (reversão).
-    Sem MAX_PRICE_CHANGE_PCT — moedas +30%, +50% são candidatas.
+    Filtra por sinais PRÉ-CRASH:
+    1. Overextension → subiu demais = profit-taking + liquidações iminentes
+    2. Funding positivo extremo → longs pagando = overleveraged
+    3. Queda em curso → momentum negativo = continuação
+    4. OI alto → alavancagem acumulada = cascata potencial
+    5. Volume → liquidez/atividade institucional
     """
     candidates = []
     for t in tickers:
         try:
             symbol     = _from_mexc(str(t.get("symbol", "")))
             vol_usd    = float(t.get("amount24", 0))
-            pct_change = float(t.get("riseFallRate", 0)) * 100.0
+            rise_fall  = float(t.get("riseFallRate", 0))
+            pct_change = rise_fall * 100
+            funding    = float(t.get("fundingRate", 0))
+            hold_vol   = float(t.get("holdVol", 0))
+            price      = float(t.get("lastPrice", 0))
 
-            # Inclui se: volume alto OU variação significativa (sobe ou cai)
             if not (vol_usd >= MIN_VOLUME_24H_USD or abs(pct_change) >= MIN_PRICE_CHANGE_PCT):
                 continue
 
-            # Crash scoring: moedas que subiram muito são mais perigosas
-            overextension_weight = max(0, pct_change - 15.0) * 2.0   # +15%+ = crash candidate
-            drop_weight          = max(0, -pct_change) * 3.0         # queda = risco reversal
-            volume_score         = min(10.0, vol_usd / 10_000_000)
-            risk_score           = max(drop_weight, overextension_weight) + volume_score
+            funding_ann = funding * 3 * 365 * 100
+            oi_usd = hold_vol * price if price > 0 else 0
+
+            # S1: Overextension (0-30)
+            if   pct_change > 50:  overext = 30
+            elif pct_change > 30:  overext = 25
+            elif pct_change > 20:  overext = 18
+            elif pct_change > 10:  overext = 10
+            elif pct_change > 5:   overext = 4
+            else:                  overext = 0
+
+            # S2: Funding positivo (0-25) — longs sobrecarregados
+            if   funding_ann > 150: f_score = 25
+            elif funding_ann > 80:  f_score = 18
+            elif funding_ann > 30:  f_score = 10
+            elif funding_ann > 10:  f_score = 4
+            else:                   f_score = 0
+
+            # S3: Queda em curso (0-20)
+            if   pct_change < -15:  drop = 20
+            elif pct_change < -8:   drop = 14
+            elif pct_change < -3:   drop = 8
+            elif pct_change < -1:   drop = 3
+            else:                   drop = 0
+
+            # S4: OI combustível (0-15)
+            if   oi_usd > 50_000_000: oi_score = 15
+            elif oi_usd > 20_000_000: oi_score = 10
+            elif oi_usd > 5_000_000:  oi_score = 6
+            elif oi_usd > 1_000_000:  oi_score = 3
+            else:                     oi_score = 0
+
+            # S5: Volume (0-10)
+            vol_score = min(10.0, vol_usd / 20_000_000)
+
+            risk_score = max(overext + f_score, drop + f_score) + oi_score + vol_score
 
             candidates.append({
-                "symbol":     symbol,
-                "price":      float(t.get("lastPrice", 0)),
+                "symbol":       symbol,
+                "price":        price,
                 "price_change": pct_change,
-                "volume_24h": vol_usd,
-                "risk_score": risk_score,
+                "volume_24h":   vol_usd,
+                "risk_score":   round(risk_score, 1),
+                "funding_ann":  round(funding_ann, 1),
+                "oi_usd":       round(oi_usd),
             })
         except (ValueError, TypeError):
             continue
