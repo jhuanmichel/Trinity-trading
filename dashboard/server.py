@@ -915,6 +915,50 @@ async def apply_optimized_weights():
         return JSONResponse(content={"applied": False, "error": str(_e)}, status_code=500)
 
 
+REPORTS_DIR = BASE_DIR / "dashboard" / "reports"
+
+
+@app.get("/api/macro-report")
+async def get_macro_report():
+    """Gera relatório macro semanal via Claude API e retorna o PDF para download."""
+    import logging as _log
+    _logger = _log.getLogger("dashboard.server")
+    try:
+        from trinity.macro_report import generate_macro_report
+        from fastapi.responses import FileResponse
+
+        pdf_path = await asyncio.to_thread(generate_macro_report)
+        return FileResponse(
+            pdf_path,
+            media_type="application/pdf",
+            filename=Path(pdf_path).name,
+        )
+    except Exception as _e:
+        _logger.error(f"[Server] Macro report error: {_e}")
+        return JSONResponse(content={"error": str(_e)}, status_code=500)
+
+
+@app.get("/api/macro-reports")
+async def list_macro_reports():
+    """Lista relatórios macro anteriores gerados."""
+    try:
+        if not REPORTS_DIR.exists():
+            return JSONResponse(content={"reports": []})
+        pdfs = sorted(REPORTS_DIR.glob("macro_*.pdf"), reverse=True)
+        return JSONResponse(content={
+            "reports": [
+                {
+                    "name":       p.name,
+                    "size_kb":    round(p.stat().st_size / 1024),
+                    "created_ts": p.stat().st_mtime,
+                }
+                for p in pdfs[:20]
+            ]
+        })
+    except Exception:
+        return JSONResponse(content={"reports": []})
+
+
 # ── Serve React app v3.0 em /app/ ────────────────────────────────────────────
 REACT_APP_DIR = BASE_DIR / "dashboard" / "static" / "app"
 if REACT_APP_DIR.exists():
