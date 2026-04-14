@@ -21,6 +21,7 @@ ALTCOIN_SCAN_FILE = BASE_DIR / "dashboard" / "altcoin_scan_latest.json"
 WIN_RATE_FILE     = BASE_DIR / "dashboard" / "win_rate.json"
 OPT_REPORT_FILE   = BASE_DIR / "dashboard" / "optimization_report.json"
 FMS_SCAN_FILE     = BASE_DIR / "dashboard" / "full_market_scan.json"
+FUNDING_SCAN_FILE = BASE_DIR / "dashboard" / "funding_extreme_latest.json"
 LOGS_DIR          = BASE_DIR / "logs"
 STATIC_DIR        = BASE_DIR / "dashboard" / "static"
 
@@ -166,6 +167,8 @@ async def startup_event():
     asyncio.create_task(_news_sentinel_loop())
     # Full Market Scanner — varre todos os contratos MEXC a cada 90s
     asyncio.create_task(_fms_loop())
+    # Funding Extreme Scanner — detecta funding extremo em todos contratos a cada 120s
+    asyncio.create_task(_funding_scan_loop())
 
 
 async def _run_analysis_bg(force: bool = False):
@@ -403,24 +406,46 @@ async def get_liquidations():
 
 
 async def _pump_scan_loop():
-    """Roda o Predictive Pump Trader a cada 30s em background (scan + alertas Telegram)."""
+    """Roda o Predictive Pump Trader a cada 60s em background (scan + alertas Telegram)."""
     import logging as _log
     _plog = _log.getLogger("pump_trader")
-    await asyncio.sleep(30)  # offset: crash começa em 20s, pump em 30s
+    await asyncio.sleep(45)  # offset: crash começa em 20s, pump em 45s
     while True:
         try:
             import sys as _sys
             _sys.path.insert(0, str(BASE_DIR))
             from trinity.traders.predictive_pump_trader.predictive_pump_trader import run_pump_cycle
             result = await asyncio.to_thread(run_pump_cycle)
-            _plog.debug(
-                f"Pump scan: {result.get('coins_scanned', 0)} coins | "
+            _plog.info(
+                f"[PUMP] scan OK: {result.get('coins_scanned', 0)} coins | "
                 f"{len(result.get('candidates', []))} candidatos | "
+                f"{result.get('scan_duration_s', 0):.1f}s | "
+                f"salvo em pump_scan_latest.json"
+            )
+        except Exception as _e:
+            _plog.error(f"[PUMP] scan loop error: {_e}", exc_info=True)
+        await asyncio.sleep(60)
+
+
+async def _funding_scan_loop():
+    """Roda o Funding Extreme Scanner a cada 120s em background — independente do pump/crash."""
+    import logging as _log
+    _flog = _log.getLogger("funding_scanner")
+    await asyncio.sleep(70)  # offset: pump em 45s, funding em 70s
+    while True:
+        try:
+            import sys as _sys
+            _sys.path.insert(0, str(BASE_DIR))
+            from trinity.traders.funding_extreme_scanner import run_funding_scan
+            result = await asyncio.to_thread(run_funding_scan)
+            _flog.info(
+                f"[FUNDING] scan OK: {result.get('coins_scanned', 0)} coins | "
+                f"{result.get('extremes_found', 0)} extremos | "
                 f"{result.get('scan_duration_s', 0):.1f}s"
             )
         except Exception as _e:
-            _plog.error(f"Pump scan loop error: {_e}")
-        await asyncio.sleep(30)
+            _flog.error(f"[FUNDING] scan loop error: {_e}", exc_info=True)
+        await asyncio.sleep(120)
 
 
 @app.get("/api/pump-scanner")
@@ -443,6 +468,88 @@ def get_crash_scanner():
         except Exception:
             pass
     return JSONResponse(content={"scan_ts": None, "candidates": [], "coins_scanned": 0})
+
+
+@app.get("/api/funding-extreme")
+def get_funding_extreme():
+    """Último resultado do Funding Extreme Scanner."""
+    if FUNDING_SCAN_FILE.exists():
+        try:
+            return JSONResponse(content=json.loads(FUNDING_SCAN_FILE.read_text()))
+        except Exception:
+            pass
+    return JSONResponse(content={
+        "scan_ts": None, "coins_scanned": 0,
+        "extremes_found": 0, "top_longs": [], "top_shorts": [], "all_extremes": []
+    })
+
+
+_bubbles_cache: dict = {"data": None, "cached_at": 0.0}
+_BUBBLES_TTL = 60  # segundos — atualiza a cada 1 min
+
+@app.get("/api/crypto-bubbles")
+def get_crypto_bubbles():
+    """
+    Retorna top 80 coins por volume para o Crypto Bubbles chart.
+    Usa MEXC Futures ticker (contract.mexc.com) — 1 request, todos os dados.
+    Campos: symbol, price, change_pct_24h, volume_usd_24h, bubble_size, oi_usd.
+    """
+    now = _time.time()
+    cached = _bubbles_cache.get("data")
+    if cached and (now - _bubbles_cache.get("cached_at", 0)) < _BUBBLES_TTL:
+        return JSONResponse(content=cached)
+
+    try:
+        r    = _req.get("https://contract.mexc.com/api/v1/contract/ticker", timeout=8)
+        data = r.json().get("data", [])
+
+        bubbles = []
+        for item in data:
+            try:
+                sym      = item.get("symbol", "")
+                if not sym.endswith("_USDT"):
+                    continue
+                price    = float(item.get("lastPrice", 0) or 0)
+                rfr      = float(item.get("riseFallRate", 0) or 0)
+                amount24 = float(item.get("amount24", 0) or 0)
+                hold_vol = float(item.get("holdVol", 0) or 0)
+                funding  = float(item.get("fundingRate", 0) or 0)
+                if price <= 0 or amount24 < 100_000:
+                    continue
+                oi_usd = hold_vol * price
+                bubbles.append({
+                    "symbol":        sym.replace("_USDT", ""),
+                    "price":         price,
+                    "change_pct":    round(rfr * 100, 2),
+                    "volume_usd":    round(amount24, 0),
+                    "oi_usd":        round(oi_usd, 0),
+                    "funding_rate":  round(funding, 6),
+                })
+            except Exception:
+                continue
+
+        # Sort by volume desc, top 80
+        bubbles.sort(key=lambda x: x["volume_usd"], reverse=True)
+        bubbles = bubbles[:80]
+
+        # Normalizar bubble_size (0-100) baseado em volume
+        if bubbles:
+            max_vol = bubbles[0]["volume_usd"]
+            for b in bubbles:
+                b["bubble_size"] = round(b["volume_usd"] / max_vol * 100, 1)
+
+        result = {
+            "fetched_at": _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime()),
+            "coins": bubbles
+        }
+        _bubbles_cache["data"]      = result
+        _bubbles_cache["cached_at"] = now
+        return JSONResponse(content=result)
+
+    except Exception as e:
+        if cached:
+            return JSONResponse(content=cached)
+        return JSONResponse(content={"fetched_at": None, "coins": [], "error": str(e)})
 
 
 @app.get("/api/full-market-scan")

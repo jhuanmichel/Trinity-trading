@@ -2882,3 +2882,84 @@ body {
   .fms-det-grid       { grid-template-columns: repeat(2,1fr); }
   .fms-risk-footer    { flex-direction: column; gap: 4px; }
 }
+
+/* ── FUNDING EXTREME ──────────────────────────────────────────────────────── */
+.funding-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  margin-bottom: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.funding-row:hover { background: rgba(255,255,255,0.04); }
+.funding-sym  { font-size: 12px; font-weight: 700; color: var(--text-primary); min-width: 72px; }
+.funding-tier { font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 3px; letter-spacing: 0.4px; }
+.funding-tier.CRITICAL { background: rgba(255,23,68,0.2);  color: #ff1744; border: 1px solid #ff174455; }
+.funding-tier.HIGH     { background: rgba(255,109,0,0.2);  color: #ff6d00; border: 1px solid #ff6d0055; }
+.funding-tier.ELEVATED { background: rgba(255,171,0,0.2);  color: #ffab00; border: 1px solid #ffab0055; }
+.funding-tier.WATCH    { background: rgba(120,144,156,0.2);color: #90a4ae; border: 1px solid #78909c55; }
+.funding-rate-val { font-size: 11px; font-family: 'JetBrains Mono', monospace; font-weight: 600; margin-left: auto; }
+.funding-score-bar {
+  width: 60px; height: 4px; background: var(--border); border-radius: 2px; flex-shrink: 0;
+}
+.funding-score-fill { height: 4px; border-radius: 2px; transition: width 0.4s; }
+
+/* ── CRYPTO BUBBLES ───────────────────────────────────────────────────────── */
+.bubbles-controls {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.tf-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tf-btn:hover  { border-color: var(--accent); color: var(--accent); }
+.tf-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,255,178,0.08); }
+
+.bubbles-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 12px 0;
+  min-height: 180px;
+}
+.bubble {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  text-align: center;
+  position: relative;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+}
+.bubble:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 16px rgba(0,255,178,0.25);
+  z-index: 10;
+}
+.bubble-sym  { font-size: 9px; font-weight: 700; color: #fff; line-height: 1; }
+.bubble-pct  { font-size: 8px; color: rgba(255,255,255,0.85); margin-top: 1px; }
+
+@media (max-width: 600px) {
+  .bubbles-grid { gap: 6px; }
+}

@@ -262,6 +262,72 @@
       </div>
     </section>
 
+    <!-- ── SECTION 5a: FUNDING EXTREME ──────────────────────────────────────── -->
+    <section class="section" id="fundingSection">
+      <div class="section-header">
+        <h2 class="section-title">FUNDING EXTREMO</h2>
+        <span class="section-divider"></span>
+        <span class="section-sub">Funding rates extremos — todos os contratos MEXC · atualiza a cada 2min</span>
+        <span class="fms-live-badge" id="fundingScanBadge">AGUARDANDO</span>
+      </div>
+
+      <div class="fms-meta-bar" id="fundingMetaBar">
+        <span class="c-muted" style="font-size:11px">Iniciando scanner...</span>
+      </div>
+
+      <div class="fms-dual">
+        <!-- TOP LONGS (funding negativo — shorts pagando) -->
+        <div class="fms-panel" id="fundingLongPanel">
+          <div class="fms-panel-header fms-pump-header">
+            <span class="fms-panel-icon">🚀</span>
+            <span class="fms-panel-title">SQUEEZE LONGS (fr &lt; 0)</span>
+          </div>
+          <div class="fms-list" id="fundingLongList">
+            <div class="fms-row skeleton-card" style="height:38px"></div>
+            <div class="fms-row skeleton-card" style="height:38px;margin-top:4px"></div>
+            <div class="fms-row skeleton-card" style="height:38px;margin-top:4px"></div>
+          </div>
+        </div>
+        <!-- TOP SHORTS (funding positivo — longs pagando) -->
+        <div class="fms-panel" id="fundingShortPanel">
+          <div class="fms-panel-header fms-crash-header">
+            <span class="fms-panel-icon">📉</span>
+            <span class="fms-panel-title">LIQUIDAÇÃO SHORTS (fr &gt; 0)</span>
+          </div>
+          <div class="fms-list" id="fundingShortList">
+            <div class="fms-row skeleton-card" style="height:38px"></div>
+            <div class="fms-row skeleton-card" style="height:38px;margin-top:4px"></div>
+            <div class="fms-row skeleton-card" style="height:38px;margin-top:4px"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SECTION 5b: CRYPTO BUBBLES ─────────────────────────────────────── -->
+    <section class="section" id="bubblesSection">
+      <div class="section-header">
+        <h2 class="section-title">CRYPTO BUBBLES</h2>
+        <span class="section-divider"></span>
+        <span class="section-sub">Volume · variação · funding — todos os contratos MEXC Futures</span>
+      </div>
+
+      <div class="bubbles-controls">
+        <button class="tf-btn active" data-tf="24h" onclick="setBubblesSort('change_pct',this)">VARIAÇÃO %</button>
+        <button class="tf-btn" data-tf="vol"        onclick="setBubblesSort('volume_usd',this)">VOLUME</button>
+        <button class="tf-btn" data-tf="funding"    onclick="setBubblesSort('funding_rate',this)">FUNDING</button>
+        <button class="tf-btn" data-tf="oi"         onclick="setBubblesSort('oi_usd',this)">OI</button>
+      </div>
+
+      <div class="bubbles-grid" id="bubblesGrid">
+        <div class="bubble skeleton-card" style="width:70px;height:70px;border-radius:50%"></div>
+        <div class="bubble skeleton-card" style="width:55px;height:55px;border-radius:50%"></div>
+        <div class="bubble skeleton-card" style="width:45px;height:45px;border-radius:50%"></div>
+        <div class="bubble skeleton-card" style="width:60px;height:60px;border-radius:50%"></div>
+        <div class="bubble skeleton-card" style="width:40px;height:40px;border-radius:50%"></div>
+        <div class="bubble skeleton-card" style="width:50px;height:50px;border-radius:50%"></div>
+      </div>
+    </section>
+
     <!-- ── SECTION 5: CRASH + PUMP RADAR (lado a lado) ──────────────────────── -->
     <section class="section radar-dual-section" id="radarSection">
 
@@ -270,7 +336,7 @@
         <div class="section-header">
           <h2 class="section-title crash-title">CRASH RADAR</h2>
           <span class="section-divider"></span>
-          <span class="section-sub">Predição de crashes — Gate.io Futures</span>
+          <span class="section-sub">Predição de crashes — MEXC Futures</span>
           <span class="crash-live-badge" id="crashScanBadge">AGUARDANDO</span>
         </div>
 
@@ -290,7 +356,7 @@
         <div class="section-header">
           <h2 class="section-title pump-title">PUMP RADAR</h2>
           <span class="section-divider"></span>
-          <span class="section-sub">Predição de pumps — Gate.io Futures</span>
+          <span class="section-sub">Predição de pumps — MEXC Futures</span>
           <span class="pump-live-badge" id="pumpScanBadge">AGUARDANDO</span>
         </div>
 

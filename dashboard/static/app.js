@@ -1036,10 +1036,11 @@ function renderCrashCard(c) {
     STRONG:    '#ff6d00',
     TRADEABLE: '#ffab00',
     WEAK:      '#78909c',
+    MICRO:     '#546e7a',
   };
   const clsColor = clsColors[moveCls] || '#78909c';
 
-  const clsEmoji = { EXTREME: '🔴', STRONG: '🟠', TRADEABLE: '🟡', WEAK: '⚪' }[moveCls] || '⚡';
+  const clsEmoji = { EXTREME: '🔴', STRONG: '🟠', TRADEABLE: '🟡', WEAK: '⚪', MICRO: '🔵' }[moveCls] || '⚡';
 
   const pctStr = c.price_change_pct >= 0
     ? `<span class="c-green">+${c.price_change_pct.toFixed(1)}%</span>`
@@ -1053,10 +1054,10 @@ function renderCrashCard(c) {
   const oppColor = oppPct >= 85 ? '#ff1744' : oppPct >= 70 ? '#ff6d00' : '#ffab00';
 
   const compBars = [
-    renderComponentBar('Liquidez',    comp.liquidity    || 0),
-    renderComponentBar('Alavancagem', comp.leverage     || 0),
-    renderComponentBar('Whale Dump',  comp.whale        || 0),
-    renderComponentBar('Funding/OI',  comp.funding_oi   || 0),
+    renderComponentBar('Cascade',    comp.cascade    || 0),
+    renderComponentBar('Collapse',   comp.collapse   || 0),
+    renderComponentBar('Whale Dump', comp.whale      || 0),
+    renderComponentBar('Volatility', comp.volatility || 0),
   ].join('');
 
   const signals = (c.top_signals || []).slice(0, 3)
@@ -1199,9 +1200,10 @@ function renderPumpCard(c) {
     STRONG:    '#00C853',
     TRADEABLE: '#ffab00',
     WEAK:      '#78909c',
+    MICRO:     '#546e7a',
   };
   const clsColor = clsColors[moveCls] || '#78909c';
-  const clsEmoji = { EXTREME: '🚀', STRONG: '⚡', TRADEABLE: '📡', WEAK: '👁' }[moveCls] || '⚡';
+  const clsEmoji = { EXTREME: '🚀', STRONG: '⚡', TRADEABLE: '📡', WEAK: '👁', MICRO: '🔵' }[moveCls] || '⚡';
 
   const pct      = c.price_change_pct >= 0 ? `+${c.price_change_pct.toFixed(1)}%` : `${c.price_change_pct.toFixed(1)}%`;
   const pctColor = c.price_change_pct >= 0 ? 'var(--green)' : 'var(--red)';
@@ -2308,3 +2310,163 @@ document.addEventListener('keydown', e => {
   const alt = document.getElementById('altDetailModal');
   if (alt && alt.style.display !== 'none') { alt.style.display = 'none'; }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNDING EXTREME SCANNER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const FUNDING_REFRESH_MS = 120_000; // 2 min
+
+function _tierColor(tier) {
+  return { CRITICAL: '#ff1744', HIGH: '#ff6d00', ELEVATED: '#ffab00', WATCH: '#78909c' }[tier] || '#546e7a';
+}
+
+function _renderFundingRow(s, direction) {
+  const color     = _tierColor(s.tier);
+  const frVal     = (s.funding_rate * 100).toFixed(4);
+  const frSign    = s.funding_rate >= 0 ? '+' : '';
+  const frColor   = direction === 'LONG' ? '#00e676' : '#ff1744';
+  const scorePct  = Math.min(100, s.composite_score);
+  const pctStr    = s.price_change_pct >= 0 ? `+${s.price_change_pct.toFixed(1)}%` : `${s.price_change_pct.toFixed(1)}%`;
+
+  return `<div class="funding-row" title="${(s.signals || []).join(' | ')}">
+    <span class="funding-sym">${s.symbol.replace('_USDT','')}</span>
+    <span class="funding-tier ${s.tier}">${s.tier}</span>
+    <span style="font-size:10px;color:var(--text-muted);min-width:36px">${pctStr}</span>
+    <span class="funding-rate-val" style="color:${frColor}">${frSign}${frVal}%/8h</span>
+    <div class="funding-score-bar">
+      <div class="funding-score-fill" style="width:${scorePct}%;background:${color}"></div>
+    </div>
+    <span style="font-size:10px;color:${color};font-weight:700;min-width:28px">${s.composite_score.toFixed(0)}</span>
+  </div>`;
+}
+
+async function updateFundingExtreme() {
+  try {
+    const d     = await fetch('/api/funding-extreme').then(r => r.json());
+    const badge = document.getElementById('fundingScanBadge');
+    const meta  = document.getElementById('fundingMetaBar');
+
+    const longs  = d.top_longs  || [];
+    const shorts = d.top_shorts || [];
+    const ts     = d.scan_ts ? new Date(d.scan_ts).toLocaleTimeString('pt-BR') : '--:--';
+
+    if (badge) {
+      badge.textContent  = `${d.extremes_found || 0} EXTREMOS`;
+      badge.className    = 'fms-live-badge';
+      badge.style.color  = (d.extremes_found || 0) > 0 ? '#ff6d00' : '';
+    }
+    if (meta) {
+      meta.innerHTML = `<span class="c-muted" style="font-size:11px">
+        Scan: <b>${ts}</b> · ${d.coins_scanned || 0} coins · ${d.scan_duration_s || 0}s
+      </span>`;
+    }
+
+    const longEl  = document.getElementById('fundingLongList');
+    const shortEl = document.getElementById('fundingShortList');
+
+    if (longEl) {
+      longEl.innerHTML = longs.length
+        ? longs.map(s => _renderFundingRow(s, 'LONG')).join('')
+        : '<div class="c-muted" style="font-size:11px;padding:12px">Nenhum funding extremo negativo</div>';
+    }
+    if (shortEl) {
+      shortEl.innerHTML = shorts.length
+        ? shorts.map(s => _renderFundingRow(s, 'SHORT')).join('')
+        : '<div class="c-muted" style="font-size:11px;padding:12px">Nenhum funding extremo positivo</div>';
+    }
+
+  } catch (_) {}
+}
+
+updateFundingExtreme();
+setInterval(updateFundingExtreme, FUNDING_REFRESH_MS);
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CRYPTO BUBBLES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const BUBBLES_REFRESH_MS = 60_000; // 1 min
+let _bubblesData    = [];
+let _bubblesSortKey = 'change_pct';
+
+function _bubbleColor(val, key) {
+  if (key === 'change_pct') {
+    if (val >= 15)  return ['#00e676', '#00c853'];
+    if (val >= 5)   return ['#69f0ae', '#00e676'];
+    if (val >= 1)   return ['#a5d6a7', '#69f0ae'];
+    if (val >= -1)  return ['#546e7a', '#37474f'];
+    if (val >= -5)  return ['#ef9a9a', '#e57373'];
+    if (val >= -15) return ['#ef5350', '#e53935'];
+    return ['#b71c1c', '#c62828'];
+  }
+  if (key === 'funding_rate') {
+    if (val < -0.005)  return ['#00e676', '#00c853']; // funding negativo extremo → LONG
+    if (val < -0.001)  return ['#69f0ae', '#00e676'];
+    if (val < 0)       return ['#a5d6a7', '#546e7a'];
+    if (val < 0.001)   return ['#546e7a', '#37474f'];
+    if (val < 0.005)   return ['#ef9a9a', '#e57373'];
+    return ['#ef5350', '#e53935'];
+  }
+  // volume_usd / oi_usd — escala de intensidade neutra
+  return ['#1a6e5a', '#0d4d3e'];
+}
+
+function _bubbleSize(b, sortKey) {
+  // Tamanho base (16-72px) proporcional ao volume relativo
+  const base = b.bubble_size || 0;
+  return Math.max(28, Math.min(76, 28 + base * 0.48));
+}
+
+function _renderBubble(b) {
+  const sortVal   = b[_bubblesSortKey] || 0;
+  const [bg, bg2] = _bubbleColor(sortVal, _bubblesSortKey);
+  const size      = _bubbleSize(b);
+  const label     = _bubblesSortKey === 'change_pct'
+    ? (sortVal >= 0 ? `+${sortVal.toFixed(1)}%` : `${sortVal.toFixed(1)}%`)
+    : _bubblesSortKey === 'funding_rate'
+      ? `${(sortVal * 100).toFixed(3)}%`
+      : `$${(sortVal / 1e6).toFixed(0)}M`;
+  const sym       = b.symbol.length > 5 ? b.symbol.slice(0, 5) : b.symbol;
+  const fontSize  = size < 40 ? 7 : size < 55 ? 8 : 9;
+
+  return `<div class="bubble"
+    style="width:${size}px;height:${size}px;background:radial-gradient(circle at 35% 35%,${bg},${bg2})"
+    title="${b.symbol} | Δ${b.change_pct >= 0 ? '+' : ''}${b.change_pct.toFixed(2)}% | Vol $${(b.volume_usd/1e6).toFixed(0)}M | FR ${(b.funding_rate*100).toFixed(4)}%/8h">
+    <span class="bubble-sym" style="font-size:${fontSize}px">${sym}</span>
+    <span class="bubble-pct" style="font-size:${Math.max(6, fontSize - 1)}px">${label}</span>
+  </div>`;
+}
+
+function setBubblesSort(key, btn) {
+  _bubblesSortKey = key;
+  document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  _renderBubbles();
+}
+
+function _renderBubbles() {
+  const grid = document.getElementById('bubblesGrid');
+  if (!grid || !_bubblesData.length) return;
+
+  // Sort descending by abs value (para funding, por abs)
+  const sorted = [..._bubblesData].sort((a, b) => {
+    const va = _bubblesSortKey === 'funding_rate' ? Math.abs(a[_bubblesSortKey] || 0) : (a[_bubblesSortKey] || 0);
+    const vb = _bubblesSortKey === 'funding_rate' ? Math.abs(b[_bubblesSortKey] || 0) : (b[_bubblesSortKey] || 0);
+    return vb - va;
+  });
+
+  grid.innerHTML = sorted.slice(0, 60).map(_renderBubble).join('');
+}
+
+async function updateCryptoBubbles() {
+  try {
+    const d = await fetch('/api/crypto-bubbles').then(r => r.json());
+    _bubblesData = d.coins || [];
+    _renderBubbles();
+  } catch (_) {}
+}
+
+updateCryptoBubbles();
+setInterval(updateCryptoBubbles, BUBBLES_REFRESH_MS);
