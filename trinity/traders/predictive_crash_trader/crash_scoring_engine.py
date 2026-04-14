@@ -210,6 +210,13 @@ def score_crash(
             elif btc_strength >= 15:
                 opportunity_score *= 0.90
 
+        # Sinal macro NFCI no Telegram
+        nfci_regime = btc.get("nfci_regime", "NEUTRAL")
+        if nfci_regime == "RISK_ON":
+            top_signals.append(f"🏛️ NFCI RISK ON ({btc.get('nfci_value', 0):.3f}) — macro favorável")
+        elif nfci_regime == "RISK_OFF":
+            top_signals.append(f"🏛️ NFCI RISK OFF ({btc.get('nfci_value', 0):.3f}) — macro desfavorável")
+
         # Sinais BTC no Telegram
         if btc.get("signals") and btc_strength >= 20:
             for sig in btc["signals"][:2]:

@@ -49,6 +49,11 @@ _funding_history: list  = []  # últimos 10 funding rates para detectar acelera�
 CACHE_TTL               = 30
 TRANSITION_MEMORY_S     = 300  # transição é "recente" por 5 minutos
 
+# ── FRED API (macro conditions) ───────────────────────────────────────────
+FRED_BASE      = "https://api.stlouisfed.org/fred/series/observations"
+_macro_cache: Dict = {"data": None, "ts": 0.0}
+MACRO_CACHE_TTL    = 3600  # 1 hora (dados são semanais — não precisa buscar a cada ciclo)
+
 
 def get_btc_regime() -> dict:
     """
@@ -231,6 +236,55 @@ def _full_analysis() -> dict:
     elif momentum_4h < -2.0:
         bear_points += 5
 
+    # ── CAMADA G: NFCI — Condições financeiras macro (0-15 pts) ─────────────
+    macro = _get_macro_conditions()
+    nfci_regime    = macro.get("nfci_regime", "NEUTRAL")
+    nfci_direction = macro.get("nfci_direction", "STABLE")
+
+    if nfci_regime == "RISK_ON":
+        if nfci_direction == "LOOSENING":
+            bull_points += 15
+            bull_confirmations += 1
+            signals.append(
+                f"NFCI RISK ON + afrouxando ({macro['nfci_value']:.3f}) — macro bullish"
+            )
+        else:
+            bull_points += 8
+            signals.append(
+                f"NFCI RISK ON ({macro['nfci_value']:.3f}) — condições frouxas"
+            )
+    elif nfci_regime == "RISK_OFF":
+        if nfci_direction == "TIGHTENING":
+            bear_points += 15
+            bear_confirmations += 1
+            signals.append(
+                f"NFCI RISK OFF + apertando ({macro['nfci_value']:.3f}) — macro bearish"
+            )
+        else:
+            bear_points += 8
+            signals.append(
+                f"NFCI RISK OFF ({macro['nfci_value']:.3f}) — condições apertadas"
+            )
+
+    # ── CAMADA H: M2 Liquidez global (0-10 pts) ─────────────────────────────
+    m2_direction = macro.get("m2_direction", "STABLE")
+    m2_yoy       = macro.get("m2_yoy_pct", 0)
+
+    if m2_direction == "EXPANDING" and m2_yoy > 5:
+        bull_points += 10
+        bull_confirmations += 1
+        signals.append(f"M2 expandindo +{m2_yoy:.1f}% YoY — liquidez crescente")
+    elif m2_direction == "EXPANDING":
+        bull_points += 5
+        signals.append(f"M2 expandindo +{m2_yoy:.1f}% YoY")
+    elif m2_direction == "CONTRACTING" and m2_yoy < -2:
+        bear_points += 10
+        bear_confirmations += 1
+        signals.append(f"M2 contraindo {m2_yoy:.1f}% YoY — liquidez secando")
+    elif m2_direction == "CONTRACTING":
+        bear_points += 5
+        signals.append(f"M2 contraindo {m2_yoy:.1f}% YoY")
+
     # ── Direção e classificação ────────────────────────────────────────────
     net = bull_points - bear_points
     strength = min(100, max(bull_points, bear_points))
@@ -263,7 +317,9 @@ def _full_analysis() -> dict:
         f"confirmations={confirmations} bias={bias} "
         f"transition='{transition}' boost={transition_boost:.2f} | "
         f"funding={funding_ann:.0f}%/yr 15m={momentum_15m:+.1f}% "
-        f"1h={momentum_1h:+.1f}% 4h={momentum_4h:+.1f}% L/S={ls_ratio:.2f}"
+        f"1h={momentum_1h:+.1f}% 4h={momentum_4h:+.1f}% L/S={ls_ratio:.2f} | "
+        f"NFCI={macro.get('nfci_value', 0):.3f}({macro.get('nfci_regime', '?')}) "
+        f"M2={macro.get('m2_yoy_pct', 0):+.1f}%({macro.get('m2_direction', '?')})"
     )
 
     return {
@@ -286,6 +342,14 @@ def _full_analysis() -> dict:
         "bear_score":       round(bear_points, 1),
         "confirmations":    confirmations,
         "momentum_score":   round(min(100, bull_points + bear_points), 1),
+        # ── Campos macro ─────────────────────────────────────────────────
+        "nfci_value":       macro.get("nfci_value", 0),
+        "nfci_regime":      macro.get("nfci_regime", "NEUTRAL"),
+        "nfci_direction":   macro.get("nfci_direction", "STABLE"),
+        "m2_yoy_pct":       macro.get("m2_yoy_pct", 0),
+        "m2_direction":     macro.get("m2_direction", "STABLE"),
+        "macro_bias":       macro.get("macro_bias", "NEUTRAL"),
+        "macro_strength":   macro.get("macro_strength", 0),
     }
 
 
@@ -456,6 +520,211 @@ def _get_multi_tf_momentum() -> Tuple[float, float, float]:
     return 0.0, 0.0, 0.0
 
 
+def _get_fred_key() -> str:
+    """Obtém FRED API key do config."""
+    try:
+        import sys
+        from pathlib import Path
+        _base = Path(__file__).parent.parent.parent
+        if str(_base) not in sys.path:
+            sys.path.insert(0, str(_base))
+        from config import FRED_API_KEY
+        return FRED_API_KEY or ""
+    except Exception:
+        import os
+        return os.getenv("FRED_API_KEY", "")
+
+
+def _fetch_fred_series(series_id: str, api_key: str, limit: int = 8) -> list:
+    """
+    Busca observações de uma série FRED.
+    Retorna lista ordenada do mais recente ao mais antigo.
+    """
+    try:
+        r = requests.get(
+            FRED_BASE,
+            params={
+                "series_id":  series_id,
+                "api_key":    api_key,
+                "file_type":  "json",
+                "limit":      limit,
+                "sort_order": "desc",
+            },
+            headers=_HEADERS,
+            timeout=15,
+        )
+        if r.status_code != 200:
+            log.debug(f"[BTCRegime] FRED {series_id}: status {r.status_code}")
+            return []
+        data = r.json()
+        observations = data.get("observations", [])
+        # Filtrar valores válidos (FRED retorna "." para dados pendentes)
+        return [obs for obs in observations if obs.get("value", ".") != "."]
+    except Exception as e:
+        log.debug(f"[BTCRegime] FRED {series_id} error: {e}")
+        return []
+
+
+def _default_macro() -> dict:
+    return {
+        "nfci_value": 0.0, "nfci_prev": 0.0,
+        "nfci_direction": "STABLE", "nfci_regime": "NEUTRAL",
+        "m2_yoy_pct": 0.0, "m2_direction": "STABLE",
+        "macro_bias": "NEUTRAL", "macro_strength": 0,
+    }
+
+
+def _get_macro_conditions() -> dict:
+    """
+    Busca NFCI e M2 do FRED. Cache de 1 hora.
+
+    NFCI (National Financial Conditions Index):
+      Negativo = condições frouxas = RISK ON = bullish BTC
+      Positivo = condições apertadas = RISK OFF = bearish BTC
+      A DIREÇÃO (melhorando ou piorando) é tão importante quanto o nível.
+
+    M2 (Money Supply):
+      Crescendo = mais liquidez = bullish
+      Contraindo = menos liquidez = bearish
+
+    Returns:
+        {
+            "nfci_value":      float,  # valor atual (-0.433 = frouxo)
+            "nfci_prev":       float,  # valor semana anterior
+            "nfci_direction":  str,    # LOOSENING / TIGHTENING / STABLE
+            "nfci_regime":     str,    # RISK_ON / RISK_OFF / NEUTRAL
+            "m2_yoy_pct":      float,  # M2 variação % ano-sobre-ano
+            "m2_direction":    str,    # EXPANDING / CONTRACTING / STABLE
+            "macro_bias":      str,    # BULLISH / BEARISH / NEUTRAL
+            "macro_strength":  float,  # 0-100
+        }
+    """
+    now = time.time()
+    if _macro_cache["data"] and (now - _macro_cache["ts"]) < MACRO_CACHE_TTL:
+        return _macro_cache["data"]
+
+    fred_key = _get_fred_key()
+    if not fred_key:
+        log.debug("[BTCRegime] FRED key não configurada")
+        return _default_macro()
+
+    result = _default_macro()
+
+    try:
+        # ── NFCI (semanal) ────────────────────────────────────────────────
+        nfci_data = _fetch_fred_series("NFCI", fred_key, limit=8)
+        if len(nfci_data) >= 2:
+            nfci_current = float(nfci_data[0]["value"])
+            nfci_prev    = float(nfci_data[1]["value"])
+            nfci_4w_ago  = float(nfci_data[3]["value"]) if len(nfci_data) > 3 else nfci_prev
+
+            delta_1w = nfci_current - nfci_prev
+            delta_4w = nfci_current - nfci_4w_ago
+
+            if delta_1w < -0.05 or delta_4w < -0.15:
+                nfci_direction = "LOOSENING"
+            elif delta_1w > 0.05 or delta_4w > 0.15:
+                nfci_direction = "TIGHTENING"
+            else:
+                nfci_direction = "STABLE"
+
+            if nfci_current < -0.10:
+                nfci_regime = "RISK_ON"
+            elif nfci_current > 0.10:
+                nfci_regime = "RISK_OFF"
+            else:
+                nfci_regime = "NEUTRAL"
+
+            result["nfci_value"]     = round(nfci_current, 4)
+            result["nfci_prev"]      = round(nfci_prev, 4)
+            result["nfci_direction"] = nfci_direction
+            result["nfci_regime"]    = nfci_regime
+
+            log.info(
+                f"[BTCRegime] NFCI: {nfci_current:.3f} (prev: {nfci_prev:.3f}) "
+                f"dir={nfci_direction} regime={nfci_regime}"
+            )
+    except Exception as e:
+        log.debug(f"[BTCRegime] NFCI fetch error: {e}")
+
+    try:
+        # ── M2 Money Supply (semanal — WM2NS) ────────────────────────────
+        m2_data = _fetch_fred_series("WM2NS", fred_key, limit=60)
+        if len(m2_data) >= 52:
+            m2_current  = float(m2_data[0]["value"])
+            m2_year_ago = float(m2_data[51]["value"])
+
+            m2_yoy = ((m2_current - m2_year_ago) / m2_year_ago * 100) if m2_year_ago > 0 else 0.0
+
+            m2_4w_ago = float(m2_data[3]["value"]) if len(m2_data) > 3 else m2_current
+            m2_trend  = m2_current - m2_4w_ago
+
+            if m2_trend > 0 and m2_yoy > 2:
+                m2_direction = "EXPANDING"
+            elif m2_trend < 0 and m2_yoy < 0:
+                m2_direction = "CONTRACTING"
+            else:
+                m2_direction = "STABLE"
+
+            result["m2_yoy_pct"]   = round(m2_yoy, 2)
+            result["m2_direction"] = m2_direction
+
+            log.info(
+                f"[BTCRegime] M2: YoY={m2_yoy:.1f}% dir={m2_direction} "
+                f"current={m2_current:.0f}B prev_4w={m2_4w_ago:.0f}B"
+            )
+        elif len(m2_data) >= 2:
+            m2_current = float(m2_data[0]["value"])
+            m2_prev    = float(m2_data[1]["value"])
+            result["m2_yoy_pct"]   = 0.0
+            result["m2_direction"] = "EXPANDING" if m2_current > m2_prev else "CONTRACTING"
+    except Exception as e:
+        log.debug(f"[BTCRegime] M2 fetch error: {e}")
+
+    # ── Macro bias combinado ──────────────────────────────────────────────
+    bull_signals = 0
+    bear_signals = 0
+
+    if result["nfci_regime"] == "RISK_ON":
+        bull_signals += 1
+    elif result["nfci_regime"] == "RISK_OFF":
+        bear_signals += 1
+
+    if result["nfci_direction"] == "LOOSENING":
+        bull_signals += 1
+    elif result["nfci_direction"] == "TIGHTENING":
+        bear_signals += 1
+
+    if result["m2_direction"] == "EXPANDING":
+        bull_signals += 1
+    elif result["m2_direction"] == "CONTRACTING":
+        bear_signals += 1
+
+    if result["m2_yoy_pct"] > 5:
+        bull_signals += 1
+    elif result["m2_yoy_pct"] < -2:
+        bear_signals += 1
+
+    if bull_signals >= 3:
+        result["macro_bias"]     = "BULLISH"
+        result["macro_strength"] = min(100, bull_signals * 25)
+    elif bear_signals >= 3:
+        result["macro_bias"]     = "BEARISH"
+        result["macro_strength"] = min(100, bear_signals * 25)
+    elif bull_signals > bear_signals:
+        result["macro_bias"]     = "BULLISH"
+        result["macro_strength"] = min(100, bull_signals * 20)
+    elif bear_signals > bull_signals:
+        result["macro_bias"]     = "BEARISH"
+        result["macro_strength"] = min(100, bear_signals * 20)
+    else:
+        result["macro_bias"]     = "NEUTRAL"
+        result["macro_strength"] = 0
+
+    _macro_cache.update({"data": result, "ts": now})
+    return result
+
+
 def _default_regime() -> dict:
     return {
         "direction": "NEUTRAL", "strength": 0, "bias": "NEUTRAL",
@@ -464,4 +733,7 @@ def _default_regime() -> dict:
         "price_change_pct": 0, "momentum_15m": 0, "momentum_1h": 0, "momentum_4h": 0,
         "oi_usd": 0, "ls_ratio": 1.0, "signals": [],
         "bull_score": 0, "bear_score": 0, "confirmations": 0, "momentum_score": 0,
+        "nfci_value": 0, "nfci_regime": "NEUTRAL", "nfci_direction": "STABLE",
+        "m2_yoy_pct": 0, "m2_direction": "STABLE",
+        "macro_bias": "NEUTRAL", "macro_strength": 0,
     }

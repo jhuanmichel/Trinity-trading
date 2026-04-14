@@ -23,6 +23,9 @@ COINGLASS_API_KEY   = os.getenv("COINGLASS_API_KEY", "07b9e463298b43cc9d0008b1c1
 GLASSNODE_API_KEY   = os.getenv("GLASSNODE_API_KEY", "")
 CRYPTOQUANT_API_KEY = os.getenv("CRYPTOQUANT_API_KEY", "")
 
+# FRED (Federal Reserve Economic Data) — gratuito, sem limite
+FRED_API_KEY = os.getenv("FRED_API_KEY", "816262af9534ed9260cd1171a22fd964")
+
 # Parâmetros do agente
 SYMBOL                   = os.getenv("SYMBOL", "BTC/USDT:USDT")
 TIMEFRAME                = os.getenv("TIMEFRAME", "15m")
