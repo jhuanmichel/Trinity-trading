@@ -157,49 +157,77 @@ def analyze_funding_extreme(coin_data: dict, direction: str = "PUMP") -> dict:
 
         # ═══════════════════════════════════════════════════════════════════
         # DIMENSÃO 3: CONTEXTO DE PREÇO (0-100)
+        # Regra central: se o preço cai MAIS RÁPIDO que o custo do funding,
+        # o lado que está pagando está GANHANDO — não há squeeze iminente.
         # flat + funding extremo = BOMBA ARMADA (melhor cenário)
-        # movendo na direção = squeeze/liquidação JÁ COMEÇOU
         # ═══════════════════════════════════════════════════════════════════
+        context = ""  # rastreado para safety cap
+
         if direction == "PUMP":
-            if abs(pct_change) < 3.0:
-                context_score = 100
+            # Se a queda supera 1.5× o custo diário → shorts estão ganhando → sem squeeze
+            drop_exceeds_cost = (pct_change < 0 and abs(pct_change) > daily_cost * 1.5)
+
+            if drop_exceeds_cost:
+                context_score = 0
+                context       = "FALLING"
                 signals.append(
-                    f"💣 Preço FLAT ({pct_change:+.1f}%) com funding extremo — BOMBA ARMADA"
+                    f"⛔ Queda {pct_change:.1f}% excede custo funding {daily_cost:.1f}%/dia "
+                    f"— shorts ganhando, sem squeeze"
                 )
+            elif abs(pct_change) < 3.0:
+                context_score = 100
+                context       = "BOMBA_ARMADA"
+                signals.append(f"💣 Preço FLAT ({pct_change:+.1f}%) + funding extremo = BOMBA ARMADA")
             elif pct_change > 3.0:
                 context_score = 80
-                signals.append(
-                    f"🚀 Preço subindo {pct_change:+.1f}% — squeeze JÁ EM ANDAMENTO"
-                )
+                context       = "SQUEEZE_ATIVO"
+                signals.append(f"🚀 Squeeze ativo — preço subindo {pct_change:+.1f}%")
             elif pct_change > 0:
                 context_score = 60
-            elif pct_change > -5.0:
-                context_score = 40
+                context       = "ACUMULANDO"
+            elif abs(pct_change) <= daily_cost:
+                # Queda menor que custo funding → funding pressiona mais → squeeze provável
+                context_score = 50
+                context       = "ACUMULANDO"
+                signals.append(
+                    f"📊 Queda leve {pct_change:.1f}% < custo {daily_cost:.1f}%/dia — funding pressiona"
+                )
             else:
+                # Zona cinza: queda entre daily_cost e 1.5× daily_cost
                 context_score = 20
+                context       = "LATE"
                 signals.append(
-                    f"⏳ Preço caindo {pct_change:.1f}% mas funding destrói shorts no tempo"
+                    f"⏳ Queda {pct_change:.1f}% vs custo {daily_cost:.1f}%/dia — monitorar"
                 )
+
         else:  # CRASH
-            if abs(pct_change) < 3.0:
-                context_score = 100
+            # Se a alta supera 1.5× o custo diário → longs estão ganhando → sem liquidação
+            rise_exceeds_cost = (pct_change > 0 and pct_change > daily_cost * 1.5)
+
+            if rise_exceeds_cost:
+                context_score = 0
+                context       = "RISING"
                 signals.append(
-                    f"💣 Preço FLAT ({pct_change:+.1f}%) com longs pagando — ARMADILHA"
+                    f"⛔ Alta {pct_change:+.1f}% excede custo funding {daily_cost:.1f}%/dia "
+                    f"— longs ganhando"
                 )
+            elif abs(pct_change) < 3.0:
+                context_score = 100
+                context       = "BOMBA_ARMADA"
+                signals.append(f"💣 Preço FLAT ({pct_change:+.1f}%) com longs pagando — ARMADILHA")
             elif pct_change < -3.0:
                 context_score = 80
-                signals.append(
-                    f"📉 Preço caindo {pct_change:.1f}% — liquidação JÁ EM ANDAMENTO"
-                )
+                context       = "LIQUIDACAO_ATIVA"
+                signals.append(f"📉 Liquidação ativa — preço caindo {pct_change:.1f}%")
             elif pct_change < 0:
                 context_score = 60
-            elif pct_change < 5.0:
-                context_score = 40
+                context       = "ACUMULANDO"
+            elif pct_change <= daily_cost:
+                context_score = 50
+                context       = "ACUMULANDO"
             else:
                 context_score = 20
-                signals.append(
-                    f"⏳ Preço subindo {pct_change:+.1f}% mas funding destrói longs no tempo"
-                )
+                context       = "LATE"
 
         # ═══════════════════════════════════════════════════════════════════
         # DIMENSÃO 4: VOLUME (0-100)
@@ -246,6 +274,12 @@ def analyze_funding_extreme(coin_data: dict, direction: str = "PUMP") -> dict:
         else:
             tier           = "NORMAL"
             composite_mult = 1.0
+
+        # Safety cap: queda/alta excedeu custo de funding → lado oposto está ganhando
+        # Não há squeeze/liquidação iminente — não amplificar o score
+        if context in ("FALLING", "RISING"):
+            composite_mult = 1.0
+            tier           = "NORMAL"
 
         # ── Estimativa de tempo até squeeze/liquidação ─────────────────────
         if daily_cost >= 5.0:

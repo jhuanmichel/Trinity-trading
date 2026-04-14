@@ -243,26 +243,44 @@ class FundingExtremeScanner:
                 signals.append(f"🔋 OI ${oi_usd/1e6:.1f}M — combustível para squeeze/liquidação")
 
             # ── DIMENSÃO 3: CONTEXTO DE PREÇO (0-25) ─────────────────────────
-            if direction == "LONG":   # funding negativo: queremos short squeeze (preço subindo)
-                if abs(pct_change) < 3.0:
-                    context_score = 25
+            # Mesma regra do engine: se a variação excede 1.5× o custo diário
+            # no sentido errado, o lado pagante está GANHANDO — zerar contexto.
+            context = ""
+
+            if direction == "LONG":   # funding negativo: short squeeze (preço subindo)
+                drop_exceeds_cost = (pct_change < 0 and abs(pct_change) > daily_cost_pct * 1.5)
+                if drop_exceeds_cost:
+                    ctx_score, context = 0, "FALLING"
+                elif abs(pct_change) < 3.0:
+                    ctx_score, context = 25, "BOMBA_ARMADA"
                     signals.append(f"💣 Preço FLAT ({pct_change:+.1f}%) com shorts presos — BOMBA ARMADA")
                 elif pct_change > 3.0:
-                    context_score = 20
+                    ctx_score, context = 18, "SQUEEZE_ATIVO"
                     signals.append(f"🚀 Preço +{pct_change:.1f}% — squeeze EM ANDAMENTO")
-                elif pct_change > 0:   context_score = 14
-                elif pct_change > -5:  context_score = 8
-                else:                  context_score = 4
-            else:  # funding positivo: queremos long liquidation (preço caindo)
-                if abs(pct_change) < 3.0:
-                    context_score = 25
+                elif pct_change > 0:
+                    ctx_score, context = 12, "ACUMULANDO"
+                elif abs(pct_change) <= daily_cost_pct:
+                    ctx_score, context = 12, "ACUMULANDO"
+                else:
+                    ctx_score, context = 5, "LATE"
+            else:  # funding positivo: long liquidation (preço caindo)
+                rise_exceeds_cost = (pct_change > 0 and pct_change > daily_cost_pct * 1.5)
+                if rise_exceeds_cost:
+                    ctx_score, context = 0, "RISING"
+                elif abs(pct_change) < 3.0:
+                    ctx_score, context = 25, "BOMBA_ARMADA"
                     signals.append(f"💣 Preço FLAT ({pct_change:+.1f}%) com longs presos — ARMADILHA")
                 elif pct_change < -3.0:
-                    context_score = 20
+                    ctx_score, context = 18, "LIQUIDACAO_ATIVA"
                     signals.append(f"📉 Preço {pct_change:.1f}% — liquidação EM ANDAMENTO")
-                elif pct_change < 0:   context_score = 14
-                elif pct_change < 5:   context_score = 8
-                else:                  context_score = 4
+                elif pct_change < 0:
+                    ctx_score, context = 12, "ACUMULANDO"
+                elif pct_change <= daily_cost_pct:
+                    ctx_score, context = 12, "ACUMULANDO"
+                else:
+                    ctx_score, context = 5, "LATE"
+
+            context_score = ctx_score
 
             # ── DIMENSÃO 4: VOLUME (0-10) ─────────────────────────────────────
             if   amount24 >= 50_000_000: volume_score = 10
