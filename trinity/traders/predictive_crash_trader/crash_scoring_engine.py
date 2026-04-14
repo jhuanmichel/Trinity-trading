@@ -168,9 +168,24 @@ def score_crash(
     move_classification = _classify_expected_move(expected_move_pct)
     tradeable           = expected_move_pct >= 4.0  # baixado de 6% para 4%
 
+    # ── Overextension Multiplier ───────────────────────────────────────────
+    # Coins que já subiram muito têm maior probabilidade de crash violento
+    pct_change_24h = float(_cd.get("price_change_pct", 0))
+
+    overext_mult = 1.0
+    if   pct_change_24h > 150: overext_mult = 1.70
+    elif pct_change_24h > 100: overext_mult = 1.50
+    elif pct_change_24h > 70:  overext_mult = 1.35
+    elif pct_change_24h > 50:  overext_mult = 1.25
+    elif pct_change_24h > 30:  overext_mult = 1.15
+    elif pct_change_24h > 20:  overext_mult = 1.08
+
+    if overext_mult > 1.0:
+        top_signals.insert(0, f"⚠️ OVEREXTENDED +{pct_change_24h:.0f}% 24h (boost ×{overext_mult:.2f})")
+
     # ── Opportunity Score final ────────────────────────────────────────────
-    # ORDEM CORRETA: penalidade PRIMEIRO, depois bônus DNA
-    opportunity_score = opportunity_score_raw
+    # ORDEM: overext_mult → penalidade → DNA → BTC boost → round
+    opportunity_score = opportunity_score_raw * overext_mult
 
     # 1. Penalidade (×0.70) se expected_move < 4% — aplicar ANTES do DNA
     if not tradeable:

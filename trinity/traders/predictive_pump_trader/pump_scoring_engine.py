@@ -183,10 +183,31 @@ def score_pump(
     move_classification = _classify_expected_move(expected_move_pct)
     tradeable           = expected_move_pct >= 4.0  # baixado de 6% para 4%
 
+    # ── Momentum Acceleration Multiplier ──────────────────────────────────
+    # Pump em andamento (+8% a +50%) é sinal de força — ainda pode continuar
+    pct_change_pump = float(_cd.get("price_change_pct", 0))
+    fund_ann_mom    = funding_rate * 3.0 * 365.0 * 100.0
+
+    momentum_mult = 1.0
+    if 8.0 <= pct_change_pump < 25.0:
+        # Funding negativo + pump = short squeeze ativo → boost máximo
+        momentum_mult = 1.35 if fund_ann_mom < -30.0 else 1.20
+    elif 25.0 <= pct_change_pump <= 50.0:
+        momentum_mult = 1.10
+
+    if momentum_mult >= 1.35:
+        top_signals.insert(0,
+            f"🚀 SQUEEZE ATIVO +{pct_change_pump:.0f}% | funding {fund_ann_mom:.0f}%/yr (boost ×{momentum_mult:.2f})")
+    elif momentum_mult >= 1.20:
+        top_signals.insert(0,
+            f"📈 MOMENTUM +{pct_change_pump:.0f}% 24h (boost ×{momentum_mult:.2f})")
+    elif momentum_mult > 1.0:
+        top_signals.insert(0,
+            f"⚡ CONTINUAÇÃO +{pct_change_pump:.0f}% 24h (boost ×{momentum_mult:.2f})")
+
     # ── Opportunity Score final ────────────────────────────────────────────
-    # ORDEM CORRETA: penalidade PRIMEIRO, depois bônus DNA
-    # (evita que a penalidade seja aplicada sobre o score já bonificado)
-    opportunity_score = opportunity_score_raw
+    # ORDEM: momentum_mult → penalidade → DNA → BTC boost → round
+    opportunity_score = opportunity_score_raw * momentum_mult
 
     # 1. Penalidade (×0.70) se expected_move < 4% — aplicar ANTES do DNA
     if not tradeable:

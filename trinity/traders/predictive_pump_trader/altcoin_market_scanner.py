@@ -62,7 +62,7 @@ EXCLUDED_KEYWORDS = {
 }
 
 MIN_VOLUME_24H_USD   = 300_000      # $300K mínimo (mesmo do FMS)
-MAX_PRICE_CHANGE_PCT = 15.0         # exclui moedas que já pomparam > 15%
+MAX_PRICE_CHANGE_PCT = 50.0         # captura pumps em andamento até +50%
 
 _universe_cache: dict = {"data": [], "ts": 0.0}
 _ls_cache:       dict = {}
