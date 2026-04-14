@@ -40,6 +40,8 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from trinity.traders.smart_entry_engine import calculate_smart_entry
+
 log = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -319,6 +321,17 @@ def run_pump_cycle() -> dict:
                 continue
 
         try:
+            # Smart Entry — Plano A/B com confluência de níveis
+            try:
+                from trinity.traders.predictive_pump_trader.altcoin_market_scanner import fetch_coin_data as _fc
+                _cd_entry = _fc(symbol)
+                if _cd_entry:
+                    _ctx  = c.get("dna_pattern", "") or c.get("move_classification", "")
+                    _move = c.get("expected_move_pct", 5.0)
+                    c["_smart_plans"] = calculate_smart_entry(_cd_entry, "LONG", _ctx, _move)
+            except Exception:
+                pass  # fail-open — Telegram mostra formato antigo se falhar
+
             _send_pump_telegram(c)
             _alert_cooldown[symbol]   = now
             _alert_last_score[symbol] = score
@@ -456,52 +469,88 @@ def _send_pump_telegram(c: dict):
         signals     = c.get("top_signals", [])
         dna_pattern = c.get("dna_pattern", "")
         prob_pct    = c.get("probability_pct", 0)
-        entry       = c.get("entry", price)
-        stop        = c.get("stop", 0)
-        tp1         = c.get("tp1", 0)
-        tp2         = c.get("tp2", 0)
-        tp3         = c.get("tp3", 0)
+        plans       = c.get("_smart_plans")
 
         tier_map   = {"EXTREME": "🔥🔥🔥", "STRONG": "🔥🔥", "TRADEABLE": "🔥", "WEAK": "⚡", "MICRO": "👁"}
         tier_emoji = tier_map.get(move_cls, "⚡")
-        header     = "🚀" if opp_score >= 75 else "📡"
+        header     = "🚀" if opp_score >= 85 else "📡"
         pct_str    = f"+{pct_change:.1f}%" if pct_change >= 0 else f"{pct_change:.1f}%"
 
         def bar(val, mx=25):
             filled = max(0, min(8, int(val / mx * 8)))
             return "█" * filled + "░" * (8 - filled)
 
-        # Sinais — máximo 4 para não estourar 4096 chars
+        def fp(p):
+            if p <= 0: return "—"
+            if p < 0.001: return f"${p:,.7f}"
+            if p < 0.01:  return f"${p:,.6f}"
+            if p < 1:     return f"${p:,.5f}"
+            if p < 10:    return f"${p:,.4f}"
+            if p < 100:   return f"${p:,.3f}"
+            return f"${p:,.2f}"
+
+        def pd(lv, ref, d="up"):
+            if ref <= 0 or lv <= 0: return ""
+            pct = abs(lv - ref) / ref * 100
+            return f"({'+'  if d == 'up' else '-'}{pct:.1f}%)"
+
         sig_lines = ""
         for s in signals[:4]:
             sig_lines += f"\n• {s}"
 
-        msg = (
-            f"{header} *TRINITY — LONG SETUP*\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"{tier_emoji} *{move_cls}*"
-        )
+        msg = f"{header} *TRINITY — LONG SETUP*\n━━━━━━━━━━━━━━━━━━━━━━\n{tier_emoji} *{move_cls}*"
         if dna_pattern:
             msg += f" — {dna_pattern}"
         msg += (
-            f"\n🪙 `{symbol}` | {pct_str} | {_fmt_p(price)}\n\n"
+            f"\n🪙 `{symbol}` | {pct_str} | {fp(price)}\n\n"
             f"🎯 *Score: {opp_score:.0f}* | Move: *+{move_pct:.1f}%* | Prob: *{prob_pct:.0f}%*\n\n"
             f"📊 *DETECTORES:*\n"
             f"  Silent:  `{bar(comp.get('silent_acc', 0))}` {comp.get('silent_acc', 0):.1f}\n"
             f"  Squeeze: `{bar(comp.get('squeeze', 0))}` {comp.get('squeeze', 0):.1f}\n"
             f"  Gravity: `{bar(comp.get('gravity', 0))}` {comp.get('gravity', 0):.1f}\n"
             f"  Breakout:`{bar(comp.get('breakout', 0))}` {comp.get('breakout', 0):.1f}\n\n"
-            f"🔑 *SINAIS:*{sig_lines}\n\n"
-            f"📌 *TRADE PLAN:*\n"
-            f"  `LONG  {_fmt_p(entry)}`\n"
-            f"  `STOP  {_fmt_p(stop)}  {_pct_diff(stop, entry, 'down')}`\n"
-            f"  `TP1   {_fmt_p(tp1)}  {_pct_diff(tp1, entry, 'up')}`\n"
-            f"  `TP2   {_fmt_p(tp2)}  {_pct_diff(tp2, entry, 'up')}`\n"
-            f"  `TP3   {_fmt_p(tp3)}  {_pct_diff(tp3, entry, 'up')}`\n\n"
-            f"💡 _{action}_"
+            f"🔑 *SINAIS:*{sig_lines}\n"
         )
 
-        # Truncar se exceder limite Telegram (4096 chars)
+        if plans:
+            rec = plans.get("recommended_plan", "B")
+            pa  = plans.get("plan_a", {})
+            pb  = plans.get("plan_b", {})
+
+            star_a = " ⭐" if rec == "A" else ""
+            star_b = " ⭐" if rec == "B" else ""
+
+            msg += (
+                f"\n📌 *PLANO A — {pa.get('label', '')}*{star_a}\n"
+                f"  `LONG  {fp(pa.get('entry',0))}` ← _{pa.get('instruction','')}_\n"
+                f"  `STOP  {fp(pa.get('stop',0))}  {pd(pa.get('stop',0), pa.get('entry',0), 'down')}`\n"
+                f"  `TP1   {fp(pa.get('tp1',0))}  {pd(pa.get('tp1',0), pa.get('entry',0), 'up')}`\n"
+                f"  `TP2   {fp(pa.get('tp2',0))}  {pd(pa.get('tp2',0), pa.get('entry',0), 'up')}`\n"
+                f"  `TP3   {fp(pa.get('tp3',0))}  {pd(pa.get('tp3',0), pa.get('entry',0), 'up')}`\n"
+                f"  R:R *1:{pa.get('rr_ratio', 0):.1f}*\n"
+                f"\n📌 *PLANO B — {pb.get('label', '')}*{star_b}\n"
+                f"  `LONG  {fp(pb.get('entry',0))}` ← _{pb.get('instruction','')}_\n"
+                f"  `STOP  {fp(pb.get('stop',0))}  {pd(pb.get('stop',0), pb.get('entry',0), 'down')}`\n"
+                f"  `TP1   {fp(pb.get('tp1',0))}  {pd(pb.get('tp1',0), pb.get('entry',0), 'up')}`\n"
+                f"  `TP2   {fp(pb.get('tp2',0))}  {pd(pb.get('tp2',0), pb.get('entry',0), 'up')}`\n"
+                f"  `TP3   {fp(pb.get('tp3',0))}  {pd(pb.get('tp3',0), pb.get('entry',0), 'up')}`\n"
+                f"  R:R *1:{pb.get('rr_ratio', 0):.1f}*"
+            )
+        else:
+            # Fallback — formato antigo se smart plans não disponível
+            entry = c.get("entry", price)
+            stop  = c.get("stop", 0)
+            tp1, tp2, tp3 = c.get("tp1", 0), c.get("tp2", 0), c.get("tp3", 0)
+            msg += (
+                f"\n📌 *TRADE PLAN:*\n"
+                f"  `LONG  {_fmt_p(entry)}`\n"
+                f"  `STOP  {_fmt_p(stop)}  {_pct_diff(stop, entry, 'down')}`\n"
+                f"  `TP1   {_fmt_p(tp1)}  {_pct_diff(tp1, entry, 'up')}`\n"
+                f"  `TP2   {_fmt_p(tp2)}  {_pct_diff(tp2, entry, 'up')}`\n"
+                f"  `TP3   {_fmt_p(tp3)}  {_pct_diff(tp3, entry, 'up')}`"
+            )
+
+        msg += f"\n\n💡 _{action}_"
         if len(msg) > 4000:
             msg = msg[:3950] + "\n\n_...truncado_"
 
@@ -511,18 +560,30 @@ def _send_pump_telegram(c: dict):
             timeout=8,
         )
 
-        # Registrar sinal no OutcomeTracker para tracking de win rate
+        # Registrar sinal no OutcomeTracker — usa plano recomendado para tracking
         try:
             from datetime import datetime, timezone as _tz
             from outcome_tracker import get_tracker
             conviction = "HIGH" if move_cls in ("STRONG", "EXTREME") else "MEDIUM"
+            if plans:
+                _rec_key = f"plan_{plans.get('recommended_plan', 'b').lower()}"
+                _p = plans.get(_rec_key, {})
+                _entry_ot = _p.get("entry", c.get("entry", price))
+                _stop_ot  = _p.get("stop",  c.get("stop", 0))
+                _tp1_ot   = _p.get("tp1",   c.get("tp1", 0))
+                _tp2_ot   = _p.get("tp2",   c.get("tp2", 0))
+            else:
+                _entry_ot = c.get("entry", price)
+                _stop_ot  = c.get("stop", 0)
+                _tp1_ot   = c.get("tp1", 0)
+                _tp2_ot   = c.get("tp2", 0)
             get_tracker().register_signal({
                 "direction":       "LONG",
                 "score":           opp_score,
-                "entry_price":     entry,
-                "stop_loss":       stop,
-                "tp1":             tp1,
-                "tp2":             tp2,
+                "entry_price":     _entry_ot,
+                "stop_loss":       _stop_ot,
+                "tp1":             _tp1_ot,
+                "tp2":             _tp2_ot,
                 "symbol":          symbol,
                 "timestamp":       datetime.now(_tz.utc).isoformat(),
                 "conviction_tier": conviction,
