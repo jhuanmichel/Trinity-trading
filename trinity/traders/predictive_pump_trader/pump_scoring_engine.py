@@ -30,6 +30,7 @@ import logging
 from typing import Tuple
 
 from trinity.traders.btc_regime_monitor import get_btc_regime
+from trinity.traders.funding_extreme_engine import analyze_funding_extreme
 
 log = logging.getLogger(__name__)
 
@@ -205,9 +206,26 @@ def score_pump(
         top_signals.insert(0,
             f"⚡ CONTINUAÇÃO +{pct_change_pump:.0f}% 24h (boost ×{momentum_mult:.2f})")
 
+    # ── Funding Extreme Analysis (motor 4D) ────────────────────────────────
+    funding_analysis    = analyze_funding_extreme(coin_data or {}, direction="PUMP")
+    funding_extreme_mult = funding_analysis["composite_mult"]
+
+    # Sinais de funding vão ao TOPO — são os mais importantes
+    if funding_analysis["tier"] != "NORMAL":
+        for sig in reversed(funding_analysis["signals"][:3]):
+            top_signals.insert(0, sig)
+
     # ── Opportunity Score final ────────────────────────────────────────────
-    # ORDEM: momentum_mult → penalidade → DNA → BTC boost → round
-    opportunity_score = opportunity_score_raw * momentum_mult
+    # ORDEM: funding_extreme → momentum → penalidade → DNA → BTC boost → round
+    opportunity_score = opportunity_score_raw
+
+    # Funding extreme — o sinal mais forte em cripto futures (PRIMEIRO)
+    if funding_extreme_mult > 1.0:
+        opportunity_score = min(100.0, opportunity_score * funding_extreme_mult)
+
+    # Momentum acceleration — pump ativo
+    if momentum_mult > 1.0:
+        opportunity_score = min(100.0, opportunity_score * momentum_mult)
 
     # 1. Penalidade (×0.70) se expected_move < 4% — aplicar ANTES do DNA
     if not tradeable:
