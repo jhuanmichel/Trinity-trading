@@ -13,17 +13,21 @@ log = logging.getLogger(__name__)
 
 
 def _get_anthropic_key() -> str:
+    import os
+    # Prioridade: env var (Render) → config.py
+    key = os.getenv("ANTHROPIC_API_KEY", "")
+    if key:
+        return key
     try:
-        import sys, os
+        import sys
         from pathlib import Path
         base = Path(__file__).parent.parent.parent
         if str(base) not in sys.path:
             sys.path.insert(0, str(base))
         from config import ANTHROPIC_API_KEY
-        return ANTHROPIC_API_KEY or os.getenv("ANTHROPIC_API_KEY", "")
+        return ANTHROPIC_API_KEY or ""
     except Exception:
-        import os
-        return os.getenv("ANTHROPIC_API_KEY", "")
+        return ""
 
 
 def generate_analysis(collected_data: dict) -> dict:
