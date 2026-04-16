@@ -178,10 +178,28 @@ async def _delayed_warmup():
         _wlog.error(f"[WARMUP] ExchangeManager/ArbEngine erro: {_e}")
 
 
+async def _keep_alive():
+    """Self-ping a cada 4 minutos para evitar cold start do Render free tier."""
+    await asyncio.sleep(30)   # aguarda boot completo
+    while True:
+        try:
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: _req.get(
+                    "https://trinity-trading.onrender.com/health",
+                    timeout=10,
+                )
+            )
+        except Exception:
+            pass
+        await asyncio.sleep(240)   # 4 minutos
+
+
 @app.on_event("startup")
 async def startup_event():
     # ExchangeManager — init e warmup tardio (10s) para não bloquear o boot
     asyncio.create_task(_delayed_warmup())
+    asyncio.create_task(_keep_alive())
     asyncio.create_task(_apify_loop())
     # Inicia engine de liquidações Binance como task async
     try:
