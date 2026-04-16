@@ -163,7 +163,7 @@ async def _delayed_warmup():
     """
     import logging as _wlog_mod
     _wlog = _wlog_mod.getLogger("startup.warmup")
-    await asyncio.sleep(10)   # deixa o servidor aceitar requests primeiro
+    await asyncio.sleep(2)    # deixa o servidor aceitar requests primeiro
     global _ex_mgr, _arb_engine
     try:
         from trinity.exchanges.exchange_manager import get_exchange_manager as _get_ex_mgr
