@@ -284,28 +284,23 @@
     </section>
 
     <!-- ── SECTION 5b: CRYPTO BUBBLES ─────────────────────────────────────── -->
-    <section class="section" id="bubblesSection">
-      <div class="section-header">
-        <h2 class="section-title">CRYPTO BUBBLES</h2>
-        <span class="section-divider"></span>
-        <span class="section-sub">Volume · variação · funding — todos os contratos MEXC Futures</span>
+    <section id="crypto-bubbles" class="section">
+      <div class="bubbles-section-header">
+        <div>
+          <h2 class="section-title">CRYPTO BUBBLES</h2>
+          <span class="section-sub">Volume · variação · funding — todos os contratos MEXC Futures</span>
+        </div>
+        <div class="bubbles-controls">
+          <button class="tf-btn active" data-tf="change_pct">VARIAÇÃO %</button>
+          <button class="tf-btn"        data-tf="funding_rate">FUNDING</button>
+        </div>
       </div>
 
-      <div class="bubbles-controls">
-        <button class="tf-btn active" data-tf="24h" onclick="setBubblesSort('change_pct',this)">VARIAÇÃO %</button>
-        <button class="tf-btn" data-tf="vol"        onclick="setBubblesSort('volume_usd',this)">VOLUME</button>
-        <button class="tf-btn" data-tf="funding"    onclick="setBubblesSort('funding_rate',this)">FUNDING</button>
-        <button class="tf-btn" data-tf="oi"         onclick="setBubblesSort('oi_usd',this)">OI</button>
+      <div id="bubbles-container" class="bubbles-viewport">
+        <p class="no-data">Carregando mercado...</p>
       </div>
 
-      <div class="bubbles-grid" id="bubblesGrid">
-        <div class="bubble skeleton-card" style="width:70px;height:70px;border-radius:50%"></div>
-        <div class="bubble skeleton-card" style="width:55px;height:55px;border-radius:50%"></div>
-        <div class="bubble skeleton-card" style="width:45px;height:45px;border-radius:50%"></div>
-        <div class="bubble skeleton-card" style="width:60px;height:60px;border-radius:50%"></div>
-        <div class="bubble skeleton-card" style="width:40px;height:40px;border-radius:50%"></div>
-        <div class="bubble skeleton-card" style="width:50px;height:50px;border-radius:50%"></div>
-      </div>
+      <div id="bubbles-stats" class="bubbles-stats"></div>
     </section>
 
     <!-- ── SECTION 5: CRASH + PUMP RADAR (lado a lado) ──────────────────────── -->

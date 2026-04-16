@@ -2355,89 +2355,141 @@ setInterval(updateFundingExtreme, FUNDING_REFRESH_MS);
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CRYPTO BUBBLES
+// CRYPTO BUBBLES — Visual institucional 3D
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const BUBBLES_REFRESH_MS = 60_000; // 1 min
-let _bubblesData    = [];
-let _bubblesSortKey = 'change_pct';
+let _bubblesData = [];
+let _bubblesTf   = 'change_pct'; // campo de cor: 'change_pct' ou 'funding_rate'
 
-function _bubbleColor(val, key) {
-  if (key === 'change_pct') {
-    if (val >= 15)  return ['#00e676', '#00c853'];
-    if (val >= 5)   return ['#69f0ae', '#00e676'];
-    if (val >= 1)   return ['#a5d6a7', '#69f0ae'];
-    if (val >= -1)  return ['#546e7a', '#37474f'];
-    if (val >= -5)  return ['#ef9a9a', '#e57373'];
-    if (val >= -15) return ['#ef5350', '#e53935'];
-    return ['#b71c1c', '#c62828'];
+function renderBubbles() {
+  const container = document.getElementById('bubbles-container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const coins = _bubblesData;
+  if (!coins || !coins.length) {
+    container.innerHTML = '<p class="no-data">Carregando mercado...</p>';
+    return;
   }
-  if (key === 'funding_rate') {
-    if (val < -0.005)  return ['#00e676', '#00c853']; // funding negativo extremo → LONG
-    if (val < -0.001)  return ['#69f0ae', '#00e676'];
-    if (val < 0)       return ['#a5d6a7', '#546e7a'];
-    if (val < 0.001)   return ['#546e7a', '#37474f'];
-    if (val < 0.005)   return ['#ef9a9a', '#e57373'];
-    return ['#ef5350', '#e53935'];
-  }
-  // volume_usd / oi_usd — escala de intensidade neutra
-  return ['#1a6e5a', '#0d4d3e'];
-}
 
-function _bubbleSize(b, sortKey) {
-  // Tamanho base (16-72px) proporcional ao volume relativo
-  const base = b.bubble_size || 0;
-  return Math.max(28, Math.min(76, 28 + base * 0.48));
-}
+  // Sempre ordenado por volume desc (tamanho = volume)
+  const top = [...coins].slice(0, 100);
 
-function _renderBubble(b) {
-  const sortVal   = b[_bubblesSortKey] || 0;
-  const [bg, bg2] = _bubbleColor(sortVal, _bubblesSortKey);
-  const size      = _bubbleSize(b);
-  const label     = _bubblesSortKey === 'change_pct'
-    ? (sortVal >= 0 ? `+${sortVal.toFixed(1)}%` : `${sortVal.toFixed(1)}%`)
-    : _bubblesSortKey === 'funding_rate'
-      ? `${(sortVal * 100).toFixed(3)}%`
-      : `$${(sortVal / 1e6).toFixed(0)}M`;
-  const sym       = b.symbol.length > 5 ? b.symbol.slice(0, 5) : b.symbol;
-  const fontSize  = size < 40 ? 7 : size < 55 ? 8 : 9;
+  let totalUp = 0, totalDown = 0, totalFlat = 0;
+  let biggestGain = { sym: '', pct: -Infinity };
+  let biggestLoss = { sym: '', pct: Infinity };
 
-  return `<div class="bubble"
-    style="width:${size}px;height:${size}px;background:radial-gradient(circle at 35% 35%,${bg},${bg2})"
-    title="${b.symbol} | Δ${b.change_pct >= 0 ? '+' : ''}${b.change_pct.toFixed(2)}% | Vol $${(b.volume_usd/1e6).toFixed(0)}M | FR ${(b.funding_rate*100).toFixed(4)}%/8h">
-    <span class="bubble-sym" style="font-size:${fontSize}px">${sym}</span>
-    <span class="bubble-pct" style="font-size:${Math.max(6, fontSize - 1)}px">${label}</span>
-  </div>`;
-}
+  top.forEach((b, i) => {
+    const pct24    = b.change_pct || 0;
+    // Valor de cor: change_pct já está em %, funding_rate é decimal → *100
+    const colorVal = _bubblesTf === 'funding_rate' ? (b.funding_rate * 100) : pct24;
 
-function setBubblesSort(key, btn) {
-  _bubblesSortKey = key;
-  document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  _renderBubbles();
-}
+    // Stats sempre por 24h
+    if (pct24 > 0.5) totalUp++;
+    else if (pct24 < -0.5) totalDown++;
+    else totalFlat++;
+    if (pct24 > biggestGain.pct) biggestGain = { sym: b.symbol, pct: pct24 };
+    if (pct24 < biggestLoss.pct) biggestLoss = { sym: b.symbol, pct: pct24 };
 
-function _renderBubbles() {
-  const grid = document.getElementById('bubblesGrid');
-  if (!grid || !_bubblesData.length) return;
+    // Classe de tamanho por ranking de volume
+    let sizeClass;
+    if      (i <  2) sizeClass = 'bbl-1';
+    else if (i <  6) sizeClass = 'bbl-2';
+    else if (i < 16) sizeClass = 'bbl-3';
+    else if (i < 40) sizeClass = 'bbl-4';
+    else if (i < 70) sizeClass = 'bbl-5';
+    else             sizeClass = 'bbl-6';
 
-  // Sort descending by abs value (para funding, por abs)
-  const sorted = [..._bubblesData].sort((a, b) => {
-    const va = _bubblesSortKey === 'funding_rate' ? Math.abs(a[_bubblesSortKey] || 0) : (a[_bubblesSortKey] || 0);
-    const vb = _bubblesSortKey === 'funding_rate' ? Math.abs(b[_bubblesSortKey] || 0) : (b[_bubblesSortKey] || 0);
-    return vb - va;
+    // Gradiente radial pra efeito esférico — 10 faixas de cor
+    let baseColor, darkColor;
+    const cv = colorVal;
+    if      (cv > 15)  { baseColor = '#00ff88'; darkColor = '#004d1a'; }
+    else if (cv > 8)   { baseColor = '#00e67a'; darkColor = '#00401a'; }
+    else if (cv > 4)   { baseColor = '#00cc6a'; darkColor = '#003616'; }
+    else if (cv > 1.5) { baseColor = '#00b35c'; darkColor = '#002d12'; }
+    else if (cv > 0)   { baseColor = '#2d8659'; darkColor = '#1a3d2b'; }
+    else if (cv > -1.5){ baseColor = '#6b5b5b'; darkColor = '#2a2020'; }
+    else if (cv > -4)  { baseColor = '#b33030'; darkColor = '#3d0e0e'; }
+    else if (cv > -8)  { baseColor = '#cc2929'; darkColor = '#4d0f0f'; }
+    else if (cv > -15) { baseColor = '#e62e2e'; darkColor = '#5a1111'; }
+    else               { baseColor = '#ff3333'; darkColor = '#661414'; }
+
+    const bg = `radial-gradient(circle at 30% 25%, ${baseColor}, ${darkColor})`;
+
+    // Glow para extreme movers (por 24h)
+    let glowClass = 'glow-none';
+    if (pct24 > 10) glowClass = 'glow-green';
+    else if (pct24 < -10) glowClass = 'glow-red';
+
+    // Formatação tooltip
+    const volStr  = b.volume_usd >= 1e9 ? `$${(b.volume_usd/1e9).toFixed(1)}B`
+                  : b.volume_usd >= 1e6 ? `$${(b.volume_usd/1e6).toFixed(1)}M`
+                  : `$${(b.volume_usd/1e3).toFixed(0)}K`;
+
+    const priceStr = b.price >= 1000 ? `$${b.price.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`
+                   : b.price >= 1    ? `$${b.price.toFixed(2)}`
+                   : b.price >= 0.01 ? `$${b.price.toFixed(4)}`
+                   : `$${b.price.toFixed(6)}`;
+
+    const fundPct  = (b.funding_rate || 0) * 100;
+    const fundStr  = `${fundPct >= 0 ? '+' : ''}${fundPct.toFixed(3)}%`;
+    const pctSign  = pct24 >= 0 ? '+' : '';
+    const pctColor = pct24 >= 0 ? 'tt-green' : 'tt-red';
+
+    // Label interno — mostra colorVal (muda com modo selecionado)
+    const cvSign  = colorVal >= 0 ? '+' : '';
+    const labelTf = _bubblesTf === 'funding_rate'
+      ? `${cvSign}${colorVal.toFixed(3)}%`
+      : `${pctSign}${pct24.toFixed(1)}%`;
+
+    const div = document.createElement('div');
+    div.className  = `bbl ${sizeClass} ${glowClass}`;
+    div.style.background = bg;
+    div.innerHTML  = `
+      <span class="bbl-sym">${b.symbol}</span>
+      <span class="bbl-pct">${labelTf}</span>
+      <div class="bbl-tooltip">
+        <div class="tt-sym">${b.symbol}</div>
+        <div class="tt-row"><span class="tt-label">Preço</span><span class="tt-val">${priceStr}</span></div>
+        <div class="tt-row"><span class="tt-label">24h</span><span class="tt-val ${pctColor}">${pctSign}${pct24.toFixed(2)}%</span></div>
+        <div class="tt-row"><span class="tt-label">Volume</span><span class="tt-val">${volStr}</span></div>
+        <div class="tt-row"><span class="tt-label">Funding</span><span class="tt-val">${fundStr}/8h</span></div>
+      </div>`;
+    container.appendChild(div);
   });
 
-  grid.innerHTML = sorted.slice(0, 60).map(_renderBubble).join('');
+  // Stats bar
+  const statsEl = document.getElementById('bubbles-stats');
+  if (statsEl) {
+    const gainStr = biggestGain.sym ? `${biggestGain.sym} +${biggestGain.pct.toFixed(1)}%` : '—';
+    const lossStr = biggestLoss.sym ? `${biggestLoss.sym} ${biggestLoss.pct.toFixed(1)}%` : '—';
+    statsEl.innerHTML = `
+      <span><span class="stat-green">${totalUp}</span> em alta</span>
+      <span><span class="stat-red">${totalDown}</span> em queda</span>
+      <span>${totalFlat} neutros</span>
+      <span>Maior alta: <span class="stat-green">${gainStr}</span></span>
+      <span>Maior queda: <span class="stat-red">${lossStr}</span></span>`;
+  }
 }
 
 async function updateCryptoBubbles() {
   try {
     const d = await fetch('/api/crypto-bubbles').then(r => r.json());
     _bubblesData = d.coins || [];
-    _renderBubbles();
+    renderBubbles();
   } catch (_) {}
 }
+
+// Event listener para botões de timeframe das bubbles (C4)
+document.querySelectorAll('.tf-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    _bubblesTf = btn.dataset.tf;
+    renderBubbles();
+  });
+});
 
 updateCryptoBubbles();
 setInterval(updateCryptoBubbles, BUBBLES_REFRESH_MS);
