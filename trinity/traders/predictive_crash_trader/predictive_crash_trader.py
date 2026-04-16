@@ -341,6 +341,12 @@ def run_crash_cycle() -> dict:
     for s in _expired:
         del _alert_cooldown[s]
 
+    # Outcome Tracker — registra TODOS os candidatos >= OPP_THRESHOLD (35)
+    # Separado do loop de alertas para evitar o break em score < 60
+    for c in result.get("candidates", []):
+        if c.get("opportunity_score", 0) >= OPP_THRESHOLD:
+            _register_outcome_crash(c)
+
     alerted = 0
     for c in result.get("candidates", []):
         score  = c.get("opportunity_score", 0)
@@ -505,6 +511,47 @@ async def _send_telegram_alerts(candidates: list):
         log.info(f"[CrashTrader] {alerted} alertas Telegram enviados")
 
 
+def _register_outcome_crash(c: dict):
+    """Registra candidato crash no OutcomeTracker. Usa smart plans se disponíveis."""
+    try:
+        from outcome_tracker import get_tracker
+        from datetime import datetime, timezone as _tz
+
+        price = c.get("price", 0)
+        plans = c.get("_smart_plans")
+        if plans and plans.get("recommended_plan"):
+            _p    = plans.get(f"plan_{plans['recommended_plan'].lower()}", {})
+            entry = _p.get("entry") or c.get("entry", price)
+            stop  = _p.get("stop")  or c.get("stop", 0)
+            tp1   = _p.get("tp1")   or c.get("tp1", 0)
+            tp2   = _p.get("tp2")   or c.get("tp2", 0)
+        else:
+            entry = c.get("entry", price)
+            stop  = c.get("stop", 0)
+            tp1   = c.get("tp1", 0)
+            tp2   = c.get("tp2", 0)
+
+        get_tracker().register_signal({
+            "symbol":          c.get("symbol", ""),
+            "direction":       "SHORT",
+            "score":           c.get("opportunity_score", 0),
+            "entry_price":     entry,
+            "stop_loss":       stop,
+            "tp1":             tp1,
+            "tp2":             tp2,
+            "timestamp":       datetime.now(_tz.utc).isoformat(),
+            "conviction_tier": c.get("move_classification", "MEDIUM"),
+            "dna_pattern":     c.get("dna_pattern", ""),
+            "layer_scores":    c.get("component_scores", {}),
+        })
+        log.info(
+            f"[CrashTrader] Outcome registrado: {c.get('symbol','')} SHORT "
+            f"score={c.get('opportunity_score',0):.0f} entry={entry}"
+        )
+    except Exception as _oe:
+        log.debug(f"[CrashTrader] Outcome tracker error: {_oe}")
+
+
 def _send_crash_telegram(c: dict):
     try:
         import sys
@@ -614,38 +661,6 @@ def _send_crash_telegram(c: dict):
             timeout=8,
         )
 
-        # Registrar sinal no OutcomeTracker — usa plano recomendado para tracking
-        try:
-            from datetime import datetime, timezone as _tz
-            from outcome_tracker import get_tracker
-            conviction = "HIGH" if move_cls in ("STRONG", "EXTREME") else "MEDIUM"
-            if plans:
-                _rec_key = f"plan_{plans.get('recommended_plan', 'b').lower()}"
-                _p = plans.get(_rec_key, {})
-                _entry_ot = _p.get("entry", c.get("entry", price))
-                _stop_ot  = _p.get("stop",  c.get("stop", 0))
-                _tp1_ot   = _p.get("tp1",   c.get("tp1", 0))
-                _tp2_ot   = _p.get("tp2",   c.get("tp2", 0))
-            else:
-                _entry_ot = c.get("entry", price)
-                _stop_ot  = c.get("stop", 0)
-                _tp1_ot   = c.get("tp1", 0)
-                _tp2_ot   = c.get("tp2", 0)
-            get_tracker().register_signal({
-                "direction":       "SHORT",
-                "score":           opp_score,
-                "entry_price":     _entry_ot,
-                "stop_loss":       _stop_ot,
-                "tp1":             _tp1_ot,
-                "tp2":             _tp2_ot,
-                "symbol":          symbol,
-                "timestamp":       datetime.now(_tz.utc).isoformat(),
-                "conviction_tier": conviction,
-                "layer_scores":    comp,
-            })
-            log.info(f"[CrashTrader] OutcomeTracker: sinal SHORT registrado — {symbol} score={opp_score:.0f}")
-        except Exception as _oe:
-            log.debug(f"[CrashTrader] OutcomeTracker register_signal falhou: {_oe}")
     except Exception as e:
         log.warning(f"[CrashTrader] Telegram error: {e}")
 
