@@ -960,14 +960,34 @@ REPORTS_DIR = BASE_DIR / "dashboard" / "reports"
 
 @app.get("/api/macro-report")
 async def get_macro_report():
-    """Gera relatório macro semanal via Claude API e retorna o PDF para download."""
+    """Gera relatório macro semanal via Claude API, envia ao Telegram e retorna o PDF."""
     import logging as _log
+    import requests as _requests
     _logger = _log.getLogger("dashboard.server")
     try:
         from trinity.macro_report import generate_macro_report
         from fastapi.responses import FileResponse
+        from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
 
         pdf_path = await asyncio.to_thread(generate_macro_report)
+
+        # Envia PDF ao Telegram via sendDocument
+        if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
+            try:
+                with open(pdf_path, "rb") as _f:
+                    tg = _requests.post(
+                        f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument",
+                        data={"chat_id": TELEGRAM_CHAT_ID, "caption": "📊 Relatório Macro Semanal — Trinity Trading"},
+                        files={"document": (_f.name.split("/")[-1], _f, "application/pdf")},
+                        timeout=30,
+                    ).json()
+                if not tg.get("ok"):
+                    _logger.error(f"[MacroReport] Telegram recusou: {tg}")
+                else:
+                    _logger.info("[MacroReport] PDF enviado ao Telegram com sucesso")
+            except Exception as _te:
+                _logger.error(f"[MacroReport] Erro ao enviar ao Telegram: {_te}")
+
         return FileResponse(
             pdf_path,
             media_type="application/pdf",
