@@ -11,6 +11,7 @@ import glob
 import asyncio
 import time as _time
 import requests as _req
+from trinity.traders.daily_summary import should_send_summary, send_daily_summary
 
 BASE_DIR          = Path(__file__).parent.parent
 STATE_FILE        = BASE_DIR / "dashboard" / "current_state.json"
@@ -169,6 +170,8 @@ async def startup_event():
     asyncio.create_task(_fms_loop())
     # Funding Extreme Scanner — detecta funding extremo em todos contratos a cada 120s
     asyncio.create_task(_funding_scan_loop())
+    # Daily Summary — resumo diário às 08:00 UTC via Telegram
+    asyncio.create_task(_daily_summary_loop())
 
 
 async def _run_analysis_bg(force: bool = False):
@@ -656,6 +659,32 @@ async def _altcoin_scan_loop():
         except Exception as _e:
             _alog.error(f"Altcoin scan loop error: {_e}")
         await asyncio.sleep(300)  # 5 minutos
+
+
+async def _daily_summary_loop():
+    """Verifica a cada 5 min se deve enviar o resumo diário (às 08:00 UTC)."""
+    import logging as _log
+    _dslog = _log.getLogger("daily_summary")
+    await asyncio.sleep(60)  # aguarda 60s após startup para todos os módulos carregarem
+    while True:
+        try:
+            if should_send_summary():
+                _dslog.info("[Server] Disparando resumo diário...")
+                await asyncio.to_thread(send_daily_summary)
+        except Exception as _e:
+            _dslog.error(f"Daily summary loop error: {_e}")
+        await asyncio.sleep(300)  # check a cada 5 min
+
+
+@app.get("/api/daily-summary")
+async def trigger_daily_summary():
+    """Força envio do resumo diário no Telegram (para teste)."""
+    try:
+        from trinity.traders.daily_summary import force_send_summary
+        await asyncio.to_thread(force_send_summary)
+        return JSONResponse({"status": "sent"})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.get("/api/altcoin-scanner")
