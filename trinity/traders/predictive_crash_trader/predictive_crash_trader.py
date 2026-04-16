@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from trinity.traders.smart_entry_engine import calculate_smart_entry
+from trinity.traders.predictive_crash_trader.crash_scoring_engine import BLUE_CHIPS
 
 log = logging.getLogger(__name__)
 
@@ -334,14 +335,24 @@ def run_crash_cycle() -> dict:
 
     import time as _t
     now     = _t.time()
+
+    # C3 — cleanup cooldowns expirados (evita memory leak em runs longas)
+    _expired = [s for s, t in _alert_cooldown.items() if (now - t) > ALERT_COOLDOWN_S * 2]
+    for s in _expired:
+        del _alert_cooldown[s]
+
     alerted = 0
     for c in result.get("candidates", []):
         score  = c.get("opportunity_score", 0)
         symbol = c.get("symbol", "")
         cls    = c.get("move_classification", "")
 
-        if score < ALERT_THRESHOLD:
-            break
+        # C2 — threshold diferenciado: 60 para blue chips, ALERT_THRESHOLD para o resto
+        _threshold = 60 if symbol in BLUE_CHIPS else ALERT_THRESHOLD
+        if score < _threshold:
+            if score < 60:  # mínimo absoluto — nada abaixo pode alertar
+                break
+            continue  # non-blue-chip abaixo do threshold geral; blue chips à frente ainda possíveis
 
         last_alert = _alert_cooldown.get(symbol, 0)
         cooldown   = CRITICAL_COOLDOWN_S if score >= CRITICAL_THRESHOLD else ALERT_COOLDOWN_S
@@ -461,8 +472,12 @@ async def _send_telegram_alerts(candidates: list):
         symbol = c.get("symbol", "")              if isinstance(c, dict) else c.symbol
         cls    = c.get("move_classification", "") if isinstance(c, dict) else c.move_classification
 
-        if score < ALERT_THRESHOLD:
-            break  # lista ordenada por opp_score — para quando abaixo do threshold
+        # C2 — threshold diferenciado: 60 para blue chips, ALERT_THRESHOLD para o resto
+        _threshold = 60 if symbol in BLUE_CHIPS else ALERT_THRESHOLD
+        if score < _threshold:
+            if score < 60:  # mínimo absoluto — para o loop
+                break
+            continue  # non-blue-chip abaixo do threshold geral
 
         # Cooldown por símbolo
         last_alert = _alert_cooldown.get(symbol, 0)
