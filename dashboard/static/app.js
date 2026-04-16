@@ -1405,38 +1405,6 @@ function renderBtMetrics(metrics) {
   ].join('');
 }
 
-function renderBtTrades(trades) {
-  const tbody = document.getElementById('btBody');
-  if (!tbody) return;
-  if (!trades || trades.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="table-empty">Nenhum trade no período</td></tr>';
-    return;
-  }
-
-  const rows = [...trades].reverse().slice(0, 100).map(t => {
-    const isLong = t.direction === 'LONG';
-    const dirCls = isLong ? 'c-bull' : 'c-bear';
-    const resCls = t.result === 'WIN' ? 'bt-win' : t.result === 'LOSS' ? 'bt-loss' : 'bt-timeout';
-    const pnlSign = t.pnl_r >= 0 ? '+' : '';
-    const statusMap = { TP3: '🟢 TP3', TP2: '🟡 TP2', TP1: '🟠 TP1', STOP: '🔴 STOP', TIMEOUT: '⏱ TIMEOUT' };
-    const dt = new Date(t.timestamp);
-    const dateStr = `${dt.getUTCDate().toString().padStart(2,'0')}/${(dt.getUTCMonth()+1).toString().padStart(2,'0')}`;
-
-    return `<tr>
-      <td style="color:var(--text-dim);font-size:10px">${dateStr}</td>
-      <td class="${dirCls}" style="font-weight:700">${t.direction}</td>
-      <td style="font-size:11px">${(t.smc_score||0).toFixed(1)}</td>
-      <td style="font-size:11px;font-family:'JetBrains Mono',monospace">${(t.entry||0).toLocaleString('en-US',{maximumFractionDigits:1})}</td>
-      <td style="font-size:11px;font-family:'JetBrains Mono',monospace">${(t.exit_price||0).toLocaleString('en-US',{maximumFractionDigits:1})}</td>
-      <td class="${resCls}" style="font-family:'JetBrains Mono',monospace">${pnlSign}${(t.pnl_r||0).toFixed(2)}R</td>
-      <td class="${resCls}" style="font-family:'JetBrains Mono',monospace">${pnlSign}${(t.pnl_pct||0).toFixed(2)}%</td>
-      <td class="${resCls}">${statusMap[t.exit_reason] || t.exit_reason}</td>
-    </tr>`;
-  });
-
-  tbody.innerHTML = rows.join('');
-}
-
 // Renderiza cards das 4 janelas walk-forward
 function renderBtWindows(windows) {
   const el = document.getElementById('btWindowsGrid');
@@ -1563,7 +1531,6 @@ async function updateBacktestResults() {
     const m = data.metrics;
     renderBtMetrics({ ...m, period_days: data.config?.period_days });
     renderBtEquityCurve(data.equity_curve || []);
-    renderBtTrades(data.trades || []);
     renderBtWindows(data.windows || []);
     renderBtOptimal(data);
 
