@@ -242,7 +242,10 @@ async def get_liquidations_live():
 def get_status():
     """Estado atual do mercado — última análise institucional."""
     if STATE_FILE.exists():
-        return JSONResponse(content=json.loads(STATE_FILE.read_text()))
+        try:
+            return JSONResponse(content=json.loads(STATE_FILE.read_text()))
+        except Exception:
+            pass
     return JSONResponse(content={"status": "no_data"})
 
 
@@ -250,7 +253,10 @@ def get_status():
 def get_backtest_results():
     """Resultados do backtest walk-forward — métricas, equity curve e trades."""
     if BACKTEST_FILE.exists():
-        return JSONResponse(content=json.loads(BACKTEST_FILE.read_text()))
+        try:
+            return JSONResponse(content=json.loads(BACKTEST_FILE.read_text()))
+        except Exception:
+            pass
     return JSONResponse(content={"status": "no_data", "trades": [], "metrics": {}, "equity_curve": []})
 
 
@@ -711,7 +717,10 @@ def get_altcoin_scanner():
 def get_current_state():
     """Alias de /api/status para o React frontend."""
     if STATE_FILE.exists():
-        return JSONResponse(content=json.loads(STATE_FILE.read_text()))
+        try:
+            return JSONResponse(content=json.loads(STATE_FILE.read_text()))
+        except Exception:
+            pass
     return JSONResponse(content={"status": "no_data"})
 
 

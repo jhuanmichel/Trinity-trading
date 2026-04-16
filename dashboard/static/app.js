@@ -1293,6 +1293,8 @@ async function updatePumpRadar() {
     renderPumpRadar(data);
   } catch (e) {
     console.warn('Pump Radar fetch error:', e);
+    const g = document.getElementById('pumpGrid');
+    if (g) g.innerHTML = '<div class="pump-card no-data" style="grid-column:1/-1">Sem dados — aguardando scan...</div>';
   }
 }
 
@@ -2024,6 +2026,8 @@ async function updateAltcoinRadar() {
     _renderFilteredAlt(query);
   } catch (e) {
     console.warn('[Trinity] Altcoin radar error:', e);
+    const grid = document.getElementById('altGrid');
+    if (grid) grid.innerHTML = '<div class="alt-card no-data" style="grid-column:1/-1">Sem dados — aguardando scan...</div>';
   }
 }
 
