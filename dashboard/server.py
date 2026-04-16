@@ -34,6 +34,15 @@ _sys.path.insert(0, str(BASE_DIR))
 from full_market_scanner import FullMarketScanner as _FMSClass
 _fms = _FMSClass()
 
+# ── Exchange Manager singleton (lazy init) — Trinity v5 ───────────────────────
+try:
+    from trinity.exchanges.exchange_manager import get_exchange_manager as _get_ex_mgr
+    _ex_mgr = _get_ex_mgr()
+except Exception as _ex_mgr_err:
+    import logging as _ex_log
+    _ex_log.getLogger(__name__).warning(f"[ExchangeMgr] Não carregado: {_ex_mgr_err}")
+    _ex_mgr = None
+
 # ── Price ticker cache ────────────────────────────────────────────────────────
 _MEXC_TICKER  = "https://api.mexc.com/api/v3/ticker/24hr"
 _MEXC_KLINES  = "https://api.mexc.com/api/v3/klines"
@@ -1017,6 +1026,60 @@ async def list_macro_reports():
         })
     except Exception:
         return JSONResponse(content={"reports": []})
+
+
+# ── Multi-Exchange API — Trinity v5 ──────────────────────────────────────────
+
+@app.get("/api/exchanges/status")
+async def get_exchanges_status():
+    """
+    Status do ExchangeManager: exchanges ativas, contagem de tickers por exchange,
+    total de símbolos únicos e símbolos em 2+ exchanges.
+    """
+    if _ex_mgr is None:
+        return JSONResponse(content={"error": "ExchangeManager não disponível"}, status_code=503)
+    try:
+        summary = await asyncio.to_thread(_ex_mgr.status_summary)
+        return JSONResponse(content=summary)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/funding-arbitrage")
+async def get_funding_arbitrage(min_spread: float = 20.0):
+    """
+    Oportunidades de arbitragem de funding rate cross-exchange.
+    Retorna lista ordenada por spread_annual_pct DESC.
+    Parâmetro min_spread: mínimo anualizado % (default 20%).
+    """
+    if _ex_mgr is None:
+        return JSONResponse(content={"error": "ExchangeManager não disponível", "opportunities": []}, status_code=503)
+    try:
+        opps = await asyncio.to_thread(_ex_mgr.get_funding_arbitrage_opportunities, min_spread)
+        return JSONResponse(content={"opportunities": opps, "total": len(opps)})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e), "opportunities": []}, status_code=500)
+
+
+@app.get("/api/exchanges/ticker/{symbol}")
+async def get_exchange_ticker(symbol: str):
+    """
+    Ticker de um símbolo em todas as exchanges disponíveis.
+    Retorna lista com preço, funding rate, OI, volume por exchange.
+    """
+    if _ex_mgr is None:
+        return JSONResponse(content={"error": "ExchangeManager não disponível"}, status_code=503)
+    try:
+        import dataclasses as _dc
+        unified  = await asyncio.to_thread(_ex_mgr.fetch_all_tickers_unified)
+        tickers  = unified.get(symbol.upper(), [])
+        return JSONResponse(content={
+            "symbol":    symbol.upper(),
+            "exchanges": [_dc.asdict(t) for t in tickers],
+            "total":     len(tickers),
+        })
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 # ── Serve React app v3.0 em /app/ ────────────────────────────────────────────
