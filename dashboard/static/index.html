@@ -283,6 +283,45 @@
       </div>
     </section>
 
+    <!-- ── SECTION 5c: FUNDING ARBITRAGE ────────────────────────────────────── -->
+    <section class="section" id="arbSection">
+      <div class="section-header">
+        <h2 class="section-title">FUNDING ARBITRAGE</h2>
+        <span class="section-divider"></span>
+        <span class="section-sub" id="arbSubtitle">Cross-exchange · 5 exchanges · atualiza a cada 30s</span>
+        <span class="fms-live-badge" id="arbScanBadge">AGUARDANDO</span>
+      </div>
+
+      <!-- Stats meta bar -->
+      <div class="fms-meta-bar" id="arbMetaBar">
+        <span class="c-muted" style="font-size:11px">Carregando oportunidades...</span>
+      </div>
+
+      <!-- Toolbar: filtros + min APR -->
+      <div class="alt-toolbar">
+        <div class="alt-filter-btns">
+          <button class="alt-filter-btn active" data-arb="all"         onclick="setArbFilter('all',this)">TODOS</button>
+          <button class="alt-filter-btn"         data-arb="HOT"         onclick="setArbFilter('HOT',this)">HOT 🔥</button>
+          <button class="alt-filter-btn"         data-arb="BLUE_CHIP"   onclick="setArbFilter('BLUE_CHIP',this)">BLUE CHIP</button>
+          <button class="alt-filter-btn"         data-arb="cross_exchange" onclick="setArbFilter('cross_exchange',this)">CROSS</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-size:11px;color:var(--text-muted)">MIN APR%</label>
+          <input id="arbMinApr" type="number" value="20" min="0" max="9999"
+            style="width:64px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-size:12px"
+            onchange="fetchArbOpportunities()" />
+        </div>
+      </div>
+
+      <!-- Cards grid -->
+      <div class="arb-grid" id="arbGrid">
+        <div class="arb-card skeleton-card" style="min-height:140px"></div>
+        <div class="arb-card skeleton-card" style="min-height:140px"></div>
+        <div class="arb-card skeleton-card" style="min-height:140px"></div>
+        <div class="arb-card skeleton-card" style="min-height:140px"></div>
+      </div>
+    </section>
+
     <!-- ── SECTION 5b: CRYPTO BUBBLES ─────────────────────────────────────── -->
     <section id="crypto-bubbles" class="section">
       <div class="bubbles-section-header">
