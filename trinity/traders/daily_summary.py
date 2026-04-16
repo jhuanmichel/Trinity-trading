@@ -248,8 +248,10 @@ def _format_message(now: datetime, btc: dict, regime: dict,
 
 # ── Envio ─────────────────────────────────────────────────────────────────────
 
-def send_daily_summary():
-    """Coleta todos os dados e envia resumo diário no Telegram."""
+def send_daily_summary() -> dict:
+    """Coleta todos os dados e envia resumo diário no Telegram.
+    Retorna {"ok": True} em sucesso ou {"ok": False, "error": ...} em falha.
+    """
     global _last_summary_date
     now = datetime.now(timezone.utc)
 
@@ -260,18 +262,18 @@ def send_daily_summary():
 
         if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
             log.warning("[DailySummary] TELEGRAM_TOKEN ou TELEGRAM_CHAT_ID não configurados")
-            return
+            return {"ok": False, "error": "tokens não configurados"}
 
-        # Coletar dados em paralelo (fail-safe individual)
-        btc     = _collect_btc_price()
-        regime  = _collect_regime()
-        signals = _collect_pump_crash()
-        funding = _collect_funding()
+        # Coletar dados (fail-safe individual por fonte)
+        btc      = _collect_btc_price()
+        regime   = _collect_regime()
+        signals  = _collect_pump_crash()
+        funding  = _collect_funding()
         outcomes = _collect_outcomes()
 
         msg = _format_message(now, btc, regime, signals, funding, outcomes)
 
-        requests.post(
+        r = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={
                 "chat_id":    TELEGRAM_CHAT_ID,
@@ -280,16 +282,33 @@ def send_daily_summary():
             },
             timeout=10,
         )
+        tg = r.json()
+
+        if not tg.get("ok"):
+            # Markdown rejeitado? Tenta sem parse_mode como fallback
+            log.warning(f"[DailySummary] Markdown rejeitado ({tg}) — tentando sem parse_mode")
+            r2 = requests.post(
+                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+                json={"chat_id": TELEGRAM_CHAT_ID, "text": msg},
+                timeout=10,
+            )
+            tg = r2.json()
+
+        if not tg.get("ok"):
+            log.error(f"[DailySummary] Telegram recusou mensagem: {tg}")
+            return {"ok": False, "telegram_error": tg}
 
         _last_summary_date = now.strftime("%Y-%m-%d")
         log.info(f"[DailySummary] Resumo enviado — {now.strftime('%d/%m/%Y %H:%M')} UTC")
+        return {"ok": True}
 
     except Exception as e:
         log.error(f"[DailySummary] Erro ao enviar resumo: {e}")
+        return {"ok": False, "error": str(e)}
 
 
-def force_send_summary():
+def force_send_summary() -> dict:
     """Força envio imediato do resumo (ignora o controle de data). Para teste."""
     global _last_summary_date
     _last_summary_date = ""
-    send_daily_summary()
+    return send_daily_summary()

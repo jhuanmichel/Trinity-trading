@@ -684,11 +684,13 @@ async def _daily_summary_loop():
 
 @app.get("/api/daily-summary")
 async def trigger_daily_summary():
-    """Força envio do resumo diário no Telegram (para teste)."""
+    """Força envio do resumo diário no Telegram (para teste). Retorna resultado real."""
     try:
         from trinity.traders.daily_summary import force_send_summary
-        await asyncio.to_thread(force_send_summary)
-        return JSONResponse({"status": "sent"})
+        result = await asyncio.to_thread(force_send_summary)
+        if result and result.get("ok"):
+            return JSONResponse({"status": "sent"})
+        return JSONResponse({"status": "failed", "detail": result}, status_code=500)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
