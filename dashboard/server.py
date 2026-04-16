@@ -28,20 +28,22 @@ STATIC_DIR        = BASE_DIR / "dashboard" / "static"
 
 app = FastAPI(title="QuantDesk", version="1.0")
 
+
+@app.get("/health")
+def health():
+    """Health check — responde imediatamente, sem I/O nem dependências externas."""
+    return {"status": "ok"}
+
+
 # ── Full Market Scanner singleton ─────────────────────────────────────────────
 import sys as _sys
 _sys.path.insert(0, str(BASE_DIR))
 from full_market_scanner import FullMarketScanner as _FMSClass
 _fms = _FMSClass()
 
-# ── Exchange Manager singleton (lazy init) — Trinity v5 ───────────────────────
-try:
-    from trinity.exchanges.exchange_manager import get_exchange_manager as _get_ex_mgr
-    _ex_mgr = _get_ex_mgr()
-except Exception as _ex_mgr_err:
-    import logging as _ex_log
-    _ex_log.getLogger(__name__).warning(f"[ExchangeMgr] Não carregado: {_ex_mgr_err}")
-    _ex_mgr = None
+# ── Exchange Manager — inicializado em background 10s após startup ─────────────
+# Não importar nem instanciar no nível de módulo — bloqueia o boot síncrono
+_ex_mgr = None  # setado por _delayed_warmup()
 
 # ── Price ticker cache ────────────────────────────────────────────────────────
 _MEXC_TICKER  = "https://api.mexc.com/api/v3/ticker/24hr"
@@ -153,8 +155,29 @@ async def _crash_scan_loop():
         await asyncio.sleep(30)
 
 
+async def _delayed_warmup():
+    """
+    Inicializa o ExchangeManager e aquece o cache 10s após o servidor subir.
+    Separado do módulo-level para não bloquear o boot síncrono do uvicorn.
+    """
+    import logging as _wlog_mod
+    _wlog = _wlog_mod.getLogger("startup.warmup")
+    await asyncio.sleep(10)   # deixa o servidor aceitar requests primeiro
+    global _ex_mgr
+    try:
+        from trinity.exchanges.exchange_manager import get_exchange_manager as _get_ex_mgr
+        _ex_mgr = _get_ex_mgr()
+        _wlog.info("[WARMUP] ExchangeManager criado")
+        await asyncio.to_thread(_ex_mgr.fetch_all_tickers_unified)
+        _wlog.info("[WARMUP] ExchangeManager warmup concluído (cache quente)")
+    except Exception as _e:
+        _wlog.error(f"[WARMUP] ExchangeManager erro: {_e}")
+
+
 @app.on_event("startup")
 async def startup_event():
+    # ExchangeManager — init e warmup tardio (10s) para não bloquear o boot
+    asyncio.create_task(_delayed_warmup())
     asyncio.create_task(_apify_loop())
     # Inicia engine de liquidações Binance como task async
     try:
