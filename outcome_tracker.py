@@ -195,6 +195,7 @@ class OutcomeTracker:
             "outcome":        outcome,
             "status":         status,
             "signal_id":      s.get("signal_id", ""),
+            "symbol":         s.get("symbol", ""),
             "direction":      s.get("direction", ""),
             "score":          s.get("score", 0),
             "layer_scores":   s.get("layer_scores", {}),
