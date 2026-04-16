@@ -43,8 +43,7 @@ _fms = _FMSClass()
 
 # ── Exchange Manager — inicializado em background 10s após startup ─────────────
 # Não importar nem instanciar no nível de módulo — bloqueia o boot síncrono
-_ex_mgr    = None  # setado por _delayed_warmup()
-_arb_engine = None  # ArbOpportunityEngine — inicializado após _ex_mgr
+_ex_mgr = None  # setado por _delayed_warmup()
 
 # ── Price ticker cache ────────────────────────────────────────────────────────
 _MEXC_TICKER  = "https://api.mexc.com/api/v3/ticker/24hr"
@@ -164,18 +163,15 @@ async def _delayed_warmup():
     import logging as _wlog_mod
     _wlog = _wlog_mod.getLogger("startup.warmup")
     await asyncio.sleep(2)    # deixa o servidor aceitar requests primeiro
-    global _ex_mgr, _arb_engine
+    global _ex_mgr
     try:
         from trinity.exchanges.exchange_manager import get_exchange_manager as _get_ex_mgr
         _ex_mgr = _get_ex_mgr()
         _wlog.info("[WARMUP] ExchangeManager criado")
         await asyncio.to_thread(_ex_mgr.fetch_all_tickers_unified)
         _wlog.info("[WARMUP] ExchangeManager warmup concluído (cache quente)")
-        from trinity.traders.arb_opportunity_engine import ArbOpportunityEngine as _ArbCls
-        _arb_engine = _ArbCls(_ex_mgr)
-        _wlog.info("[WARMUP] ArbOpportunityEngine inicializado")
     except Exception as _e:
-        _wlog.error(f"[WARMUP] ExchangeManager/ArbEngine erro: {_e}")
+        _wlog.error(f"[WARMUP] ExchangeManager erro: {_e}")
 
 
 async def _keep_alive():
@@ -1104,54 +1100,6 @@ async def get_funding_arbitrage(min_spread: float = 20.0):
         return JSONResponse(content={"opportunities": opps, "total": len(opps)})
     except Exception as e:
         return JSONResponse(content={"error": str(e), "opportunities": []}, status_code=500)
-
-
-@app.get("/api/funding-arb/opportunities")
-async def get_arb_opportunities(
-    min_spread: float = 20.0,
-    min_score:  int   = 0,
-    top_n:      int   = 50,
-):
-    """
-    Oportunidades de arbitragem de funding rate enriquecidas com confidence score,
-    P&L projetado, taxas líquidas e tier (HOT/BLUE_CHIP/NORMAL).
-    Cache 30s — retorna até top_n resultados.
-    """
-    if _arb_engine is None:
-        return JSONResponse(
-            content={"error": "ArbEngine não disponível (warmup pendente)", "opportunities": []},
-            status_code=503,
-        )
-    try:
-        opps  = await asyncio.to_thread(
-            _arb_engine.get_opportunities, min_spread, min_score, top_n
-        )
-        stats = await asyncio.to_thread(_arb_engine.get_aggregate_stats)
-        return JSONResponse(content={
-            "opportunities": opps,
-            "total":         len(opps),
-            "stats":         stats,
-        })
-    except Exception as e:
-        return JSONResponse(content={"error": str(e), "opportunities": []}, status_code=500)
-
-
-@app.get("/api/funding-arb/heatmap")
-async def get_arb_heatmap():
-    """
-    Matriz cross-exchange de pares (mexc/binance/bybit/okx/gateio) com
-    count, avg_apr e best_symbol por par, para o heatmap do dashboard.
-    """
-    if _arb_engine is None:
-        return JSONResponse(
-            content={"error": "ArbEngine não disponível", "matrix": {}},
-            status_code=503,
-        )
-    try:
-        heatmap = await asyncio.to_thread(_arb_engine.get_heatmap)
-        return JSONResponse(content=heatmap)
-    except Exception as e:
-        return JSONResponse(content={"error": str(e), "matrix": {}}, status_code=500)
 
 
 @app.get("/api/exchanges/ticker/{symbol}")
