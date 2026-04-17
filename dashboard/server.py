@@ -1123,6 +1123,56 @@ async def get_exchange_ticker(symbol: str):
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
+# ── ML Pipeline ──────────────────────────────────────────────────────────────
+
+_ml_mgr = None  # inicializado lazy no primeiro uso
+
+def _get_ml_mgr():
+    global _ml_mgr
+    if _ml_mgr is None:
+        from trinity.ml.ml_manager import MLManager
+        _ml_mgr = MLManager.get_instance()
+    return _ml_mgr
+
+
+@app.post("/api/ml/run")
+async def ml_run():
+    """
+    Dispara o pipeline de ML (Feature Importance + Weight Optimizer) em background.
+    Retorna 202 se iniciou, 409 se já está rodando.
+    """
+    mgr = _get_ml_mgr()
+    started = await asyncio.to_thread(mgr.run_async)
+    if started:
+        return JSONResponse(content={"status": "started"}, status_code=202)
+    return JSONResponse(content={"status": "already_running"}, status_code=409)
+
+
+@app.get("/api/ml/status")
+def ml_status():
+    """
+    Retorna estado atual do pipeline ML e resultados resumidos para o dashboard.
+    """
+    try:
+        mgr = _get_ml_mgr()
+        return JSONResponse(content=mgr.summary_for_api())
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/ml/results")
+def ml_results():
+    """Retorna resultados completos do pipeline ML (feature importance + pesos)."""
+    try:
+        mgr = _get_ml_mgr()
+        res = mgr.get_results()
+        if not res:
+            return JSONResponse(content={"status": "no_data"})
+        return JSONResponse(content=res)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
 # ── Serve React app v3.0 em /app/ ────────────────────────────────────────────
 REACT_APP_DIR = BASE_DIR / "dashboard" / "static" / "app"
 if REACT_APP_DIR.exists():
