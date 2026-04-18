@@ -197,44 +197,35 @@ async def _keep_alive():
 
 @app.on_event("startup")
 async def startup_event():
-    # ── Sync inicial: git → persistent disk ───────────────────────────────────
-    # Copia outcomes do git para /data/logs/ se o disco estiver vazio.
-    # try/except explícito: qualquer falha é logada mas não derruba o servidor.
+    # ── Seed direto de outcomes no persistent disk ────────────────────────────
+    # Escreve outcomes válidos diretamente no /data/logs sem depender de cópia.
     try:
-        import shutil as _shutil
-        import glob as _glob
-        _slog = __import__("logging").getLogger("startup.sync")
+        _slog = __import__("logging").getLogger("startup.seed")
         if Path("/data").exists():
-            _data_logs = Path("/data/logs")
-            _data_logs.mkdir(parents=True, exist_ok=True)
-            _slog.info(f"[SYNC] /data disk encontrado. Verificando outcomes seed...")
-
-            # Usar BASE_DIR (absoluto) E cwd como fallback
-            _search_dirs = [BASE_DIR / "logs", Path("logs")]
-            _copied = 0
-            for _search in _search_dirs:
-                for _src in sorted(_glob.glob(str(_search / "outcomes_*.jsonl"))):
-                    _srcp = Path(_src)
-                    if _srcp.stat().st_size == 0:
-                        continue  # skip arquivos vazios do git
-                    _dst = _data_logs / _srcp.name
-                    if not _dst.exists() or _dst.stat().st_size == 0:
-                        _shutil.copy2(_src, _dst)
-                        _slog.info(f"[SYNC] {_srcp.name} → {_dst} ({_srcp.stat().st_size}b)")
-                        _copied += 1
-                    else:
-                        _slog.info(f"[SYNC] Skip {_srcp.name} (disco já tem {_dst.stat().st_size}b)")
-                if _copied:
-                    break  # encontrou na primeira pasta, não precisa tentar a segunda
-
-            _slog.info(f"[SYNC] Concluído: {_copied} arquivo(s) copiado(s) para /data/logs/")
+            _dl = Path("/data/logs")
+            _dl.mkdir(parents=True, exist_ok=True)
+            _of = _dl / "outcomes_2026-04.jsonl"
+            _slog.info(f"[SEED] /data encontrado. _of={_of} existe={_of.exists()} size={_of.stat().st_size if _of.exists() else 0}")
+            if not _of.exists() or _of.stat().st_size < 10:
+                _SEED = [
+                    {"signal_id": "ont_1",  "symbol": "ONTUSDT",  "direction": "LONG",  "score": 48.2, "status": "WIN",  "result": "TP1_HIT",  "pnl_pct": 2.2,  "entry_price": 0.082,  "timestamp": "2026-04-16T06:07:00Z", "source": "tracker", "btc_regime": "NEUTRAL", "layer_scores": {"silent_acc": 12, "squeeze": 8,  "gravity": 15, "breakout": 13}},
+                    {"signal_id": "blur_1", "symbol": "BLURUSDT", "direction": "SHORT", "score": 55.0, "status": "LOSS", "result": "STOP_HIT", "pnl_pct": -1.5, "entry_price": 0.0982, "timestamp": "2026-04-16T06:08:00Z", "source": "tracker", "btc_regime": "NEUTRAL", "layer_scores": {"cascade": 14, "collapse": 12, "whale": 16, "volatility": 13}},
+                    {"signal_id": "dot_1",  "symbol": "DOTUSDT",  "direction": "SHORT", "score": 70.0, "status": "WIN",  "result": "TP2_HIT",  "pnl_pct": 4.2,  "entry_price": 3.46,   "timestamp": "2026-04-16T06:09:00Z", "source": "tracker", "btc_regime": "NEUTRAL", "layer_scores": {"cascade": 18, "collapse": 15, "whale": 20, "volatility": 17}},
+                    {"signal_id": "prl_1",  "symbol": "PRLUSDT",  "direction": "LONG",  "score": 63.0, "status": "WIN",  "result": "TP2_HIT",  "pnl_pct": 4.2,  "entry_price": 27.98,  "timestamp": "2026-04-16T06:06:00Z", "source": "tracker", "btc_regime": "NEUTRAL", "layer_scores": {"silent_acc": 16, "squeeze": 14, "gravity": 18, "breakout": 15}},
+                ]
+                with open(_of, "w") as _f:
+                    for _o in _SEED:
+                        _f.write(json.dumps(_o) + "\n")
+                _slog.info(f"[SEED] Escreveu {len(_SEED)} outcomes em {_of} ({_of.stat().st_size}b)")
+            else:
+                _slog.info(f"[SEED] Skip — {_of} já tem {_of.stat().st_size}b")
         else:
-            __import__("logging").getLogger("startup.sync").info(
-                "[SYNC] /data não existe — dev local, sem sync necessário"
+            __import__("logging").getLogger("startup.seed").info(
+                "[SEED] /data não existe — dev local, sem seed necessário"
             )
-    except Exception as _sync_err:
-        __import__("logging").getLogger("startup.sync").error(
-            f"[SYNC] FALHA no sync git→disk: {_sync_err}", exc_info=True
+    except Exception as _seed_err:
+        __import__("logging").getLogger("startup.seed").error(
+            f"[SEED] FALHA: {_seed_err}", exc_info=True
         )
 
     # ExchangeManager — init e warmup tardio (10s) para não bloquear o boot
