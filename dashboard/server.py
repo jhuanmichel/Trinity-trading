@@ -23,7 +23,7 @@ WIN_RATE_FILE     = BASE_DIR / "dashboard" / "win_rate.json"
 OPT_REPORT_FILE   = BASE_DIR / "dashboard" / "optimization_report.json"
 FMS_SCAN_FILE     = BASE_DIR / "dashboard" / "full_market_scan.json"
 FUNDING_SCAN_FILE = BASE_DIR / "dashboard" / "funding_extreme_latest.json"
-LOGS_DIR          = BASE_DIR / "logs"
+LOGS_DIR          = Path("/data/logs") if Path("/data").exists() else BASE_DIR / "logs"
 STATIC_DIR        = BASE_DIR / "dashboard" / "static"
 
 app = FastAPI(title="QuantDesk", version="1.0")
@@ -1297,7 +1297,7 @@ async def api_outcomes_export():
       git add logs/outcomes_*.jsonl && git commit -m "backup outcomes" && git push
     """
     lines = []
-    for f in sorted(glob.glob("logs/outcomes_*.jsonl")):
+    for f in sorted(glob.glob(str(LOGS_DIR / "outcomes_*.jsonl"))):
         try:
             with open(f) as fh:
                 lines.extend(l.strip() for l in fh if l.strip())

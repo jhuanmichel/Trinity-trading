@@ -48,7 +48,8 @@ MIN_OUTCOMES = 30
 MIN_SUBGROUP = 10
 
 # Diretório de logs (relativo à raiz do projeto)
-LOGS_DIR = pathlib.Path(__file__).parent.parent.parent / "logs"
+LOGS_DIR = (pathlib.Path("/data/logs") if pathlib.Path("/data").exists()
+            else pathlib.Path(__file__).parent.parent.parent / "logs")
 
 # Arquivo de persistência dos resultados
 RESULTS_FILE = pathlib.Path(__file__).parent.parent.parent / "dashboard" / "ml_feature_importance.json"

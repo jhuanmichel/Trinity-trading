@@ -112,7 +112,7 @@ def _collect_outcomes() -> dict:
         "samples_needed": 30, "samples_collected": 0,
     }
     try:
-        pf = BASE_DIR / "logs" / "pending_outcomes.jsonl"
+        pf = (Path("/data/logs") if Path("/data").exists() else BASE_DIR / "logs") / "pending_outcomes.jsonl"
         if pf.exists():
             lines = [l for l in pf.read_text().strip().split("\n") if l.strip()]
             result["pending"] = len(lines)

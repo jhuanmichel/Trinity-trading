@@ -37,7 +37,7 @@ WEIGHT_CONSTRAINTS: dict = {
     "max_change_per_round":  8,                # nenhum peso muda > 8 pontos de uma vez
 }
 
-OUTCOMES_DIR     = Path("logs")
+OUTCOMES_DIR     = Path("/data/logs") if Path("/data").exists() else Path("logs")
 REPORT_FILE      = Path("dashboard/optimization_report.json")
 ENGINE_FILE      = Path("smart_money_engine.py")
 ENGINE_BACKUP    = Path("smart_money_engine.py.bak")

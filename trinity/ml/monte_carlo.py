@@ -46,7 +46,8 @@ LOSS_PNL_FALLBACK = 1.5  # % estimado por LOSS (positivo, perde)
 
 STRESS_N_MONTHS  = 3     # quantos "piores meses" repetidos no stress test
 
-LOGS_DIR     = pathlib.Path(__file__).parent.parent.parent / "logs"
+LOGS_DIR     = (pathlib.Path("/data/logs") if pathlib.Path("/data").exists()
+                else pathlib.Path(__file__).parent.parent.parent / "logs")
 RESULTS_FILE = pathlib.Path(__file__).parent.parent.parent / "dashboard" / "ml_monte_carlo.json"
 
 

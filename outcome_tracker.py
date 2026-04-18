@@ -17,9 +17,14 @@ from typing import Optional
 log = logging.getLogger(__name__)
 
 # ── Constantes ────────────────────────────────────────────────────────────────
-PENDING_FILE     = Path("logs/pending_outcomes.jsonl")
-OUTCOMES_DIR     = Path("logs")
+# Render Persistent Disk montado em /data — usa /data/logs quando disponível.
+# Fallback para logs/ em dev local (quando /data não existe).
+OUTCOMES_DIR     = Path("/data/logs") if Path("/data").exists() else Path("logs")
+OUTCOMES_DIR.mkdir(parents=True, exist_ok=True)
+PENDING_FILE     = OUTCOMES_DIR / "pending_outcomes.jsonl"
 WIN_RATE_FILE    = Path("dashboard/win_rate.json")
+log.info("[OUTCOME] Usando %s (%s)", OUTCOMES_DIR,
+         "persistent disk" if str(OUTCOMES_DIR).startswith("/data") else "dev local")
 MEXC_FUTURES_KLINES = "https://contract.mexc.com/api/v1/contract/kline"  # Futures (não spot)
 CHECK_AFTER_H    = [4, 24, 48]   # checkpoints em horas após o sinal
 EXPIRY_HOURS     = 48            # horas até expirar automaticamente
