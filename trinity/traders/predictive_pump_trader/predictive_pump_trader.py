@@ -46,7 +46,7 @@ from trinity.traders.predictive_pump_trader.pump_scoring_engine import BLUE_CHIP
 log = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-SCAN_INTERVAL_S    = 60
+SCAN_INTERVAL_S    = 90
 TOP_RESULTS        = 5         # top N oportunidades institucionais
 OPP_THRESHOLD      = 35        # mínimo para aparecer no dashboard
 ALERT_THRESHOLD    = 75        # mínimo para disparar alerta Telegram

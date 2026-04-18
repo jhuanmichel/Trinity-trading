@@ -48,7 +48,7 @@ from trinity.traders.predictive_crash_trader.crash_scoring_engine import BLUE_CH
 log = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-SCAN_INTERVAL_S      = 60       # ciclo de scan em segundos
+SCAN_INTERVAL_S      = 90       # ciclo de scan em segundos (A: 60→90s)
 TOP_RESULTS          = 5        # top N oportunidades institucionais
 OPP_THRESHOLD        = 35        # mínimo para aparecer no dashboard
 ALERT_THRESHOLD      = 75        # mínimo para disparar alerta Telegram

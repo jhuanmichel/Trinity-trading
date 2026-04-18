@@ -138,7 +138,7 @@ _analysis_running = False   # flag para evitar runs concorrentes
 
 
 async def _crash_scan_loop():
-    """Roda o Predictive Crash Trader a cada 30s em background (scan + alertas Telegram)."""
+    """Roda o Predictive Crash Trader a cada 90s em background (scan + alertas Telegram)."""
     import logging as _log
     _clog = _log.getLogger("crash_trader")
     # Aguarda 20s no startup para não competir com a análise institucional
@@ -156,7 +156,7 @@ async def _crash_scan_loop():
             )
         except Exception as _e:
             _clog.error(f"Crash scan loop error: {_e}")
-        await asyncio.sleep(30)
+        await asyncio.sleep(90)  # A: 30s→90s | C: crash em 20,110,200... pump em 65,155,245...
 
 
 async def _delayed_warmup():
@@ -500,10 +500,10 @@ async def get_liquidations():
 
 
 async def _pump_scan_loop():
-    """Roda o Predictive Pump Trader a cada 60s em background (scan + alertas Telegram)."""
+    """Roda o Predictive Pump Trader a cada 90s em background (scan + alertas Telegram)."""
     import logging as _log
     _plog = _log.getLogger("pump_trader")
-    await asyncio.sleep(45)  # offset: crash começa em 20s, pump em 45s
+    await asyncio.sleep(65)  # C: offset 65s = crash(20s) + 45s stagger → sem sobreposição
     while True:
         try:
             import sys as _sys
@@ -518,7 +518,7 @@ async def _pump_scan_loop():
             )
         except Exception as _e:
             _plog.error(f"[PUMP] scan loop error: {_e}", exc_info=True)
-        await asyncio.sleep(60)
+        await asyncio.sleep(90)  # A: 60s→90s | C: pump em 65,155,245... crash em 20,110,200...
 
 
 async def _funding_scan_loop():
