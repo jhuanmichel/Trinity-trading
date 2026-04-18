@@ -60,6 +60,16 @@ def _run_scheduler():
     # Backtest walk-forward mensal (atualiza métricas e equity curve)
     schedule.every(30).days.do(run_monthly_backtest)
 
+    # Weekly digest de performance — todo domingo às 20:00 UTC
+    def run_weekly_digest():
+        try:
+            from trinity.notifications.weekly_digest import WeeklyDigest
+            WeeklyDigest().send()
+        except Exception as _e:
+            log.error(f"[WeeklyDigest] Erro: {_e}")
+
+    schedule.every().sunday.at("20:00").do(run_weekly_digest)
+
     # Full Market Scanner — varre todos os contratos MEXC a cada 90s
     from full_market_scanner import FullMarketScanner as _FMSClass
     _fms_instance = _FMSClass()
