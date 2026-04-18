@@ -531,6 +531,14 @@ def _register_outcome_crash(c: dict):
             tp1   = c.get("tp1", 0)
             tp2   = c.get("tp2", 0)
 
+        # btc_regime — cached (TTL=30s), sem overhead extra
+        _btc_regime = "UNKNOWN"
+        try:
+            from trinity.traders.btc_regime_monitor import get_btc_regime as _gbr
+            _btc_regime = _gbr().get("direction", "UNKNOWN")
+        except Exception:
+            pass
+
         get_tracker().register_signal({
             "symbol":          c.get("symbol", ""),
             "direction":       "SHORT",
@@ -543,6 +551,7 @@ def _register_outcome_crash(c: dict):
             "conviction_tier": c.get("move_classification", "MEDIUM"),
             "dna_pattern":     c.get("dna_pattern", ""),
             "layer_scores":    c.get("component_scores", {}),
+            "btc_regime":      _btc_regime,
         })
         log.info(
             f"[CrashTrader] Outcome registrado: {c.get('symbol','')} SHORT "

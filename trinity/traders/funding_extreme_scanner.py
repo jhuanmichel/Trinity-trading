@@ -104,6 +104,65 @@ class FundingExtremeSignal:
     scanned_at:       str = ""
 
 
+def _register_outcome_funding(s: "FundingExtremeSignal"):
+    """
+    Registra sinal de funding extremo no OutcomeTracker para alimentar o pipeline de ML.
+    Chamado para sinais com composite_score >= ALERT_THRESHOLD (55).
+    Falhas são silenciosas — nunca interrompem o scanner.
+    """
+    try:
+        import sys as _sys
+        _sys.path.insert(0, str(BASE_DIR))
+        from outcome_tracker import get_tracker
+        from datetime import datetime, timezone as _tz
+
+        price     = s.price
+        direction = s.direction  # "LONG" or "SHORT"
+
+        # Níveis: mesmo padrão percentual do pump/crash trader
+        if direction == "LONG":
+            stop = round(price * 0.985, 6)   # -1.5%
+            tp1  = round(price * 1.022, 6)   # +2.2%
+            tp2  = round(price * 1.042, 6)   # +4.2%
+        else:
+            stop = round(price * 1.015, 6)   # +1.5%
+            tp1  = round(price * 0.978, 6)   # -2.2%
+            tp2  = round(price * 0.958, 6)   # -4.2%
+
+        _btc_regime = "UNKNOWN"
+        try:
+            from trinity.traders.btc_regime_monitor import get_btc_regime as _gbr
+            _btc_regime = _gbr().get("direction", "UNKNOWN")
+        except Exception:
+            pass
+
+        get_tracker().register_signal({
+            "symbol":          s.symbol,
+            "direction":       direction,
+            "score":           s.composite_score,
+            "entry_price":     price,
+            "stop_loss":       stop,
+            "tp1":             tp1,
+            "tp2":             tp2,
+            "timestamp":       datetime.now(_tz.utc).isoformat(),
+            "conviction_tier": s.tier,
+            "source":          "funding_scanner",
+            "btc_regime":      _btc_regime,
+            "layer_scores": {
+                "level":   s.level_score,
+                "fuel":    s.fuel_score,
+                "context": s.context_score,
+                "volume":  s.volume_score,
+            },
+        })
+        log.debug(
+            f"[FundingExtreme] Outcome registrado: {s.symbol} {direction} "
+            f"score={s.composite_score:.0f} tier={s.tier}"
+        )
+    except Exception as _oe:
+        log.debug(f"[FundingExtreme] Outcome tracker error: {_oe}")
+
+
 # ── Core scanner ───────────────────────────────────────────────────────────────
 
 class FundingExtremeScanner:
@@ -344,8 +403,12 @@ class FundingExtremeScanner:
         Dados ficam no dashboard (/api/funding-extreme) e alimentam
         o Funding Extreme Engine nos scoring engines do pump/crash radar.
         Alertas Telegram só saem via pump/crash radar (score >= 75).
+
+        Registra sinais ALERT+ (composite >= 55) no OutcomeTracker para ML.
         """
-        pass
+        for s in signals:
+            if s.composite_score >= ALERT_THRESHOLD:
+                _register_outcome_funding(s)
 
     def _empty_result(self, scan_ts: str) -> dict:
         return {

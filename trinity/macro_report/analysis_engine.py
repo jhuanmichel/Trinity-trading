@@ -13,11 +13,20 @@ log = logging.getLogger(__name__)
 
 
 def _get_anthropic_key() -> str:
+    """
+    Resolve a chave ANTHROPIC_API_KEY com prioridade:
+      1. env var ANTHROPIC_API_KEY (Render dashboard)
+      2. config.py (fallback local)
+
+    Ordem verificada: env var PRIMEIRO (FIX C — log de diagnóstico adicionado).
+    """
     import os
-    # Prioridade: env var (Render) → config.py
+    # ── Prioridade 1: env var (Render) ───────────────────────────────────────
     key = os.getenv("ANTHROPIC_API_KEY", "")
     if key:
+        log.debug("[AnalysisEngine] ANTHROPIC_API_KEY: fonte=env_var (len=%d)", len(key))
         return key
+    # ── Prioridade 2: config.py (fallback) ───────────────────────────────────
     try:
         import sys
         from pathlib import Path
@@ -25,8 +34,16 @@ def _get_anthropic_key() -> str:
         if str(base) not in sys.path:
             sys.path.insert(0, str(base))
         from config import ANTHROPIC_API_KEY
-        return ANTHROPIC_API_KEY or ""
-    except Exception:
+        if ANTHROPIC_API_KEY:
+            log.debug("[AnalysisEngine] ANTHROPIC_API_KEY: fonte=config.py (len=%d)", len(ANTHROPIC_API_KEY))
+            return ANTHROPIC_API_KEY
+        log.warning(
+            "[AnalysisEngine] ANTHROPIC_API_KEY não encontrada em env_var nem config.py. "
+            "Configure a variável de ambiente no Render dashboard."
+        )
+        return ""
+    except Exception as e:
+        log.warning("[AnalysisEngine] Falha ao importar config.py: %s", e)
         return ""
 
 

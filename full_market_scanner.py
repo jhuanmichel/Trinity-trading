@@ -93,6 +93,65 @@ _TACTICAL_NOTES: dict = {
 }
 
 
+def _register_outcome_fms(symbol: str, result: dict, tier: str):
+    """
+    Registra sinal FMS no OutcomeTracker para alimentar o pipeline de ML.
+    Chamado apenas quando o alerta Telegram foi enviado com sucesso (ok=True).
+    Falhas são silenciosas — nunca interrompem o loop do scanner.
+    """
+    try:
+        import sys as _sys
+        _sys.path.insert(0, str(BASE_DIR))
+        from outcome_tracker import get_tracker
+        from datetime import datetime, timezone as _tz
+
+        price    = float(result.get("ticker", {}).get("lastPrice", 0) or 0)
+        dom_type = result.get("dominant_type", "PUMP")
+        direction = "LONG" if dom_type == "PUMP" else "SHORT"
+
+        levels = calculate_trade_levels(price, dom_type, tier) if price > 0 else {}
+
+        det   = result.get("detectors", {})
+        d_key = "pump" if dom_type == "PUMP" else "crash"
+
+        _btc_regime = "UNKNOWN"
+        try:
+            from trinity.traders.btc_regime_monitor import get_btc_regime as _gbr
+            _btc_regime = _gbr().get("direction", "UNKNOWN")
+        except Exception:
+            pass
+
+        get_tracker().register_signal({
+            "symbol":          symbol,
+            "direction":       direction,
+            "score":           result.get("dominant_score", 0),
+            "entry_price":     levels.get("entry", price),
+            "stop_loss":       levels.get("stop", 0),
+            "tp1":             levels.get("tp1", 0),
+            "tp2":             levels.get("tp2", 0),
+            "timestamp":       datetime.now(_tz.utc).isoformat(),
+            "conviction_tier": tier,
+            "source":          "fms",
+            "btc_regime":      _btc_regime,
+            "layer_scores": {
+                "pump_score":  result.get("pump_score", 0),
+                "crash_score": result.get("crash_score", 0),
+                "anomaly":     det.get("d1", {}).get("anomaly_score", 0),
+                "funding":     det.get("d2", {}).get(d_key, 0),
+                "oi":          det.get("d3", {}).get(d_key, 0),
+                "cvd":         det.get("d4", {}).get(d_key, 0),
+                "momentum":    det.get("d5", {}).get("score", 0),
+                "depth":       det.get("d6", {}).get(d_key, 0),
+            },
+        })
+        logger.debug(
+            f"[FMS] Outcome registrado: {symbol} {direction} "
+            f"score={result.get('dominant_score', 0):.1f} tier={tier}"
+        )
+    except Exception as _oe:
+        logger.debug(f"[FMS] Outcome tracker error: {_oe}")
+
+
 def calculate_trade_levels(price: float, dominant_type: str, tier: str) -> dict:
     """
     Calcula Entry/Stop/TP1/TP2/TP3 com base no tipo dominante e tier.
@@ -984,6 +1043,8 @@ class AlertDispatcher:
                 f"[ALERT] {tier} {dominant_type} — {symbol} "
                 f"score={result['dominant_score']:.1f} motivo={motivo}"
             )
+            # ── Outcome Tracker (FIX A+B) ──────────────────────────
+            _register_outcome_fms(symbol, result, tier)
 
         return ok
 
