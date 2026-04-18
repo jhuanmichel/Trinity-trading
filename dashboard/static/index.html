@@ -10,12 +10,25 @@
 <body>
 
   <!-- ── HEADER ─────────────────────────────────────────────────────────── -->
-  <header class="header">
-    <div class="logo">
-      <span class="logo-name">TRINITY TRADING</span>
-      <span class="logo-sub">INSTITUTIONAL CRYPTO SIGNALS</span>
+  <header class="trinity-header">
+    <!-- Zona 1: Identidade -->
+    <div class="th-brand">
+      <span class="th-logo">TRINITY</span>
+      <span class="th-tagline">INSTITUTIONAL CRYPTO SIGNALS</span>
     </div>
-    <div class="header-right">
+
+    <!-- Zona 2: Navegação -->
+    <nav class="th-nav" id="main-nav">
+      <a href="#section-ativos"    class="th-nav-link" data-section="ativos">Ativos</a>
+      <a href="#fmsSection"        class="th-nav-link" data-section="mercado">Mercado</a>
+      <a href="#pumpRadarSection"  class="th-nav-link" data-section="pump">Pump</a>
+      <a href="#crashRadarSection" class="th-nav-link" data-section="crash">Crash</a>
+      <a href="#fundingSection"    class="th-nav-link" data-section="funding">Funding</a>
+      <a href="#altcoinSection"    class="th-nav-link" data-section="sinais">Sinais</a>
+    </nav>
+
+    <!-- Zona 3: Status — mantém IDs/classes exatos para o JS funcionar -->
+    <div class="th-status">
       <div class="macro-indicator" id="macroIndicator" title="Sentimento macro — News Sentinel">
         <span class="macro-dot" id="macroDot"></span>
         <span class="macro-text" id="macroText">Macro: —</span>
@@ -26,6 +39,11 @@
       </div>
       <div class="update-time" id="updateTime">—</div>
     </div>
+
+    <!-- Zona 4: Menu mobile -->
+    <button class="th-hamburger" id="nav-toggle" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
   </header>
 
   <main class="main">
@@ -51,7 +69,7 @@
     </section>
 
     <!-- ── SECTION 2: CARDS ──────────────────────────────────────────────── -->
-    <section class="section">
+    <section class="section" id="section-ativos">
       <div class="section-header">
         <h2 class="section-title">ATIVOS</h2>
         <span class="section-divider"></span>

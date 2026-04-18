@@ -2788,3 +2788,69 @@ document.querySelectorAll('.tf-btn').forEach(btn => {
 
 updateMarketTable();
 setInterval(updateMarketTable, MARKET_REFRESH_MS);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HEADER NAVIGATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+(function initHeaderNav() {
+  // Mapa: data-section → ID real da seção no DOM
+  const SECTION_MAP = {
+    ativos:   'section-ativos',
+    mercado:  'fmsSection',
+    pump:     'pumpRadarSection',
+    crash:    'crashRadarSection',
+    funding:  'fundingSection',
+    sinais:   'altcoinSection',
+  };
+
+  // 1. Smooth scroll nos links do nav
+  document.querySelectorAll('.th-nav-link').forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const sectionName = link.dataset.section;
+      const targetId    = SECTION_MAP[sectionName];
+      const target      = targetId ? document.getElementById(targetId) : null;
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      // Fecha menu mobile se aberto
+      const nav    = document.getElementById('main-nav');
+      const toggle = document.getElementById('nav-toggle');
+      if (nav)    nav.classList.remove('open');
+      if (toggle) toggle.classList.remove('open');
+    });
+  });
+
+  // 2. Intersection Observer — marca link ativo baseado na seção visível
+  const setActive = (name) => {
+    document.querySelectorAll('.th-nav-link').forEach(l => l.classList.remove('active'));
+    const active = document.querySelector(`.th-nav-link[data-section="${name}"]`);
+    if (active) active.classList.add('active');
+  };
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const id   = entry.target.id;
+      const name = Object.entries(SECTION_MAP).find(([, v]) => v === id)?.[0];
+      if (name) setActive(name);
+    });
+  }, { threshold: 0.25, rootMargin: '-56px 0px 0px 0px' });
+
+  Object.values(SECTION_MAP).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) observer.observe(el);
+    else    console.warn('[HeaderNav] seção não encontrada:', id);
+  });
+
+  // 3. Hamburger toggle (mobile)
+  const toggle = document.getElementById('nav-toggle');
+  const nav    = document.getElementById('main-nav');
+  if (toggle && nav) {
+    toggle.addEventListener('click', () => {
+      nav.classList.toggle('open');
+      toggle.classList.toggle('open');
+    });
+  }
+})();
