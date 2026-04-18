@@ -1135,11 +1135,13 @@ def _get_ml_mgr():
     return _ml_mgr
 
 
+@app.get("/api/ml/run")
 @app.post("/api/ml/run")
 async def ml_run():
     """
     Dispara o pipeline de ML (Feature Importance + Weight Optimizer) em background.
     Retorna 202 se iniciou, 409 se já está rodando.
+    Aceita GET e POST (curl simples sem Content-Type funciona com GET).
     """
     mgr = _get_ml_mgr()
     started = await asyncio.to_thread(mgr.run_async)
