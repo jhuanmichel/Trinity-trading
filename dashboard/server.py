@@ -4,7 +4,7 @@ Execute com: uvicorn dashboard.server:app --host 0.0.0.0 --port 8000 --reload
 """
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pathlib import Path
 import json
 import glob
@@ -1173,6 +1173,30 @@ def ml_results():
         return JSONResponse(content=res)
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+# ── Outcomes export (backup antes de redeploy) ───────────────────────────────
+
+@app.get("/api/outcomes/export")
+async def api_outcomes_export():
+    """
+    Exporta todos os outcomes resolvidos como JSONL (uma linha por outcome).
+    Usar antes de qualquer git push para não perder dados do Render:
+      curl -s https://trinity-trading.onrender.com/api/outcomes/export > logs/outcomes_2026-MM.jsonl
+      git add logs/outcomes_*.jsonl && git commit -m "backup outcomes" && git push
+    """
+    lines = []
+    for f in sorted(glob.glob("logs/outcomes_*.jsonl")):
+        try:
+            with open(f) as fh:
+                lines.extend(l.strip() for l in fh if l.strip())
+        except Exception:
+            pass
+    return Response(
+        content="\n".join(lines),
+        media_type="text/plain",
+        headers={"Content-Disposition": "attachment; filename=outcomes.jsonl"},
+    )
 
 
 # ── Serve React app v3.0 em /app/ ────────────────────────────────────────────
