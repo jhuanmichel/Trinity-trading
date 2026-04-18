@@ -552,6 +552,17 @@ def _register_outcome_crash(c: dict):
         log.debug(f"[CrashTrader] Outcome tracker error: {_oe}")
 
 
+def get_alert_tier(score: float, is_blue_chip: bool = False) -> dict:
+    """Retorna tier de alerta baseado no score e se é blue chip."""
+    hi, mid = (90, 75) if is_blue_chip else (95, 85)
+    sep = "━━━━━━━━━━━━━━━━━━━━━━"
+    if score >= hi:
+        return {"tier": "EXTREME", "emoji": "🚨🔥", "sep": sep}
+    elif score >= mid:
+        return {"tier": "STRONG",  "emoji": "⚡",   "sep": "━━━ HIGH CONFIDENCE ━━━"}
+    return      {"tier": "NORMAL",  "emoji": "📊",   "sep": ""}
+
+
 def _send_crash_telegram(c: dict):
     try:
         import sys
@@ -574,8 +585,16 @@ def _send_crash_telegram(c: dict):
 
         tier_map   = {"EXTREME": "🔴🔴🔴", "STRONG": "🔴🔴", "TRADEABLE": "🔴", "WEAK": "🟠", "MICRO": "⚪"}
         tier_emoji = tier_map.get(move_cls, "🟠")
-        header     = "🚨" if opp_score >= 85 else "📉"
         pct_str    = f"+{pct_change:.1f}%" if pct_change >= 0 else f"{pct_change:.1f}%"
+
+        is_bc = symbol in BLUE_CHIPS
+        t = get_alert_tier(opp_score, is_bc)
+        if t["tier"] == "EXTREME":
+            header_line = f"{t['sep']}\n{t['emoji']} EXTREME CRASH {t['emoji']}\n{t['sep']}"
+        elif t["tier"] == "STRONG":
+            header_line = f"{t['emoji']} STRONG CRASH\n{t['sep']}"
+        else:
+            header_line = f"{t['emoji']} SHORT SETUP"
 
         def bar(val, mx=25):
             filled = max(0, min(8, int(val / mx * 8)))
@@ -599,7 +618,7 @@ def _send_crash_telegram(c: dict):
         for s in signals[:4]:
             sig_lines += f"\n• {s}"
 
-        msg = f"{header} *TRINITY — SHORT SETUP*\n━━━━━━━━━━━━━━━━━━━━━━\n{tier_emoji} *{move_cls}*"
+        msg = f"{header_line}\n{tier_emoji} *{move_cls}*"
         if dna_pattern:
             msg += f" — {dna_pattern}"
         msg += (
@@ -614,29 +633,28 @@ def _send_crash_telegram(c: dict):
         )
 
         if plans:
-            rec = plans.get("recommended_plan", "B")
-            pa  = plans.get("plan_a", {})
-            pb  = plans.get("plan_b", {})
+            rec = plans.get("recommended_plan") or "A"
+            if rec not in ("A", "B"):
+                log.warning(f"[CrashTrader] recommended_plan inesperado: {rec!r}, usando A")
+                rec = "A"
+            selected = plans.get(f"plan_{rec.lower()}")
+            if not selected:
+                alt = "b" if rec == "A" else "a"
+                selected = plans.get(f"plan_{alt}") or {}
+                if selected:
+                    log.warning(f"[CrashTrader] plan_{rec.lower()} vazio, usando plan_{alt}")
+                    rec = alt.upper()
 
-            star_a = " ⭐" if rec == "A" else ""
-            star_b = " ⭐" if rec == "B" else ""
-
-            msg += (
-                f"\n📌 *PLANO A — {pa.get('label', '')}*{star_a}\n"
-                f"  `SHORT {fp(pa.get('entry',0))}` ← _{pa.get('instruction','')}_\n"
-                f"  `STOP  {fp(pa.get('stop',0))}  {pd(pa.get('stop',0), pa.get('entry',0), 'up')}`\n"
-                f"  `TP1   {fp(pa.get('tp1',0))}  {pd(pa.get('tp1',0), pa.get('entry',0), 'down')}`\n"
-                f"  `TP2   {fp(pa.get('tp2',0))}  {pd(pa.get('tp2',0), pa.get('entry',0), 'down')}`\n"
-                f"  `TP3   {fp(pa.get('tp3',0))}  {pd(pa.get('tp3',0), pa.get('entry',0), 'down')}`\n"
-                f"  R:R *1:{pa.get('rr_ratio', 0):.1f}*\n"
-                f"\n📌 *PLANO B — {pb.get('label', '')}*{star_b}\n"
-                f"  `SHORT {fp(pb.get('entry',0))}` ← _{pb.get('instruction','')}_\n"
-                f"  `STOP  {fp(pb.get('stop',0))}  {pd(pb.get('stop',0), pb.get('entry',0), 'up')}`\n"
-                f"  `TP1   {fp(pb.get('tp1',0))}  {pd(pb.get('tp1',0), pb.get('entry',0), 'down')}`\n"
-                f"  `TP2   {fp(pb.get('tp2',0))}  {pd(pb.get('tp2',0), pb.get('entry',0), 'down')}`\n"
-                f"  `TP3   {fp(pb.get('tp3',0))}  {pd(pb.get('tp3',0), pb.get('entry',0), 'down')}`\n"
-                f"  R:R *1:{pb.get('rr_ratio', 0):.1f}*"
-            )
+            if selected:
+                msg += (
+                    f"\n📌 *PLANO {rec} — {selected.get('label', '')}*\n"
+                    f"  `SHORT {fp(selected.get('entry',0))}` ← _{selected.get('instruction','')}_\n"
+                    f"  `STOP  {fp(selected.get('stop',0))}  {pd(selected.get('stop',0), selected.get('entry',0), 'up')}`\n"
+                    f"  `TP1   {fp(selected.get('tp1',0))}  {pd(selected.get('tp1',0), selected.get('entry',0), 'down')}`\n"
+                    f"  `TP2   {fp(selected.get('tp2',0))}  {pd(selected.get('tp2',0), selected.get('entry',0), 'down')}`\n"
+                    f"  `TP3   {fp(selected.get('tp3',0))}  {pd(selected.get('tp3',0), selected.get('entry',0), 'down')}`\n"
+                    f"  R:R *1:{selected.get('rr_ratio', 0):.1f}*"
+                )
         else:
             # Fallback — formato antigo se smart plans não disponível
             entry = c.get("entry", price)
