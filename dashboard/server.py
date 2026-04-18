@@ -1472,32 +1472,18 @@ async def api_exchanges_health():
             _ua = {"User-Agent": "Trinity/5.0"}
 
             for name in _ex_mgr.active_exchanges:
-                # ── Exchanges geo-bloqueadas em IPs cloud: ping leve ──────────────
+                # ── Exchanges geo-bloqueadas em IPs cloud ─────────────────────────
+                # Render bloqueia TODOS os endpoints públicos dessas exchanges (confirmado).
+                # Não tenta pingar — retorna restricted imediatamente com contagem conhecida.
                 if name in _CLOUD_RESTRICTED:
                     cfg = _CLOUD_RESTRICTED[name]
-                    try:
-                        t0 = _t.time()
-                        r  = _req.get(cfg["ping_url"], timeout=8, headers=_ua)
-                        ms = round((_t.time() - t0) * 1000, 1)
-                        if r.status_code == 200:
-                            results.append({
-                                "name":   name,
-                                "status": "restricted",
-                                "ms":     ms,
-                                "n":      cfg["known_n"],
-                                "approx": True,
-                            })
-                        else:
-                            results.append({
-                                "name":   name,
-                                "status": "error",
-                                "ms":     ms,
-                                "n":      0,
-                                "approx": False,
-                            })
-                    except Exception as ex:
-                        log.warning(f"[HEALTH] ping {name} falhou: {ex}")
-                        results.append({"name": name, "status": "error", "ms": 0, "n": 0, "approx": False})
+                    results.append({
+                        "name":   name,
+                        "status": "restricted",
+                        "ms":     None,
+                        "n":      cfg["known_n"],
+                        "approx": True,
+                    })
                     continue
 
                 # ── Exchanges com dados completos disponíveis ─────────────────────
