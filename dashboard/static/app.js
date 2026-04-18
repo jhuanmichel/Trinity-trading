@@ -2673,109 +2673,81 @@ setInterval(updateFundingExtreme, FUNDING_REFRESH_MS);
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CRYPTO BUBBLES — Visual institucional 3D
+// MERCADO MEXC FUTURES — Tabela leve (substitui crypto bubbles)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const BUBBLES_REFRESH_MS = 60_000; // 1 min
-let _bubblesData = [];
-let _bubblesTf   = 'change_pct'; // campo de cor: 'change_pct' ou 'funding_rate'
+const MARKET_REFRESH_MS = 60_000; // 1 min
+let _marketData = [];
+let _marketTf   = 'change_pct'; // 'change_pct' ou 'funding_rate'
 
-function renderBubbles() {
+function _fmtPrice(p) {
+  if (!p && p !== 0) return '—';
+  if (p >= 1000)  return '$' + p.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  if (p >= 1)     return '$' + p.toFixed(2);
+  if (p >= 0.01)  return '$' + p.toFixed(4);
+  return '$' + p.toFixed(6);
+}
+
+function renderMarketTable() {
   const container = document.getElementById('bubbles-container');
   if (!container) return;
-  container.innerHTML = '';
 
-  const coins = _bubblesData;
+  const coins = _marketData;
   if (!coins || !coins.length) {
-    container.innerHTML = '<p class="no-data">Carregando mercado...</p>';
+    container.innerHTML = '<p class="no-data" style="padding:24px 16px">Carregando mercado...</p>';
     return;
   }
 
-  // Sempre ordenado por volume desc (tamanho = volume)
-  const top = [...coins].slice(0, 100);
+  // Ordenar conforme toggle ativo
+  const sorted = _marketTf === 'funding_rate'
+    ? [...coins].sort((a, b) => Math.abs(b.funding_rate || 0) - Math.abs(a.funding_rate || 0))
+    : [...coins].sort((a, b) => (b.change_pct || 0) - (a.change_pct || 0));
+  const top50 = sorted.slice(0, 50);
 
+  // Stats (sempre por variação 24h, sobre todos os dados)
   let totalUp = 0, totalDown = 0, totalFlat = 0;
   let biggestGain = { sym: '', pct: -Infinity };
-  let biggestLoss = { sym: '', pct: Infinity };
-
-  top.forEach((b, i) => {
-    const pct24    = b.change_pct || 0;
-    // Valor de cor: change_pct já está em %, funding_rate é decimal → *100
-    const colorVal = _bubblesTf === 'funding_rate' ? (b.funding_rate * 100) : pct24;
-
-    // Stats sempre por 24h
-    if (pct24 > 0.5) totalUp++;
-    else if (pct24 < -0.5) totalDown++;
-    else totalFlat++;
-    if (pct24 > biggestGain.pct) biggestGain = { sym: b.symbol, pct: pct24 };
-    if (pct24 < biggestLoss.pct) biggestLoss = { sym: b.symbol, pct: pct24 };
-
-    // Classe de tamanho por ranking de volume
-    let sizeClass;
-    if      (i <  2) sizeClass = 'bbl-1';
-    else if (i <  6) sizeClass = 'bbl-2';
-    else if (i < 16) sizeClass = 'bbl-3';
-    else if (i < 40) sizeClass = 'bbl-4';
-    else if (i < 70) sizeClass = 'bbl-5';
-    else             sizeClass = 'bbl-6';
-
-    // Gradiente radial pra efeito esférico — 10 faixas de cor
-    let baseColor, darkColor;
-    const cv = colorVal;
-    if      (cv > 15)  { baseColor = '#00ff88'; darkColor = '#004d1a'; }
-    else if (cv > 8)   { baseColor = '#00e67a'; darkColor = '#00401a'; }
-    else if (cv > 4)   { baseColor = '#00cc6a'; darkColor = '#003616'; }
-    else if (cv > 1.5) { baseColor = '#00b35c'; darkColor = '#002d12'; }
-    else if (cv > 0)   { baseColor = '#2d8659'; darkColor = '#1a3d2b'; }
-    else if (cv > -1.5){ baseColor = '#6b5b5b'; darkColor = '#2a2020'; }
-    else if (cv > -4)  { baseColor = '#b33030'; darkColor = '#3d0e0e'; }
-    else if (cv > -8)  { baseColor = '#cc2929'; darkColor = '#4d0f0f'; }
-    else if (cv > -15) { baseColor = '#e62e2e'; darkColor = '#5a1111'; }
-    else               { baseColor = '#ff3333'; darkColor = '#661414'; }
-
-    const bg = `radial-gradient(circle at 30% 25%, ${baseColor}, ${darkColor})`;
-
-    // Glow para extreme movers (por 24h)
-    let glowClass = 'glow-none';
-    if (pct24 > 10) glowClass = 'glow-green';
-    else if (pct24 < -10) glowClass = 'glow-red';
-
-    // Formatação tooltip
-    const volStr  = b.volume_usd >= 1e9 ? `$${(b.volume_usd/1e9).toFixed(1)}B`
-                  : b.volume_usd >= 1e6 ? `$${(b.volume_usd/1e6).toFixed(1)}M`
-                  : `$${(b.volume_usd/1e3).toFixed(0)}K`;
-
-    const priceStr = b.price >= 1000 ? `$${b.price.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`
-                   : b.price >= 1    ? `$${b.price.toFixed(2)}`
-                   : b.price >= 0.01 ? `$${b.price.toFixed(4)}`
-                   : `$${b.price.toFixed(6)}`;
-
-    const fundPct  = (b.funding_rate || 0) * 100;
-    const fundStr  = `${fundPct >= 0 ? '+' : ''}${fundPct.toFixed(3)}%`;
-    const pctSign  = pct24 >= 0 ? '+' : '';
-    const pctColor = pct24 >= 0 ? 'tt-green' : 'tt-red';
-
-    // Label interno — mostra colorVal (muda com modo selecionado)
-    const cvSign  = colorVal >= 0 ? '+' : '';
-    const labelTf = _bubblesTf === 'funding_rate'
-      ? `${cvSign}${colorVal.toFixed(3)}%`
-      : `${pctSign}${pct24.toFixed(1)}%`;
-
-    const div = document.createElement('div');
-    div.className  = `bbl ${sizeClass} ${glowClass}`;
-    div.style.background = bg;
-    div.innerHTML  = `
-      <span class="bbl-sym">${b.symbol}</span>
-      <span class="bbl-pct">${labelTf}</span>
-      <div class="bbl-tooltip">
-        <div class="tt-sym">${b.symbol}</div>
-        <div class="tt-row"><span class="tt-label">Preço</span><span class="tt-val">${priceStr}</span></div>
-        <div class="tt-row"><span class="tt-label">24h</span><span class="tt-val ${pctColor}">${pctSign}${pct24.toFixed(2)}%</span></div>
-        <div class="tt-row"><span class="tt-label">Volume</span><span class="tt-val">${volStr}</span></div>
-        <div class="tt-row"><span class="tt-label">Funding</span><span class="tt-val">${fundStr}/8h</span></div>
-      </div>`;
-    container.appendChild(div);
+  let biggestLoss = { sym: '', pct:  Infinity };
+  coins.forEach(b => {
+    const p = b.change_pct || 0;
+    if      (p >  0.5) totalUp++;
+    else if (p < -0.5) totalDown++;
+    else               totalFlat++;
+    if (p > biggestGain.pct) biggestGain = { sym: b.symbol, pct: p };
+    if (p < biggestLoss.pct) biggestLoss = { sym: b.symbol, pct: p };
   });
+
+  // Build rows
+  const rows = top50.map(b => {
+    const pct  = b.change_pct || 0;
+    const fund = (b.funding_rate || 0) * 100;
+
+    const pctSign  = pct  >= 0 ? '+' : '';
+    const fundSign = fund >= 0 ? '+' : '';
+    const pctCls   = pct  >  0.3 ? 'mkt-positive' : pct  < -0.3 ? 'mkt-negative' : 'mkt-neutral';
+    const fundCls  = fund > 0.01 ? 'mkt-positive' : fund < -0.01 ? 'mkt-negative' : 'mkt-neutral';
+
+    const sym = b.symbol.replace('USDT', '');
+
+    return `<tr>
+      <td class="mkt-sym">${sym}</td>
+      <td class="mkt-price">${_fmtPrice(b.price)}</td>
+      <td class="${pctCls}">${pctSign}${pct.toFixed(2)}%</td>
+      <td class="${fundCls}">${fundSign}${fund.toFixed(3)}%</td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `<table class="market-table">
+    <thead>
+      <tr>
+        <th>SYMBOL</th>
+        <th>PREÇO</th>
+        <th>VAR 24H</th>
+        <th>FUNDING 8H</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`;
 
   // Stats bar
   const statsEl = document.getElementById('bubbles-stats');
@@ -2791,23 +2763,25 @@ function renderBubbles() {
   }
 }
 
-async function updateCryptoBubbles() {
+async function updateMarketTable() {
   try {
     const d = await fetch('/api/crypto-bubbles').then(r => r.json());
-    _bubblesData = d.coins || [];
-    renderBubbles();
-  } catch (_) {}
+    _marketData = d.coins || [];
+    renderMarketTable();
+  } catch (e) {
+    console.error('[MarketTable] fetch falhou:', e);
+  }
 }
 
-// Event listener para botões de timeframe das bubbles (C4)
+// Toggle VARIAÇÃO % / FUNDING
 document.querySelectorAll('.tf-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    _bubblesTf = btn.dataset.tf;
-    renderBubbles();
+    _marketTf = btn.dataset.tf;
+    renderMarketTable();
   });
 });
 
-updateCryptoBubbles();
-setInterval(updateCryptoBubbles, BUBBLES_REFRESH_MS);
+updateMarketTable();
+setInterval(updateMarketTable, MARKET_REFRESH_MS);
