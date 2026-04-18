@@ -197,6 +197,36 @@ async def _keep_alive():
 
 @app.on_event("startup")
 async def startup_event():
+    # ── Sync inicial: git → persistent disk ───────────────────────────────────
+    # Se /data existe (Render persistent disk) e os arquivos de outcomes estão
+    # vazios ou ausentes no disco, copia a versão do git como seed inicial.
+    # Executado de forma síncrona no startup para que o ML já encontre dados.
+    import shutil as _shutil
+    import glob as _glob
+    _slog = __import__("logging").getLogger("startup.sync")
+    if Path("/data").exists():
+        _data_logs = Path("/data/logs")
+        _data_logs.mkdir(parents=True, exist_ok=True)
+
+        # Outcomes resolvidos (seed do git → /data/logs/)
+        for _src in sorted(_glob.glob(str(BASE_DIR / "logs" / "outcomes_*.jsonl"))):
+            _dst = _data_logs / Path(_src).name
+            if not _dst.exists() or _dst.stat().st_size == 0:
+                _shutil.copy2(_src, _dst)
+                _slog.info(f"[STARTUP] Sync {Path(_src).name} → {_dst}  ({Path(_src).stat().st_size}b)")
+            else:
+                _slog.debug(f"[STARTUP] Skip {Path(_src).name} (disk já tem {_dst.stat().st_size}b)")
+
+        # Pending outcomes (só copia se disco vazio — não sobrescreve dados live)
+        _pending_src = BASE_DIR / "logs" / "pending_outcomes.jsonl"
+        _pending_dst = _data_logs / "pending_outcomes.jsonl"
+        if _pending_src.exists() and _pending_src.stat().st_size > 0:
+            if not _pending_dst.exists() or _pending_dst.stat().st_size == 0:
+                _shutil.copy2(_pending_src, _pending_dst)
+                _slog.info(f"[STARTUP] Sync pending → {_pending_dst}")
+    else:
+        _slog.debug("[STARTUP] /data não existe — usando logs/ local (dev mode)")
+
     # ExchangeManager — init e warmup tardio (10s) para não bloquear o boot
     asyncio.create_task(_delayed_warmup())
     asyncio.create_task(_keep_alive())
