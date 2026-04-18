@@ -45,6 +45,10 @@ _fms = _FMSClass()
 # Não importar nem instanciar no nível de módulo — bloqueia o boot síncrono
 _ex_mgr = None  # setado por _delayed_warmup()
 
+# ── Exchange health cache (B2 fix: latência real por exchange, TTL 60s) ────────
+_health_cache: dict = {"data": None, "ts": 0.0}
+_HEALTH_TTL = 60  # segundos
+
 # ── Price ticker cache ────────────────────────────────────────────────────────
 _MEXC_TICKER  = "https://api.mexc.com/api/v3/ticker/24hr"
 _MEXC_KLINES  = "https://api.mexc.com/api/v3/klines"
@@ -1315,32 +1319,55 @@ async def api_outcomes_export():
 @app.get("/api/exchanges/health")
 async def api_exchanges_health():
     """
-    Health das exchanges: status, latência (ms), nº de contratos.
-    Usa o cache interno do ExchangeManager (5s TTL) — custo zero quando quente.
+    Health das exchanges: status, latência real por exchange (ms), nº de contratos.
+    B2 fix: mede latência individualmente por adapter (não mais o tempo total unificado).
+    Cache 60s para não sobrecarregar as exchanges em cada refresh do dashboard.
     """
+    global _health_cache
+    import time as _t
+
     if _ex_mgr is None:
-        return JSONResponse(content={"exchanges": [], "ts": time.time()})
+        return JSONResponse(content={"exchanges": [], "ts": _t.time()})
+
+    # Retornar cache se ainda válido
+    if _health_cache["data"] is not None and _t.time() - _health_cache["ts"] < _HEALTH_TTL:
+        return JSONResponse(content=_health_cache["data"])
+
     try:
-        import time as _t
-        t0 = _t.time()
-        unified = await asyncio.to_thread(_ex_mgr.fetch_all_tickers_unified)
-        elapsed_ms = round((_t.time() - t0) * 1000, 1)
+        def _ping_all() -> list:
+            results = []
+            for name in _ex_mgr.active_exchanges:
+                adapter = _ex_mgr.get_adapter(name)
+                if adapter is None:
+                    results.append({"name": name, "status": "offline", "ms": 0, "n": 0})
+                    continue
+                try:
+                    t0 = _t.time()
+                    tickers = adapter.fetch_all_tickers()
+                    ms = round((_t.time() - t0) * 1000, 1)
+                    n = len(tickers) if tickers else 0
+                    results.append({
+                        "name":   name,
+                        "status": "ok" if n > 0 else "error",
+                        "ms":     ms,
+                        "n":      n,
+                    })
+                except Exception as ex:
+                    results.append({
+                        "name":   name,
+                        "status": "error",
+                        "ms":     0,
+                        "n":      0,
+                        "error":  str(ex)[:80],
+                    })
+            return results
 
-        per_ex: dict[str, int] = {}
-        for tickers in unified.values():
-            for tk in tickers:
-                per_ex[tk.exchange] = per_ex.get(tk.exchange, 0) + 1
+        exchanges = await asyncio.to_thread(_ping_all)
+        payload = {"exchanges": exchanges, "ts": _t.time(), "cached": False}
+        _health_cache["data"] = payload
+        _health_cache["ts"]   = _t.time()
+        return JSONResponse(content=payload)
 
-        result = []
-        for name in _ex_mgr.active_exchanges:
-            n = per_ex.get(name, 0)
-            result.append({
-                "name":   name,
-                "status": "ok" if n > 0 else "error",
-                "ms":     elapsed_ms,
-                "n":      n,
-            })
-        return JSONResponse(content={"exchanges": result, "ts": _t.time()})
     except Exception as e:
         return JSONResponse(content={"exchanges": [], "ts": time.time(), "error": str(e)})
 
@@ -1357,7 +1384,12 @@ async def api_equity_curve():
     try:
         from trinity.ml.feature_importance import _load_resolved_outcomes
         outcomes = await asyncio.to_thread(_load_resolved_outcomes)
-        resolved = [o for o in outcomes if o.get("status") in ("WIN", "LOSS")]
+        # B1 fix: excluir outcomes sem timestamp (evitam ponto fantasma na curva)
+        resolved = [
+            o for o in outcomes
+            if o.get("status") in ("WIN", "LOSS")
+            and (o.get("resolved_at") or o.get("timestamp"))
+        ]
         resolved.sort(key=lambda o: o.get("resolved_at", o.get("timestamp", "")))
 
         curve = []

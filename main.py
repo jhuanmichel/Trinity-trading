@@ -52,6 +52,27 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+# ─── Rate-limit para alerta Anthropic (1x/hora) ───────────────────────────────
+_last_anthropic_alert: float = 0.0
+
+
+def _alert_anthropic_failure(error_msg: str) -> None:
+    """Envia alerta Telegram quando API Anthropic falha. Máx 1x por hora."""
+    global _last_anthropic_alert
+    if time.time() - _last_anthropic_alert < 3600:
+        return
+    try:
+        alerts.send_message(
+            "⚠️ <b>TRINITY — Anthropic API falhou</b>\n"
+            "A análise de IA está desativada neste ciclo.\n"
+            f"Verificar <code>ANTHROPIC_API_KEY</code> no Render.\n\n"
+            f"Erro: <code>{str(error_msg)[:120]}</code>"
+        )
+        _last_anthropic_alert = time.time()
+        log.warning("[ANTHROPIC] Alerta Telegram enviado (próximo em 1h)")
+    except Exception as e:
+        log.warning(f"[ANTHROPIC] Falha ao enviar alerta Telegram: {e}")
+
 
 def run_analysis_summary():
     """
@@ -150,6 +171,7 @@ def run_analysis_signal():
 
         if "error" in ai_result:
             log.error(f"   Erro na IA: {ai_result['error']}")
+            _alert_anthropic_failure(ai_result["error"])
         else:
             log.info(f"   IA → {ai_result['direcao']} | Força: {ai_result['forca_sinal']}/10")
 

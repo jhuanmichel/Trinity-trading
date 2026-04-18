@@ -335,8 +335,9 @@ class OutcomeTracker:
             best_dir = self._best_direction(outcomes)
 
             # Breakdown por conviction_tier
+            # Tiers reais: EXTREME/STRONG/TRADEABLE/WEAK/MICRO (move_classification)
             by_conviction_tier: dict = {}
-            for tier in ("HIGH", "MEDIUM"):
+            for tier in ("EXTREME", "STRONG", "TRADEABLE", "WEAK", "MICRO"):
                 tier_outs   = [o for o in outcomes if o.get("conviction_tier") == tier]
                 tier_wins   = sum(1 for o in tier_outs if o.get("status") == "WIN")
                 tier_losses = sum(1 for o in tier_outs if o.get("status") == "LOSS")
@@ -428,8 +429,11 @@ class OutcomeTracker:
             "avg_score_losses":   None,
             "best_direction":     None,
             "by_conviction_tier": {
-                "HIGH":   {"win_rate_pct": None, "count": 0},
-                "MEDIUM": {"win_rate_pct": None, "count": 0},
+                "EXTREME":   {"win_rate_pct": None, "count": 0},
+                "STRONG":    {"win_rate_pct": None, "count": 0},
+                "TRADEABLE": {"win_rate_pct": None, "count": 0},
+                "WEAK":      {"win_rate_pct": None, "count": 0},
+                "MICRO":     {"win_rate_pct": None, "count": 0},
             },
             "optimizer_progress": {
                 "samples_collected": 0,
