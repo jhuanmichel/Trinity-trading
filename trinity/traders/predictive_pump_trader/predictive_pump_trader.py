@@ -204,12 +204,17 @@ class PredictivePumpTrader:
     def _analyze_coin(self, coin_data: dict, scan_ts: str) -> Optional[PumpCandidate]:
         symbol = coin_data.get("symbol", "?")
 
-        # ── Manipulation check — fail-open ─────────────────────────────────
+        # ── Manipulation check — pump SEMPRE bloqueado durante lock ────────
+        # Pump em coin manipulada = perigoso independente do padrão.
+        # (Crash trader diferencia por padrão; pump trader não.)
         try:
             from trinity.traders.manipulation_detector import check_manipulation
             manip = check_manipulation(symbol, coin_data)
             if manip["locked"]:
-                log.info(f"[PumpTrader] {symbol} SKIPPED (manipulação): {manip['reason']}")
+                log.info(
+                    f"[PumpTrader] {symbol} SKIPPED (manipulação): {manip['reason']} — "
+                    f"pump bloqueado (crash trader analisa separadamente)"
+                )
                 return None
         except Exception:
             pass  # fail-open: qualquer erro não bloqueia a análise

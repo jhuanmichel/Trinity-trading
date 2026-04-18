@@ -184,6 +184,42 @@ def scan_universe() -> List[dict]:
         return _universe_cache["data"]
 
     hot = _filter_hot_candidates(raw)
+
+    # ── FIX D: Extreme movers — sempre incluir, independente de rank ──────
+    # Coins que caíram >30% ou subiram >200% em 24h DEVEM ser analisadas.
+    # Volume mínimo reduzido para $50K (vs $300K normal).
+    _hot_syms = {c["symbol"] for c in hot}
+    _extra: List[dict] = []
+    for _t in raw:
+        _sym = _from_mexc(str(_t.get("symbol", "")))
+        if _sym in _hot_syms or _sym in EXCLUDED_KEYWORDS:
+            continue
+        _rf  = float(_t.get("riseFallRate", 0)) * 100.0  # % 24h
+        _vol = float(_t.get("amount24", 0))               # USD 24h
+        _pr  = float(_t.get("lastPrice", 0))
+        _hv  = float(_t.get("holdVol", 0))
+        _fr  = float(_t.get("fundingRate", 0))
+        # Crasher: queda >30% OU pump >200% (candidato a crash)
+        _is_extreme_crash  = _rf < -30.0 and _vol >= 50_000
+        _is_extreme_pump   = _rf > 200.0 and _vol >= 50_000
+        if _is_extreme_crash or _is_extreme_pump:
+            _extra.append({
+                "symbol":       _sym,
+                "price":        _pr,
+                "price_change": _rf,
+                "volume_24h":   _vol,
+                "risk_score":   0.0,  # será analisado por fetch_batch + score engine
+                "funding_ann":  round(_fr * 3 * 365 * 100, 1),
+                "oi_usd":       round(_hv * _pr),
+            })
+            _hot_syms.add(_sym)
+    if _extra:
+        log.info(
+            f"[CrashScanner] +{len(_extra)} extreme movers adicionados "
+            f"(queda>30% ou pump>200%, vol>$50K)"
+        )
+        hot = hot + _extra
+
     _universe_cache.update({"data": hot, "ts": now})
     log.info(f"[CrashScanner] {len(raw)} pares → {len(hot)} hot candidates")
     return hot

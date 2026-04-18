@@ -226,13 +226,29 @@ class PredictiveCrashTrader:
         """Executa pipeline completo em um único coin."""
         symbol = coin_data.get("symbol", "?")
 
-        # ── Manipulation check — fail-open ─────────────────────────────────
+        # ── Manipulation check — direcionado por tipo de padrão ────────────
+        # Pump patterns (pump&dump, flash crash, stop hunt) CONFIRMAM crash:
+        # coin que subiu extremamente = crash mais provável, não menos.
+        # Wash trading = bloqueia tudo (sem sinal direcional real).
         try:
             from trinity.traders.manipulation_detector import check_manipulation
             manip = check_manipulation(symbol, coin_data)
             if manip["locked"]:
-                log.info(f"[CrashTrader] {symbol} SKIPPED (manipulação): {manip['reason']}")
-                return None
+                _reason = manip.get("reason", "").lower()
+                # Patterns que confirmam pump extremo → crash é oportunidade
+                _PUMP_KWS = ("pump&dump", "multi-candle p&d", "flash crash", "stop hunt")
+                if any(_kw in _reason for _kw in _PUMP_KWS):
+                    log.info(
+                        f"[CrashTrader] {symbol} manipulation lock IGNORADO — "
+                        f"pump extremo detectado, crash é oportunidade | "
+                        f"pattern={manip['reason']}"
+                    )
+                    coin_data["_manipulation_pump_detected"] = True
+                    # NÃO retornar None — continuar análise de crash
+                else:
+                    # Wash trading e outros sem direção: bloquear
+                    log.info(f"[CrashTrader] {symbol} SKIPPED (manipulação): {manip['reason']}")
+                    return None
         except Exception:
             pass  # fail-open: qualquer erro não bloqueia a análise
 

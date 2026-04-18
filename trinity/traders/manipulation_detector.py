@@ -33,13 +33,16 @@ def check_manipulation(symbol: str, coin_data: dict) -> dict:
     """
     now = time.time()
 
-    # Verificar lock existente ainda ativo
+    # Verificar lock existente ainda ativo — NÃO renova o timestamp original
+    # (lock dura exatamente LOCK_DURATION_S a partir da primeira detecção)
     lock = _manipulation_locks.get(symbol)
     if lock and (now - lock["ts"]) < LOCK_DURATION_S:
+        _remaining = int(LOCK_DURATION_S - (now - lock["ts"]))
         return {
-            "locked": True,
-            "reason": lock["reason"],
-            "expires": lock["ts"] + LOCK_DURATION_S,
+            "locked":      True,
+            "reason":      lock["reason"],
+            "expires":     lock["ts"] + LOCK_DURATION_S,
+            "remaining_s": _remaining,
         }
 
     # Limpar lock expirado

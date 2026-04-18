@@ -220,6 +220,21 @@ def score_crash(
     if overext_mult > 1.0:
         opportunity_score = min(100.0, opportunity_score * overext_mult)
 
+    # Manipulation pump confirmado → crash ainda mais provável (×1.20)
+    # Ativado pelo FIX A do crash trader quando manipulation_detector detectou
+    # pump extremo e liberou a análise em vez de bloquear.
+    if _cd.get("_manipulation_pump_detected"):
+        _before_manip = opportunity_score
+        opportunity_score = min(100.0, opportunity_score * 1.20)
+        top_signals.insert(0,
+            f"🚫➡️💥 MANIPULATION PUMP confirmado — boost ×1.20 "
+            f"({_before_manip:.1f}→{opportunity_score:.1f})"
+        )
+        log.info(
+            f"[CrashScore] {_cd.get('symbol','')} manipulation_pump_boost ×1.20 | "
+            f"{_before_manip:.1f} → {opportunity_score:.1f}"
+        )
+
     # 1. Penalidade (×0.70) se expected_move < 4% — aplicar ANTES do DNA
     if not tradeable:
         opportunity_score *= 0.70
