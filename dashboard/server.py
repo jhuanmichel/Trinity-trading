@@ -96,6 +96,14 @@ _ex_mgr = None  # setado por _delayed_warmup()
 _health_cache: dict = {"data": None, "ts": 0.0}
 _HEALTH_TTL = 60  # segundos
 
+# Exchanges geo-bloqueadas em IPs cloud (Render). Ping leve confirma conectividade;
+# dados completos não estão disponíveis — usa contagem conhecida como aproximação.
+_CLOUD_RESTRICTED: dict = {
+    "mexc":    {"ping_url": "https://contract.mexc.com/api/v1/contract/support_currencies", "known_n": 869},
+    "binance": {"ping_url": "https://fapi.binance.com/fapi/v1/time",                        "known_n": 712},
+    "bybit":   {"ping_url": "https://api.bybit.com/v5/market/time",                         "known_n": 500},
+}
+
 # ── Price ticker cache ────────────────────────────────────────────────────────
 _MEXC_TICKER  = "https://api.mexc.com/api/v3/ticker/24hr"
 _MEXC_KLINES  = "https://api.mexc.com/api/v3/klines"
@@ -1461,30 +1469,58 @@ async def api_exchanges_health():
     try:
         def _ping_all() -> list:
             results = []
+            _ua = {"User-Agent": "Trinity/5.0"}
+
             for name in _ex_mgr.active_exchanges:
+                # ── Exchanges geo-bloqueadas em IPs cloud: ping leve ──────────────
+                if name in _CLOUD_RESTRICTED:
+                    cfg = _CLOUD_RESTRICTED[name]
+                    try:
+                        t0 = _t.time()
+                        r  = _req.get(cfg["ping_url"], timeout=8, headers=_ua)
+                        ms = round((_t.time() - t0) * 1000, 1)
+                        if r.status_code == 200:
+                            results.append({
+                                "name":   name,
+                                "status": "restricted",
+                                "ms":     ms,
+                                "n":      cfg["known_n"],
+                                "approx": True,
+                            })
+                        else:
+                            results.append({
+                                "name":   name,
+                                "status": "error",
+                                "ms":     ms,
+                                "n":      0,
+                                "approx": False,
+                            })
+                    except Exception as ex:
+                        log.warning(f"[HEALTH] ping {name} falhou: {ex}")
+                        results.append({"name": name, "status": "error", "ms": 0, "n": 0, "approx": False})
+                    continue
+
+                # ── Exchanges com dados completos disponíveis ─────────────────────
                 adapter = _ex_mgr.get_adapter(name)
                 if adapter is None:
-                    results.append({"name": name, "status": "offline", "ms": 0, "n": 0})
+                    results.append({"name": name, "status": "offline", "ms": 0, "n": 0, "approx": False})
                     continue
                 try:
                     t0 = _t.time()
                     tickers = adapter.fetch_all_tickers()
                     ms = round((_t.time() - t0) * 1000, 1)
-                    n = len(tickers) if tickers else 0
+                    n  = len(tickers) if tickers else 0
                     results.append({
                         "name":   name,
                         "status": "ok" if n > 0 else "error",
                         "ms":     ms,
                         "n":      n,
+                        "approx": False,
                     })
                 except Exception as ex:
-                    results.append({
-                        "name":   name,
-                        "status": "error",
-                        "ms":     0,
-                        "n":      0,
-                        "error":  str(ex)[:80],
-                    })
+                    log.error(f"[HEALTH] fetch_all_tickers {name} erro: {ex}")
+                    results.append({"name": name, "status": "error", "ms": 0, "n": 0, "approx": False})
+
             return results
 
         exchanges = await asyncio.to_thread(_ping_all)
@@ -1494,6 +1530,7 @@ async def api_exchanges_health():
         return JSONResponse(content=payload)
 
     except Exception as e:
+        log.error(f"[HEALTH] endpoint erro inesperado: {e}")
         return JSONResponse(content={"exchanges": [], "ts": time.time(), "error": str(e)})
 
 

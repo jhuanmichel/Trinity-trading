@@ -2450,19 +2450,27 @@ async function loadHealth() {
       return;
     }
     exchanges.forEach(ex => {
-      const card = document.createElement('div');
+      const card   = document.createElement('div');
       card.className = 'health-card';
-      const msStr = ex.ms !== null && ex.ms !== undefined ? `${ex.ms}ms` : '—';
+      const msStr  = ex.ms !== null && ex.ms !== undefined ? `${ex.ms}ms` : '—';
+      const isRestricted = ex.status === 'restricted';
+      const nStr   = ex.n > 0
+        ? (isRestricted ? `~${ex.n.toLocaleString()} contratos` : `${ex.n.toLocaleString()} contratos`)
+        : (ex.status === 'error' ? 'N/A' : '—');
+      const nClass = isRestricted ? 'health-meta restricted' : 'health-meta';
+      const note   = isRestricted ? '<div class="health-meta restricted">cloud restricted</div>' : '';
       card.innerHTML = `
         <div class="health-card-name">
           <span class="health-dot ${ex.status}"></span>
           ${ex.name.toUpperCase()}
         </div>
-        <div class="health-meta">${ex.n.toLocaleString()} contratos</div>
-        <div class="health-meta">Latência: ${msStr}</div>`;
+        <div class="${nClass}">${nStr}</div>
+        <div class="health-meta">Latência: ${msStr}</div>
+        ${note}`;
       grid.appendChild(card);
     });
-  } catch (_) {
+  } catch (e) {
+    console.error('[loadHealth] fetch falhou:', e);
     if (grid) grid.innerHTML = '<span style="color:var(--text-muted);font-size:13px">—</span>';
   }
 }

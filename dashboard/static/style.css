@@ -3173,9 +3173,11 @@ body {
 .health-dot {
   width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
 }
-.health-dot.ok    { background: var(--bull); box-shadow: 0 0 6px var(--bull); }
-.health-dot.error { background: var(--bear); box-shadow: 0 0 6px var(--bear); }
-.health-dot.loading { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+.health-dot.ok         { background: var(--bull);   box-shadow: 0 0 6px var(--bull); }
+.health-dot.error      { background: var(--bear);   box-shadow: 0 0 6px var(--bear); }
+.health-dot.restricted { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+.health-dot.loading    { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+.health-meta.restricted { color: var(--yellow); opacity: 0.75; }
 .health-meta { font-size: 11px; font-family: var(--mono); color: var(--text-muted); }
 
 /* ── Painel Direito: BTC Regime Detalhado + Últimos Sinais ───────────────── */
