@@ -1185,6 +1185,53 @@ async def ml_run():
     return JSONResponse(content={"status": "already_running"}, status_code=409)
 
 
+@app.get("/api/debug/storage")
+async def debug_storage():
+    """Diagnóstico temporário — estado exato dos arquivos no /data/logs/."""
+    import glob as _g, os as _os
+    result = {}
+
+    result["data_exists"]      = Path("/data").exists()
+    result["data_logs_exists"] = Path("/data/logs").exists()
+
+    if Path("/data/logs").exists():
+        files = {}
+        for f in _g.glob("/data/logs/*"):
+            p = Path(f)
+            try:
+                lines = sum(1 for _ in open(f))
+            except Exception:
+                lines = -1
+            files[p.name] = {"size": p.stat().st_size, "lines": lines}
+        result["data_logs_files"] = files
+
+    logs_files = {}
+    for f in _g.glob("logs/*outcomes*") + _g.glob("logs/*pending*"):
+        p = Path(f)
+        try:
+            lines = sum(1 for _ in open(f))
+        except Exception:
+            lines = -1
+        logs_files[p.name] = {"size": p.stat().st_size, "lines": lines}
+    result["logs_files"] = logs_files
+
+    try:
+        import outcome_tracker as _ot
+        result["OUTCOMES_DIR"] = str(getattr(_ot, "OUTCOMES_DIR", "?"))
+        result["PENDING_FILE"] = str(getattr(_ot, "PENDING_FILE", "?"))
+    except Exception as e:
+        result["tracker_error"] = str(e)
+
+    try:
+        from trinity.ml.feature_importance import FeatureImportanceAnalyzer
+        _fi = FeatureImportanceAnalyzer()
+        result["ml_paths_tried"] = str(getattr(_fi, "_outcomes_path", "?"))
+    except Exception as e:
+        result["ml_error"] = str(e)
+
+    return result
+
+
 @app.get("/api/ml/status")
 def ml_status():
     """
