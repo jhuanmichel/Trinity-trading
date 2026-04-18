@@ -407,3 +407,21 @@ class MLManager:
                 logger.info("[MLM] Resultados anteriores carregados: %s", RESULTS_FILE)
         except Exception as exc:
             logger.warning("[MLM] Não foi possível carregar %s: %s", RESULTS_FILE, exc)
+
+        # Auto-trigger: se cache está stale (n_total=0) mas há outcomes no disco, disparar pipeline
+        try:
+            cached_n = self._results.get("n_total", 0)
+            if cached_n == 0:
+                import glob as _gl
+                _logs = (pathlib.Path("/data/logs") if pathlib.Path("/data").exists()
+                         else pathlib.Path("logs"))
+                _files = list(_gl.glob(str(_logs / "outcomes_*.jsonl")))
+                _has_outcomes = any(pathlib.Path(f).stat().st_size > 10 for f in _files)
+                if _has_outcomes:
+                    logger.info("[MLM] Cache stale (n_total=0) + outcomes no disco → auto-trigger pipeline")
+                    t = threading.Thread(target=self._run_pipeline, daemon=True, name="ml-pipeline-auto")
+                    self._thread = t
+                    self._status = "running"
+                    t.start()
+        except Exception as exc:
+            logger.warning("[MLM] Auto-trigger falhou: %s", exc)
