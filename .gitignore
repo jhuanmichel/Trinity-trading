@@ -20,7 +20,12 @@ env/
 pip-selfcheck.json
 
 # ── Logs & dados gerados ─────────────────────────────────────────────────────
-logs/
+# NÃO ignorar o diretório logs/ inteiro — outcomes_*.jsonl precisam ser
+# rastreados para sobreviver redeploies do Render (FS efêmero).
+logs/signals_*.jsonl
+logs/pending_outcomes.jsonl
+logs/*.log
+logs/*.csv
 
 # ── Dados históricos OHLCV (parquets grandes — não commitar)
 data/
