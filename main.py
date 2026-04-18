@@ -116,8 +116,8 @@ def run_analysis_summary():
         score_data = calculate_score(analyses)
         log.info(f"🧮 [9/9] Score: {score_data.get('final_score', 50):.1f}/100 — {score_data.get('signal', 'NO_TRADE')}")
 
-        alerts.send_summary(price, score_data)
-        log.info("✅ Resumo enviado ao Telegram.\n")
+        # alerts.send_summary(price, score_data)  # DESATIVADO: redundante com BTC Regime Engine
+        log.info("✅ Resumo calculado (Telegram desativado).\n")
 
     except Exception as e:
         log.error(f"💥 ERRO (resumo): {e}", exc_info=True)
@@ -812,17 +812,8 @@ def run_institutional_analysis():
                 log.info(f"💤 Trinity Score {trinity_score} abaixo do threshold {INST_SCORE_THRESHOLD} — sem sinal")
                 blocked = "score_baixo"
 
-            # Envia update periódico ao Telegram mesmo sem sinal de trade
-            alerts.send_status_update(
-                price          = price,
-                trinity_score  = trinity_score,
-                neural_data    = neural_data,
-                inst_data      = inst,
-                pressure_data  = pressure_data,
-                direction_data = direction_data,
-                blocked_reason = blocked,
-                struct         = struct,
-            )
+            # alerts.send_status_update(...)  # DESATIVADO: redundante com BTC Regime Engine
+            log.info("💤 Status calculado, sem sinal (Telegram desativado).")
             return
 
         # ── Calcula níveis ─────────────────────────────────────────────────
@@ -855,16 +846,8 @@ def run_institutional_analysis():
                 cycle_data=cycle_data, direction_data=direction_data,
                 neural_data=neural_data,
             )
-            alerts.send_status_update(
-                price          = price,
-                trinity_score  = trinity_score,
-                neural_data    = neural_data,
-                inst_data      = inst,
-                pressure_data  = pressure_data,
-                direction_data = direction_data,
-                blocked_reason = f"funding_bloqueado | {funding_reason}",
-                struct         = struct,
-            )
+            # alerts.send_status_update(...)  # DESATIVADO: redundante com BTC Regime Engine
+            log.info("💤 Funding bloqueou — status calculado (Telegram desativado).")
             return
 
         # ── High Conviction Filter (Etapa 2) ──────────────────────────────
@@ -892,16 +875,8 @@ def run_institutional_analysis():
                     cycle_data=cycle_data, direction_data=direction_data,
                     neural_data=neural_data,
                 )
-                alerts.send_status_update(
-                    price          = price,
-                    trinity_score  = trinity_score,
-                    neural_data    = neural_data,
-                    inst_data      = inst,
-                    pressure_data  = pressure_data,
-                    direction_data = direction_data,
-                    blocked_reason = f"hcf_bloqueado | {_hcf_eval.get('rejection_reason', '')}",
-                    struct         = struct,
-                )
+                # alerts.send_status_update(...)  # DESATIVADO: redundante com BTC Regime Engine
+                log.info("💤 HCF bloqueou — status calculado (Telegram desativado).")
                 return
         except Exception as _hcf_err:
             log.warning(f"   HCF lançou exceção (fail-closed): {_hcf_err}")
@@ -936,16 +911,8 @@ def run_institutional_analysis():
                     f"[NEWS] 🔒 Sinal bloqueado por macro_lock "
                     f"até {_news_clearance['locked_until']} — não enviado ao Telegram"
                 )
-                alerts.send_status_update(
-                    price          = price,
-                    trinity_score  = trinity_score,
-                    neural_data    = neural_data,
-                    inst_data      = inst,
-                    pressure_data  = pressure_data,
-                    direction_data = direction_data,
-                    blocked_reason = "macro_lock",
-                    struct         = struct,
-                )
+                # alerts.send_status_update(...)  # DESATIVADO: redundante com BTC Regime Engine
+                log.info("💤 Macro lock ativo — status calculado (Telegram desativado).")
                 return
             # Aplicar multiplicador macro ao score_final
             _news_mult = _news_clearance["multiplier"]
