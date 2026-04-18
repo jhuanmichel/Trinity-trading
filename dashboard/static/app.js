@@ -1631,7 +1631,7 @@ function showOptimalParams() {
       `  tp2_ratio:       ${p.tp2_ratio}`,
       '',
       'Para aplicar, atualize DEFAULT_PARAMS em backtesting_engine.py',
-      'ou passe --threshold ao rodar backtester.run_backtest.',
+      'ou ajuste DEFAULT_PARAMS em backtesting_engine.py.',
     ].join('\n');
     alert(msg);
   } catch (_) {}
@@ -1671,7 +1671,7 @@ async function updateBacktestResults() {
         '<div class="bt-metric-card bt-neutral" style="grid-column:1/-1;text-align:center">' +
         '<div class="bt-metric-label">STATUS</div>' +
         '<div class="bt-metric-value" style="font-size:14px">Backtest não executado</div>' +
-        '<div class="bt-metric-sub">Execute: python scripts/fetch_historical_data.py → python -m backtester.run_backtest</div>' +
+        '<div class="bt-metric-sub">Use o botão ▶ RODAR BACKTEST para executar</div>' +
         '</div>';
       const wg = document.getElementById('btWindowsGrid');
       if (wg) wg.style.display = 'none';

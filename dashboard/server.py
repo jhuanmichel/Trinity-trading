@@ -2,7 +2,7 @@
 dashboard/server.py — Servidor do Dashboard de Trading
 Execute com: uvicorn dashboard.server:app --host 0.0.0.0 --port 8000 --reload
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, Response
 from pathlib import Path
@@ -11,6 +11,9 @@ import glob
 import asyncio
 import time as _time
 import requests as _req
+import base64 as _b64
+import os as _os
+import secrets as _secrets
 from trinity.traders.daily_summary import should_send_summary, send_daily_summary
 
 BASE_DIR          = Path(__file__).parent.parent
@@ -27,6 +30,50 @@ LOGS_DIR          = Path("/data/logs") if Path("/data").exists() else BASE_DIR /
 STATIC_DIR        = BASE_DIR / "dashboard" / "static"
 
 app = FastAPI(title="QuantDesk", version="1.0")
+
+
+@app.middleware("http")
+async def basic_auth_middleware(request: Request, call_next):
+    """Basic Auth em todas as rotas exceto /health (UptimeRobot)."""
+    if request.url.path == "/health":
+        return await call_next(request)
+
+    auth_user = _os.getenv("AUTH_USER", "trinity")
+    auth_pass = _os.getenv("AUTH_PASS", "")
+
+    # Sem AUTH_PASS configurado → modo dev local, sem auth
+    if not auth_pass:
+        return await call_next(request)
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Basic "):
+        return Response(
+            content="Unauthorized",
+            status_code=401,
+            headers={"WWW-Authenticate": 'Basic realm="QuantDesk"'},
+        )
+
+    try:
+        decoded = _b64.b64decode(auth_header[6:]).decode("utf-8")
+        username, password = decoded.split(":", 1)
+    except Exception:
+        return Response(
+            content="Unauthorized",
+            status_code=401,
+            headers={"WWW-Authenticate": 'Basic realm="QuantDesk"'},
+        )
+
+    u_ok = _secrets.compare_digest(username, auth_user)
+    p_ok = _secrets.compare_digest(password, auth_pass)
+
+    if not (u_ok and p_ok):
+        return Response(
+            content="Unauthorized",
+            status_code=401,
+            headers={"WWW-Authenticate": 'Basic realm="QuantDesk"'},
+        )
+
+    return await call_next(request)
 
 
 @app.get("/health")
