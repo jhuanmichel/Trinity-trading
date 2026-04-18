@@ -169,10 +169,28 @@ class WeeklyDigest:
         cum_wr     = round(all_wins / all_n * 100, 1) if all_n > 0 else 0.0
         cum_pnl    = round(sum(_pnl(o) for o in all_resolved), 1)
 
+        # Contexto macro atual (news_sentinel)
+        macro_context: str | None = None
+        try:
+            import sys as _sys
+            import pathlib as _pl
+            _base = str(_pl.Path(__file__).parent.parent.parent)
+            if _base not in _sys.path:
+                _sys.path.insert(0, _base)
+            from news_sentinel import get_sentinel as _gs
+            macro_context = _gs().get_macro_context_for_alert()
+            # Fallback descritivo quando NEUTRAL
+            if macro_context is None:
+                _sent = _gs().state_snapshot.get("current_sentiment", "NEUTRAL")
+                macro_context = f"NEUTRAL — sem eventos de alto impacto recentes"
+        except Exception as _me:
+            logger.debug("[WeeklyDigest] Macro context indisponível: %s", _me)
+
         return {
-            "timestamp":  now.isoformat(),
-            "stats_this": stats_this,
-            "stats_prev": stats_prev,
+            "timestamp":     now.isoformat(),
+            "stats_this":    stats_this,
+            "stats_prev":    stats_prev,
+            "macro_context": macro_context,
             "cumulative": {
                 "n":        all_n,
                 "wins":     all_wins,
@@ -224,10 +242,18 @@ class WeeklyDigest:
                 + (f"+{cum['pnl']:.1f}%" if cum['pnl'] >= 0 else f"{cum['pnl']:.1f}%")
             )
 
+        # Seção macro
+        macro_ctx = data.get("macro_context")
+        if macro_ctx:
+            macro_line = f"\n🌐 <b>Macro:</b> {macro_ctx}"
+        else:
+            macro_line = ""
+
         return (
             f"📊 <b>TRINITY — DIGEST SEMANAL</b>\n"
             f"<code>{'━' * 22}</code>\n"
-            f"{body}\n\n"
+            f"{body}"
+            f"{macro_line}\n\n"
             f"<i>{now_str}</i>"
         )
 

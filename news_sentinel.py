@@ -249,7 +249,13 @@ class NewsSentinel:
                 f"[NewsSentinel] 🔒 LOCK MACRO {impact} HIGH por {lock_min}min — "
                 f"{news.get('source')}: {title[:80]}"
             )
-            self._send_telegram_alert(news, cls)
+            # DESATIVADO: alertas individuais removidos para economizar créditos Anthropic.
+            # Resumo macro incluído no digest semanal (domingo 20:00 UTC).
+            # self._send_telegram_alert(news, cls)
+            logger.info(
+                f"[NewsSentinel] Alerta Telegram DESATIVADO: {impact} HIGH — "
+                f"{title[:60]}"
+            )
             self._log_news(news, cls)
 
         elif magnitude == "MEDIUM" and impact != "NEUTRAL":
