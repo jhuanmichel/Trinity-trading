@@ -313,6 +313,18 @@ def run_pump_cycle() -> dict:
         if c.get("opportunity_score", 0) >= OPP_THRESHOLD:
             _register_outcome_pump(c)
 
+    # BTC Regime Gate — bloquear alertas LONG em mercado bajista
+    # Outcomes já foram registrados acima; gate só bloqueia Telegram.
+    _btc_dir_gate = "UNKNOWN"
+    try:
+        from trinity.traders.btc_regime_monitor import get_btc_regime as _gbr_gate
+        _btc_dir_gate = _gbr_gate().get("direction", "UNKNOWN")
+    except Exception:
+        pass
+    if _btc_dir_gate in ("BEAR", "STRONG_BEAR"):
+        log.info(f"[GATE] Regime {_btc_dir_gate} — alertas LONG bloqueados (outcomes registrados)")
+        return result
+
     alerted = 0
     for c in result.get("candidates", []):
         score  = c.get("opportunity_score", 0)
@@ -431,6 +443,16 @@ def _save_result(result: dict):
 
 
 async def _send_telegram_alerts(candidates: list):
+    # BTC Regime Gate — bloquear alertas LONG em mercado bajista (async path)
+    try:
+        from trinity.traders.btc_regime_monitor import get_btc_regime as _gbr_gate
+        _btc_dir_gate = _gbr_gate().get("direction", "UNKNOWN")
+        if _btc_dir_gate in ("BEAR", "STRONG_BEAR"):
+            log.info(f"[GATE] Regime {_btc_dir_gate} — alertas LONG bloqueados (async)")
+            return
+    except Exception:
+        pass
+
     now     = time.time()
     alerted = 0
 
