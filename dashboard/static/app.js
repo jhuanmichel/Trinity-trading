@@ -2381,7 +2381,8 @@ async function loadEquity() {
   try {
     const d = await fetch('/api/equity-curve').then(r => r.json());
     drawEquity(d.curve || []);
-  } catch (_) {
+  } catch (e) {
+    console.error('[loadEquity] fetch falhou:', e);
     drawEquity([]);
   }
 }
@@ -2424,7 +2425,9 @@ async function loadCalendar() {
       }
       grid.appendChild(cell);
     });
-  } catch (_) {}
+  } catch (e) {
+    console.error('[loadCalendar] fetch falhou:', e);
+  }
 }
 
 // ── Exchange Health (Trinity v7) ──────────────────────────────────────────────
