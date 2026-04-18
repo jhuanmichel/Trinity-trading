@@ -1837,6 +1837,81 @@ async def api_signals_recent(limit: int = 10):
         return JSONResponse(content={"signals": [], "total": 0, "error": str(e)})
 
 
+# ── Deep Dive Trigger endpoints ──────────────────────────────────────────────
+
+@app.get("/api/deep-dive/status")
+async def api_deep_dive_status():
+    """Estado atual do módulo Deep Dive (cooldowns, quota diária, API key)."""
+    try:
+        from trinity.modules import get_deep_dive_trigger
+        return JSONResponse(content=get_deep_dive_trigger().get_status())
+    except Exception as exc:
+        return JSONResponse(content={"error": str(exc)}, status_code=500)
+
+
+@app.get("/api/deep-dive/history")
+async def api_deep_dive_history(limit: int = 20):
+    """Últimos deep dives executados (max 100)."""
+    try:
+        from trinity.modules import get_deep_dive_trigger
+        return JSONResponse(content=get_deep_dive_trigger().get_history(limit=min(limit, 100)))
+    except Exception as exc:
+        return JSONResponse(content={"error": str(exc)}, status_code=500)
+
+
+@app.get("/api/deep-dive/test")
+async def api_deep_dive_test(symbol: str = "BTCUSDT", dry_run: bool = True):
+    """
+    Testa o Deep Dive.
+
+    dry_run=true  (default): monta prompt mas NÃO chama API.
+    dry_run=false: executa análise real (~$0.004).
+
+    Exemplos:
+      curl -u "user:pass" "https://trinity-trading.onrender.com/api/deep-dive/test?symbol=BTCUSDT"
+      curl -u "user:pass" "https://trinity-trading.onrender.com/api/deep-dive/test?symbol=BTCUSDT&dry_run=false"
+    """
+    try:
+        from trinity.modules import get_deep_dive_trigger
+        _dd = get_deep_dive_trigger()
+
+        test_ctx = {
+            "score":             85.0,
+            "component_scores":  {"test_detector": 85.0},
+            "overextension_pct": 250.0,
+            "price_current":     0.0,
+            "price_change_pct":  250.0,
+            "volume_24h":        1_000_000.0,
+            "funding_rate":      -0.5,
+            "oi_change_pct":     -30.0,
+            "is_blue_chip":      False,
+            "manipulation_detected": False,
+            "klines_4h":         [],
+            "klines_1h":         [],
+            "market_cap":        None,
+        }
+
+        if dry_run:
+            enriched = _dd._enrich(symbol, "PUMP", test_ctx)
+            sys_p, usr_p = _dd._build_prompt(symbol, "PUMP", enriched)
+            return JSONResponse(content={
+                "mode":                "dry_run",
+                "system_prompt_len":   len(sys_p),
+                "user_prompt_len":     len(usr_p),
+                "user_prompt_preview": usr_p[:2000],
+                "status":              _dd.get_status(),
+            })
+        else:
+            result = await _dd.analyze(symbol, "PUMP", test_ctx)
+            return JSONResponse(content={
+                "mode":   "live",
+                "result": result,
+                "status": _dd.get_status(),
+            })
+    except Exception as exc:
+        return JSONResponse(content={"error": str(exc)}, status_code=500)
+
+
 # ── Serve React app v3.0 em /app/ ────────────────────────────────────────────
 REACT_APP_DIR = BASE_DIR / "dashboard" / "static" / "app"
 if REACT_APP_DIR.exists():

@@ -520,6 +520,34 @@ async def _send_telegram_alerts(candidates: list):
             _alert_last_score[symbol] = score
             _alert_last_class[symbol] = cls
             alerted += 1
+
+            # ── Deep Dive Trigger — análise institucional automática ────────
+            # Dispara assíncrono após o alerta normal; falha silenciosa.
+            try:
+                from trinity.modules import get_deep_dive_trigger
+                _dd    = get_deep_dive_trigger()
+                _cdict = c if isinstance(c, dict) else asdict(c)
+                overext = _cdict.get("price_change_pct", 0)
+                if _dd.should_trigger(score, overext, "CRASH"):
+                    _deep_ctx = {
+                        "score":             score,
+                        "component_scores":  _cdict.get("component_scores", {}),
+                        "overextension_pct": overext,
+                        "price_current":     _cdict.get("price", 0),
+                        "price_change_pct":  overext,
+                        "volume_24h":        _cdict.get("volume_24h", 0),
+                        "funding_rate":      _cdict.get("funding_rate", 0),
+                        "oi_change_pct":     _cdict.get("oi_change_pct", 0),
+                        "is_blue_chip":      symbol in BLUE_CHIPS,
+                        "manipulation_detected": _cdict.get("_manipulation_pump_detected", False),
+                        "klines_4h":         [],
+                        "klines_1h":         [],
+                        "market_cap":        None,
+                    }
+                    asyncio.create_task(_dd.analyze(symbol, "CRASH", _deep_ctx))
+            except Exception as _dde:
+                log.debug("[CrashTrader] DeepDive skip: %s", _dde)
+
         except Exception as e:
             log.warning(f"[CrashTrader] Telegram falhou para {symbol}: {e}")
 
