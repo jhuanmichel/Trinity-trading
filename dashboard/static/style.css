@@ -3204,7 +3204,7 @@ body {
 /* ── Painel Direito: BTC Regime Detalhado + Últimos Sinais ───────────────── */
 
 .right-panel {
-  display: flex; flex-direction: column; gap: 12px; height: 100%;
+  display: flex; flex-direction: column; gap: 12px;
 }
 
 /* ─── BTC Regime Detalhado ────────────────────────────────────────────────── */
@@ -3319,7 +3319,7 @@ body {
 
 .signals-card {
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: 12px; padding: 16px; flex: 1 1 0; overflow: hidden;
+  border-radius: 12px; padding: 16px; min-height: 260px;
   display: flex; flex-direction: column;
 }
 
@@ -3339,7 +3339,7 @@ body {
 
 .signals-feed {
   display: flex; flex-direction: column; gap: 4px;
-  overflow-y: auto; flex: 1 1 0;
+  overflow-y: auto; flex: 1; min-height: 0; max-height: 320px;
 }
 
 /* thin scrollbar */
