@@ -143,12 +143,15 @@ class OutcomeTracker:
             if age_h < 1.0:
                 return None   # Muito cedo — aguarda pelo menos 1h
 
-            # Expirado
-            if age_h >= EXPIRY_HOURS:
+            # Busca candles ANTES de checar expiração:
+            # Se TP ou stop foi tocado dentro da janela de 48h, registrar corretamente
+            # como WIN/LOSS mesmo que o tracker só verifique agora depois de expirado.
+            candles = self._fetch_candles_since(s.get("symbol", "BTCUSDT"), ts_str)
+
+            # Se sem candles e já expirado → EXPIRED
+            if not candles and age_h >= EXPIRY_HOURS:
                 return self._make_outcome("EXPIRED", "NEUTRAL", s, now, None)
 
-            # Busca candles
-            candles = self._fetch_candles_since(s.get("symbol", "BTCUSDT"), ts_str)
             if not candles:
                 return None
 
@@ -186,7 +189,12 @@ class OutcomeTracker:
                     if tp1_f and low <= tp1_f:
                         return self._make_outcome("TP1_HIT", "WIN", s, now, tp1_f)
 
-            return None   # Nenhum nível tocado ainda
+            # Nenhum TP/STOP tocado nos candles disponíveis.
+            # Se o sinal já expirou, registrar como EXPIRED.
+            if age_h >= EXPIRY_HOURS:
+                return self._make_outcome("EXPIRED", "NEUTRAL", s, now, None)
+
+            return None   # Ainda dentro da janela — aguardar
 
         except Exception as e:
             log.error(f"[OutcomeTracker] Erro ao avaliar {s.get('signal_id','?')}: {e}")
