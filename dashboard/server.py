@@ -1175,6 +1175,117 @@ def ml_results():
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
+@app.get("/api/ml/feature-importance")
+def ml_feature_importance():
+    """
+    Feature Importance detalhada: 5 métricas por detector, análise por
+    source (LONG/SHORT), conviction_tier e score_band.
+    """
+    try:
+        mgr = _get_ml_mgr()
+        res = mgr.get_results()
+        fi  = res.get("feature_importance")
+        if not fi:
+            return JSONResponse(content={"status": "no_data"})
+        return JSONResponse(content=fi)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/ml/walk-forward")
+def ml_walk_forward():
+    """Walk-forward: métricas OOS por fold, degradation, stability, consistency."""
+    try:
+        mgr = _get_ml_mgr()
+        res = mgr.get_results()
+        wf  = res.get("walk_forward")
+        if not wf:
+            return JSONResponse(content={"status": "no_data"})
+        return JSONResponse(content=wf)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/ml/monte-carlo")
+def ml_monte_carlo():
+    """Monte Carlo: distribuição de drawdown, retorno, Sharpe e stress test."""
+    try:
+        mgr = _get_ml_mgr()
+        res = mgr.get_results()
+        mc  = res.get("monte_carlo")
+        if not mc:
+            return JSONResponse(content={"status": "no_data"})
+        return JSONResponse(content=mc)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/ml/apply-conditions")
+@app.get("/api/ml/apply-conditions/{direction}")
+def ml_apply_conditions(direction: str = "all"):
+    """
+    6 Apply Conditions: C1-C6 para decidir se aplicar pesos otimizados.
+    direction: "long" | "short" | "all" (default)
+    """
+    try:
+        mgr = _get_ml_mgr()
+        res = mgr.get_results()
+        ac  = res.get("apply_conditions", {})
+        if direction.lower() in ("long", "short"):
+            return JSONResponse(content={
+                "direction": direction.upper(),
+                "conditions": ac.get(direction.lower(), {}),
+            })
+        return JSONResponse(content=ac)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/ml/weights")
+@app.get("/api/ml/weights/{direction}")
+def ml_weights(direction: str = "all"):
+    """
+    Pesos recomendados finais (somente se todas as 6 condições forem atendidas).
+    direction: "long" | "short" | "all" (default)
+    """
+    try:
+        mgr = _get_ml_mgr()
+        res = mgr.get_results()
+        rw  = res.get("recommended_weights", {"long": None, "short": None})
+        if direction.lower() in ("long", "short"):
+            return JSONResponse(content={
+                "direction": direction.upper(),
+                "weights":   rw.get(direction.lower()),
+                "applied":   rw.get(direction.lower()) is not None,
+            })
+        return JSONResponse(content={
+            "long":  {"weights": rw.get("long"),  "applied": rw.get("long")  is not None},
+            "short": {"weights": rw.get("short"), "applied": rw.get("short") is not None},
+        })
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/ml/risk")
+def ml_risk():
+    """Risk summary: Kelly, VaR95, DrawdownP95, RetornoP50, nível de risco."""
+    try:
+        mgr = _get_ml_mgr()
+        res = mgr.get_results()
+        rs  = res.get("risk_summary")
+        mc  = res.get("monte_carlo", {})
+        if not rs and not mc:
+            return JSONResponse(content={"status": "no_data"})
+        return JSONResponse(content={
+            "risk_summary":  rs or {},
+            "kelly":         mc.get("kelly", {}),
+            "stress_test":   mc.get("stress_test", {}),
+            "before":        mc.get("before", {}),
+        })
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
 # ── Outcomes export (backup antes de redeploy) ───────────────────────────────
 
 @app.get("/api/outcomes/export")
