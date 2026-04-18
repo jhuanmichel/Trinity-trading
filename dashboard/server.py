@@ -1199,6 +1199,112 @@ async def api_outcomes_export():
     )
 
 
+# ── Exchange Health (Trinity v7) ──────────────────────────────────────────────
+
+@app.get("/api/exchanges/health")
+async def api_exchanges_health():
+    """
+    Health das exchanges: status, latência (ms), nº de contratos.
+    Usa o cache interno do ExchangeManager (5s TTL) — custo zero quando quente.
+    """
+    if _ex_mgr is None:
+        return JSONResponse(content={"exchanges": [], "ts": time.time()})
+    try:
+        import time as _t
+        t0 = _t.time()
+        unified = await asyncio.to_thread(_ex_mgr.fetch_all_tickers_unified)
+        elapsed_ms = round((_t.time() - t0) * 1000, 1)
+
+        per_ex: dict[str, int] = {}
+        for tickers in unified.values():
+            for tk in tickers:
+                per_ex[tk.exchange] = per_ex.get(tk.exchange, 0) + 1
+
+        result = []
+        for name in _ex_mgr.active_exchanges:
+            n = per_ex.get(name, 0)
+            result.append({
+                "name":   name,
+                "status": "ok" if n > 0 else "error",
+                "ms":     elapsed_ms,
+                "n":      n,
+            })
+        return JSONResponse(content={"exchanges": result, "ts": _t.time()})
+    except Exception as e:
+        return JSONResponse(content={"exchanges": [], "ts": time.time(), "error": str(e)})
+
+
+# ── Equity Curve (Trinity v7) ──────────────────────────────────────────────────
+
+@app.get("/api/equity-curve")
+async def api_equity_curve():
+    """
+    Equity curve acumulada baseada nos outcomes resolvidos.
+    Retorna {curve: [{ts, pnl}], total: float, n: int}.
+    P&L: usa pnl_pct se disponível; fallback WIN=+2.2%, LOSS=-1.5%.
+    """
+    try:
+        from trinity.ml.feature_importance import _load_resolved_outcomes
+        outcomes = await asyncio.to_thread(_load_resolved_outcomes)
+        resolved = [o for o in outcomes if o.get("status") in ("WIN", "LOSS")]
+        resolved.sort(key=lambda o: o.get("resolved_at", o.get("timestamp", "")))
+
+        curve = []
+        cum = 0.0
+        for o in resolved:
+            if "pnl_pct" in o:
+                pnl = float(o["pnl_pct"])
+            else:
+                pnl = 2.2 if o["status"] == "WIN" else -1.5
+            cum += pnl
+            curve.append({
+                "ts":  o.get("resolved_at", o.get("timestamp", "")),
+                "pnl": round(cum, 2),
+            })
+
+        return JSONResponse(content={"curve": curve, "total": round(cum, 2), "n": len(curve)})
+    except Exception as e:
+        return JSONResponse(content={"curve": [], "total": 0.0, "n": 0, "error": str(e)})
+
+
+# ── Calendar Heatmap (Trinity v7) ─────────────────────────────────────────────
+
+@app.get("/api/calendar-heatmap")
+async def api_calendar_heatmap():
+    """
+    Win rate diário para heatmap dos últimos 90 dias.
+    Retorna {heatmap: [{d, w, l, n, wr}]}.
+    """
+    try:
+        from trinity.ml.feature_importance import _load_resolved_outcomes
+        outcomes = await asyncio.to_thread(_load_resolved_outcomes)
+        resolved = [o for o in outcomes if o.get("status") in ("WIN", "LOSS")]
+
+        by_day: dict[str, dict] = {}
+        for o in resolved:
+            ts = o.get("resolved_at", o.get("timestamp", ""))
+            day = ts[:10] if ts else None
+            if not day:
+                continue
+            if day not in by_day:
+                by_day[day] = {"w": 0, "l": 0}
+            if o["status"] == "WIN":
+                by_day[day]["w"] += 1
+            else:
+                by_day[day]["l"] += 1
+
+        heatmap = []
+        for day, counts in sorted(by_day.items()):
+            w, l = counts["w"], counts["l"]
+            n = w + l
+            wr = round(w / n * 100, 1) if n > 0 else 0.0
+            heatmap.append({"d": day, "w": w, "l": l, "n": n, "wr": wr})
+
+        return JSONResponse(content={"heatmap": heatmap})
+    except Exception as e:
+        return JSONResponse(content={"heatmap": [], "error": str(e)})
+
+
 # ── Serve React app v3.0 em /app/ ────────────────────────────────────────────
 REACT_APP_DIR = BASE_DIR / "dashboard" / "static" / "app"
 if REACT_APP_DIR.exists():

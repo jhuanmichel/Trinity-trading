@@ -19,10 +19,13 @@ let _tvPriceLines   = [];     // referências às price lines ativas
 let _chartLevels    = {};     // {entry, stop, tp1, tp2, tp3} do card BTC
 
 // Responsive resize — atualiza largura do chart quando janela muda
+let _lastEquityCurve = null;
 window.addEventListener('resize', () => {
-  if (!_tvChart) return;
-  const el = document.getElementById('sparklineChart');
-  if (el) _tvChart.applyOptions({ width: el.clientWidth });
+  if (_tvChart) {
+    const el = document.getElementById('sparklineChart');
+    if (el) _tvChart.applyOptions({ width: el.clientWidth });
+  }
+  if (_lastEquityCurve !== null) drawEquity(_lastEquityCurve);
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -2153,6 +2156,167 @@ async function updateMacroIndicator() {
   }
 }
 
+// ── Equity Curve (Trinity v7) ─────────────────────────────────────────────────
+
+function drawEquity(curve) {
+  _lastEquityCurve = curve;
+  const canvas = document.getElementById('equityCanvas');
+  const empty  = document.getElementById('equityEmpty');
+  if (!canvas) return;
+  if (!curve || curve.length === 0) {
+    canvas.style.display = 'none';
+    if (empty) empty.style.display = 'flex';
+    return;
+  }
+  canvas.style.display = 'block';
+  if (empty) empty.style.display = 'none';
+
+  const dpr  = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const W = rect.width, H = rect.height || 200;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const vals   = curve.map(p => p.pnl);
+  const vMin   = Math.min(0, ...vals);
+  const vMax   = Math.max(0, ...vals);
+  const range  = vMax - vMin || 1;
+  const pad    = { t: 16, r: 12, b: 24, l: 48 };
+  const iW     = W - pad.l - pad.r;
+  const iH     = H - pad.t - pad.b;
+
+  const toX = i => pad.l + (i / (vals.length - 1 || 1)) * iW;
+  const toY = v => pad.t + (1 - (v - vMin) / range) * iH;
+
+  // Grid
+  ctx.strokeStyle = '#1A222D';
+  ctx.lineWidth   = 1;
+  [0, 0.25, 0.5, 0.75, 1].forEach(f => {
+    const y = pad.t + f * iH;
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+    const label = (vMax - f * range).toFixed(1) + '%';
+    ctx.fillStyle = '#6e7681'; ctx.font = '10px monospace'; ctx.textAlign = 'right';
+    ctx.fillText(label, pad.l - 4, y + 4);
+  });
+
+  // Linha zero
+  const zeroY = toY(0);
+  ctx.strokeStyle = '#2a3444'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(pad.l, zeroY); ctx.lineTo(W - pad.r, zeroY); ctx.stroke();
+
+  // Fill área
+  const isPositive = vals[vals.length - 1] >= 0;
+  const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + iH);
+  grad.addColorStop(0,   isPositive ? 'rgba(0,255,178,.35)' : 'rgba(255,77,79,.35)');
+  grad.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.beginPath();
+  ctx.moveTo(toX(0), zeroY);
+  vals.forEach((v, i) => ctx.lineTo(toX(i), toY(v)));
+  ctx.lineTo(toX(vals.length - 1), zeroY);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Linha principal
+  ctx.strokeStyle = isPositive ? '#00FFB2' : '#FF4D4F';
+  ctx.lineWidth   = 2;
+  ctx.beginPath();
+  vals.forEach((v, i) => i === 0 ? ctx.moveTo(toX(i), toY(v)) : ctx.lineTo(toX(i), toY(v)));
+  ctx.stroke();
+}
+
+async function loadEquity() {
+  try {
+    const d = await fetch('/api/equity-curve').then(r => r.json());
+    drawEquity(d.curve || []);
+  } catch (_) {
+    drawEquity([]);
+  }
+}
+
+// ── Calendar Heatmap (Trinity v7) ─────────────────────────────────────────────
+
+async function loadCalendar() {
+  const grid = document.getElementById('calGrid');
+  if (!grid) return;
+  try {
+    const d    = await fetch('/api/calendar-heatmap').then(r => r.json());
+    const data = d.heatmap || [];
+
+    // Mapa por dia para lookup rápido
+    const byDay = {};
+    data.forEach(row => { byDay[row.d] = row; });
+
+    // Gera 90 dias para trás a partir de hoje
+    const today = new Date();
+    const cells = [];
+    for (let i = 89; i >= 0; i--) {
+      const dt  = new Date(today);
+      dt.setDate(today.getDate() - i);
+      const key = dt.toISOString().slice(0, 10);
+      cells.push({ key, row: byDay[key] || null });
+    }
+
+    grid.innerHTML = '';
+    cells.forEach(({ key, row }) => {
+      const cell = document.createElement('div');
+      cell.className = 'cal-cell';
+      if (row) {
+        let bg;
+        if      (row.wr >= 70) bg = 'var(--bull)';
+        else if (row.wr >= 50) bg = '#888';
+        else if (row.wr >= 30) bg = 'var(--yellow)';
+        else                   bg = 'var(--bear)';
+        cell.style.background = bg;
+        cell.innerHTML = `<span class="cal-tip">${key}<br>${row.w}W ${row.l}L — ${row.wr}%</span>`;
+      }
+      grid.appendChild(cell);
+    });
+  } catch (_) {}
+}
+
+// ── Exchange Health (Trinity v7) ──────────────────────────────────────────────
+
+async function loadHealth() {
+  const grid = document.getElementById('healthGrid');
+  const tsEl = document.getElementById('healthTs');
+  if (!grid) return;
+  try {
+    const d = await fetch('/api/exchanges/health').then(r => r.json());
+    const exchanges = d.exchanges || [];
+
+    if (tsEl && d.ts) {
+      tsEl.textContent = 'Atualizado ' + timeAgo(new Date(d.ts * 1000).toISOString());
+    }
+
+    grid.innerHTML = '';
+    if (exchanges.length === 0) {
+      grid.innerHTML = '<span style="color:var(--text-muted);font-size:13px">ExchangeManager não disponível</span>';
+      return;
+    }
+    exchanges.forEach(ex => {
+      const card = document.createElement('div');
+      card.className = 'health-card';
+      const msStr = ex.ms !== null && ex.ms !== undefined ? `${ex.ms}ms` : '—';
+      card.innerHTML = `
+        <div class="health-card-name">
+          <span class="health-dot ${ex.status}"></span>
+          ${ex.name.toUpperCase()}
+        </div>
+        <div class="health-meta">${ex.n.toLocaleString()} contratos</div>
+        <div class="health-meta">Latência: ${msStr}</div>`;
+      grid.appendChild(card);
+    });
+  } catch (_) {
+    if (grid) grid.innerHTML = '<span style="color:var(--text-muted);font-size:13px">—</span>';
+  }
+}
+
 // Init
 refresh();
 priceTick();
@@ -2164,6 +2328,9 @@ updateBacktestResults();                        // Backtest Performance — prim
 updateAltcoinRadar();                           // Altcoin Radar — primeiro carregamento
 updateWinRate();                                // Performance Real — primeiro carregamento
 updateMacroIndicator();                         // News Sentinel — primeiro carregamento
+loadEquity();                                   // Equity Curve — primeiro carregamento
+loadCalendar();                                 // Calendar Heatmap — primeiro carregamento
+loadHealth();                                   // Exchange Health — primeiro carregamento
 setInterval(refresh,                REFRESH_MS);
 setInterval(priceTick,              PRICE_MS);
 setInterval(clockTick,              1000);
@@ -2176,6 +2343,9 @@ setInterval(updateBacktestResults,  120_000);      // 2min — atualiza métrica
 setInterval(updateAltcoinRadar,     300_000);      // 5min — sincroniza com ciclo do scanner
 setInterval(updateWinRate,          300_000);      // 5min — sincroniza com ciclo do OutcomeTracker
 setInterval(updateMacroIndicator,   120_000);      // 2min — sincroniza com ciclo do News Sentinel
+setInterval(loadEquity,             600_000);      // 10min — equity curve (dados lentos)
+setInterval(loadCalendar,           600_000);      // 10min — calendar heatmap
+setInterval(loadHealth,              60_000);      //  1min — exchange health
 clockTick();
 
 // ─────────────────────────────────────────────────────────────────────────────

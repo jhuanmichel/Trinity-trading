@@ -164,6 +164,47 @@
       </div>
     </section>
 
+    <!-- ── EQUITY CURVE (Trinity v7) ────────────────────────────────────────── -->
+    <section class="section" id="equitySection">
+      <div class="section-header">
+        <h2 class="section-title">EQUITY CURVE</h2>
+        <span class="section-divider"></span>
+        <span class="section-sub">P&amp;L acumulado por trade</span>
+      </div>
+      <div class="equity-container">
+        <canvas id="equityCanvas"></canvas>
+        <div class="equity-empty" id="equityEmpty">Sem trades resolvidos ainda</div>
+      </div>
+    </section>
+
+    <!-- ── CALENDAR HEATMAP (Trinity v7) ──────────────────────────────────── -->
+    <section class="section" id="calendarSection">
+      <div class="section-header">
+        <h2 class="section-title">HEATMAP DE PERFORMANCE</h2>
+        <span class="section-divider"></span>
+        <span class="section-sub">Win rate diário — últimos 90 dias</span>
+      </div>
+      <div class="cal-wrap">
+        <div class="cal-grid" id="calGrid"></div>
+        <div class="cal-legend">
+          <span class="cal-dot" style="background:var(--bull)"></span>&nbsp;≥70% WIN&nbsp;&nbsp;
+          <span class="cal-dot" style="background:#888"></span>&nbsp;50–69%&nbsp;&nbsp;
+          <span class="cal-dot" style="background:var(--yellow)"></span>&nbsp;30–49%&nbsp;&nbsp;
+          <span class="cal-dot" style="background:var(--bear)"></span>&nbsp;&lt;30%
+        </div>
+      </div>
+    </section>
+
+    <!-- ── EXCHANGE HEALTH (Trinity v7) ──────────────────────────────────── -->
+    <section class="section" id="healthSection">
+      <div class="section-header">
+        <h2 class="section-title">EXCHANGE HEALTH</h2>
+        <span class="section-divider"></span>
+        <span class="section-sub" id="healthTs">—</span>
+      </div>
+      <div class="health-grid" id="healthGrid"></div>
+    </section>
+
     <!-- ── SECTION 4c: BACKTEST WALK-FORWARD ────────────────────────────────── -->
     <section class="section" id="backtestSection">
       <div class="section-header">
