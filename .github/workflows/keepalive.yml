@@ -9,9 +9,17 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
+      - name: Keep alive (health check)
+        run: |
+          curl -sf --max-time 30 \
+            https://trinity-trading.onrender.com/health
+          echo "✅ Serviço respondeu"
+
       - name: Trigger análise institucional
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -u "${{ secrets.AUTH_USER }}:${{ secrets.AUTH_PASS }}" \
+            --max-time 30 \
             "https://trinity-trading.onrender.com/api/run-now")
           echo "Status: $STATUS"
           if [ "$STATUS" = "202" ]; then
