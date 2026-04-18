@@ -1416,6 +1416,270 @@ async def api_calendar_heatmap():
         return JSONResponse(content={"heatmap": [], "error": str(e)})
 
 
+# ── BTC Regime Detalhado (painel direito) ─────────────────────────────────────
+
+@app.get("/api/btc-regime/detailed")
+async def api_btc_regime_detailed():
+    """
+    BTC Regime Engine — 10 camadas com scores individuais (A-J).
+    Retorna: regime, bull_score, bear_score, strength, transition, signals, layers, timestamp.
+    """
+    try:
+        from trinity.traders.btc_regime_monitor import get_btc_regime as _get_regime
+        r = await asyncio.to_thread(_get_regime)
+
+        funding_ann    = r.get("funding_ann",    0)
+        funding_accel  = r.get("funding_accel",  "STABLE")
+        momentum_1h    = r.get("momentum_1h",    0)
+        momentum_15m   = r.get("momentum_15m",   0)
+        momentum_4h    = r.get("momentum_4h",    0)
+        ls_ratio       = r.get("ls_ratio",       1.0)
+        pct_24h        = r.get("price_change_pct", 0)
+        nfci_regime    = r.get("nfci_regime",    "NEUTRAL")
+        nfci_direction = r.get("nfci_direction", "STABLE")
+        m2_direction   = r.get("m2_direction",   "STABLE")
+        m2_yoy         = r.get("m2_yoy_pct",     0)
+        bb_bias        = r.get("bull_band_bias", "NEUTRAL")
+        bb_dist        = r.get("bull_band_dist", 0)
+        season         = r.get("seasonality_season", "NEUTRAL")
+
+        def _a():  # Funding Rate (max 33)
+            bull = bear = 0
+            if   funding_ann < -100: bull = 25
+            elif funding_ann < -40:  bull = 15
+            elif funding_ann > 100:  bear = 25
+            elif funding_ann > 40:   bear = 15
+            if funding_accel == "ACCELERATING":
+                if   funding_ann < -20: bull += 8
+                elif funding_ann > 20:  bear += 8
+            return bull, bear, 33, f"{funding_ann:+.0f}%/yr · {funding_accel}"
+
+        def _b():  # Momentum 1h (max 20)
+            bull = bear = 0
+            if   momentum_1h > 2.5:  bull = 20
+            elif momentum_1h > 1.0:  bull = 12
+            elif momentum_1h > 0.4:  bull = 5
+            elif momentum_1h < -2.5: bear = 20
+            elif momentum_1h < -1.0: bear = 12
+            elif momentum_1h < -0.4: bear = 5
+            return bull, bear, 20, f"{momentum_1h:+.2f}%"
+
+        def _c():  # Momentum 15m (max 15)
+            bull = bear = 0
+            if   momentum_15m > 1.5:  bull = 15
+            elif momentum_15m > 0.6:  bull = 8
+            elif momentum_15m < -1.5: bear = 15
+            elif momentum_15m < -0.6: bear = 8
+            return bull, bear, 15, f"{momentum_15m:+.2f}%"
+
+        def _d():  # L/S Ratio (max 15)
+            bull = bear = 0
+            if   ls_ratio < 0.65: bull = 15
+            elif ls_ratio < 0.80: bull = 8
+            elif ls_ratio > 2.2:  bear = 15
+            elif ls_ratio > 1.6:  bear = 8
+            return bull, bear, 15, f"{ls_ratio:.2f}"
+
+        def _e():  # Tendência 24h (max 15) — r7_pct não disponível, approx c/ 24h
+            bull = bear = 0
+            if   pct_24h > 4.0:  bull = 15
+            elif pct_24h > 2.0:  bull = 8
+            elif pct_24h < -4.0: bear = 15
+            elif pct_24h < -2.0: bear = 8
+            return bull, bear, 15, f"{pct_24h:+.2f}%"
+
+        def _f():  # Momentum 4h (max 10)
+            bull = bear = 0
+            if   momentum_4h > 4.0:  bull = 10
+            elif momentum_4h > 2.0:  bull = 5
+            elif momentum_4h < -4.0: bear = 10
+            elif momentum_4h < -2.0: bear = 5
+            return bull, bear, 10, f"{momentum_4h:+.2f}%"
+
+        def _g():  # NFCI Macro (max 15)
+            bull = bear = 0
+            if nfci_regime == "RISK_ON":
+                bull = 15 if nfci_direction == "LOOSENING" else 8
+            elif nfci_regime == "RISK_OFF":
+                bear = 15 if nfci_direction == "TIGHTENING" else 8
+            return bull, bear, 15, f"{nfci_regime} · {nfci_direction}"
+
+        def _h():  # M2 Liquidez (max 10)
+            bull = bear = 0
+            if   m2_direction == "EXPANDING"   and m2_yoy > 5:  bull = 10
+            elif m2_direction == "EXPANDING":                    bull = 5
+            elif m2_direction == "CONTRACTING" and m2_yoy < -2: bear = 10
+            elif m2_direction == "CONTRACTING":                  bear = 5
+            return bull, bear, 10, f"{m2_direction} {m2_yoy:+.1f}%"
+
+        def _i():  # Bull Market Support Band (max 12)
+            bull = bear = 0
+            if   bb_bias == "BULL":       bull = 12
+            elif bb_bias == "BEAR":       bear = 12
+            elif bb_bias == "TRANSITION":
+                if bb_dist > 0: bull = 5
+                else:           bear = 5
+            return bull, bear, 12, f"{bb_bias} · {bb_dist:+.1f}%"
+
+        def _j():  # Sazonalidade (max 8)
+            bull = bear = 0
+            if   season == "STRONG": bull = 8
+            elif season == "WEAK":   bear = 8
+            return bull, bear, 8, season
+
+        specs = [
+            ("A", "Funding Rate",   _a),
+            ("B", "Momentum 1h",    _b),
+            ("C", "Momentum 15m",   _c),
+            ("D", "L/S Ratio",      _d),
+            ("E", "Tendência 24h",  _e),
+            ("F", "Momentum 4h",    _f),
+            ("G", "NFCI Macro",     _g),
+            ("H", "M2 Liquidez",    _h),
+            ("I", "Bull Band",      _i),
+            ("J", "Sazonalidade",   _j),
+        ]
+
+        layers = []
+        for lid, name, fn in specs:
+            bull, bear, max_pts, val_str = fn()
+            layers.append({"id": lid, "name": name, "bull": bull, "bear": bear,
+                           "max": max_pts, "value": val_str})
+
+        return JSONResponse(content={
+            "regime":     r.get("direction",        "NEUTRAL"),
+            "bull_score": r.get("bull_score",        0),
+            "bear_score": r.get("bear_score",        0),
+            "strength":   r.get("strength",          0),
+            "transition": r.get("transition",        ""),
+            "signals":    r.get("signals",           []),
+            "layers":     layers,
+            "timestamp":  r.get("last_updated_ts",  0),
+        })
+    except Exception as e:
+        return JSONResponse(content={
+            "regime": "UNKNOWN", "bull_score": 0, "bear_score": 0,
+            "strength": 0, "transition": "", "signals": [], "layers": [],
+            "error": str(e),
+        })
+
+
+@app.get("/api/signals/recent")
+async def api_signals_recent(limit: int = 10):
+    """
+    Últimos sinais gerados: pending_outcomes + pump/crash scan candidates.
+    Retorna: [{signal_id, symbol, direction, score, tier, source, timestamp, price, result, pnl_pct}].
+    result: "WIN" | "LOSS" | "PENDING"
+    """
+    try:
+        signals = []
+        seen    = set()
+
+        # 1. Mapa de outcomes resolvidos (signal_id → result)
+        resolved_map: dict = {}
+        for fp in sorted(glob.glob(str(LOGS_DIR / "outcomes_*.jsonl")), reverse=True):
+            try:
+                with open(fp) as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if not line: continue
+                        o   = json.loads(line)
+                        sid = o.get("signal_id")
+                        if sid:
+                            resolved_map[sid] = {
+                                "result":      o.get("status", "PENDING"),
+                                "resolved_at": o.get("resolved_at"),
+                                "pnl_pct":     o.get("pnl_pct"),
+                            }
+            except Exception:
+                pass
+
+        # 2. Pending outcomes (sinais rastreados)
+        pending_file = LOGS_DIR / "pending_outcomes.jsonl"
+        if pending_file.exists():
+            try:
+                with open(pending_file) as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if not line: continue
+                        o   = json.loads(line)
+                        sid = o.get("signal_id", "")
+                        if sid in seen: continue
+                        seen.add(sid)
+                        out = resolved_map.get(sid)
+                        signals.append({
+                            "signal_id": sid,
+                            "symbol":    o.get("symbol", "?"),
+                            "direction": o.get("direction", "?"),
+                            "score":     o.get("score", 0),
+                            "tier":      o.get("conviction_tier", "?"),
+                            "source":    o.get("source", "tracker"),
+                            "timestamp": o.get("timestamp", o.get("registered_at", "")),
+                            "price":     o.get("entry_price", 0),
+                            "result":    out["result"] if out else "PENDING",
+                            "pnl_pct":   out.get("pnl_pct") if out else None,
+                        })
+            except Exception:
+                pass
+
+        # 3. Pump scan candidates (completar até 2×limit)
+        if PUMP_SCAN_FILE.exists():
+            try:
+                pump = json.loads(PUMP_SCAN_FILE.read_text())
+                for c in pump.get("candidates", []):
+                    if len(signals) >= limit * 2: break
+                    sym = c.get("symbol", "")
+                    key = f"pump_{sym}"
+                    if key in seen: continue
+                    seen.add(key)
+                    signals.append({
+                        "signal_id": key,
+                        "symbol":    sym,
+                        "direction": "LONG",
+                        "score":     c.get("opportunity_score", c.get("pump_score", 0)),
+                        "tier":      c.get("move_classification", "WATCH"),
+                        "source":    "pump_scanner",
+                        "timestamp": c.get("scanned_at", pump.get("scan_ts", "")),
+                        "price":     c.get("price", c.get("entry", 0)),
+                        "result":    "PENDING",
+                        "pnl_pct":   None,
+                    })
+            except Exception:
+                pass
+
+        # 4. Crash scan candidates
+        if CRASH_SCAN_FILE.exists():
+            try:
+                crash = json.loads(CRASH_SCAN_FILE.read_text())
+                for c in crash.get("candidates", []):
+                    if len(signals) >= limit * 2: break
+                    sym = c.get("symbol", "")
+                    key = f"crash_{sym}"
+                    if key in seen: continue
+                    seen.add(key)
+                    signals.append({
+                        "signal_id": key,
+                        "symbol":    sym,
+                        "direction": "SHORT",
+                        "score":     c.get("opportunity_score", c.get("crash_score", 0)),
+                        "tier":      c.get("move_classification", "WATCH"),
+                        "source":    "crash_scanner",
+                        "timestamp": c.get("scanned_at", crash.get("scan_ts", "")),
+                        "price":     c.get("price", c.get("entry", 0)),
+                        "result":    "PENDING",
+                        "pnl_pct":   None,
+                    })
+            except Exception:
+                pass
+
+        # Ordenar mais recente primeiro
+        signals.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        return JSONResponse(content={"signals": signals[:limit], "total": len(signals)})
+
+    except Exception as e:
+        return JSONResponse(content={"signals": [], "total": 0, "error": str(e)})
+
+
 # ── Serve React app v3.0 em /app/ ────────────────────────────────────────────
 REACT_APP_DIR = BASE_DIR / "dashboard" / "static" / "app"
 if REACT_APP_DIR.exists():

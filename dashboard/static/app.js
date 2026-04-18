@@ -924,12 +924,157 @@ async function updateLiqScreenshot() {
   } catch(_) {}
 }
 
-function renderETHCard() {
-  return `<div class="coming-soon">
-    <div class="coming-soon-glyph">Ξ</div>
-    <div class="coming-soon-name">ETH / USDT</div>
-    <div class="coming-soon-label">EM DESENVOLVIMENTO</div>
+// ── Painel Direito: BTC Regime Detalhado + Últimos Sinais ─────────────────
+
+function renderRightPanel() {
+  return `<div class="right-panel">
+    <!-- BTC Regime Detalhado -->
+    <div class="regime-detail-card">
+      <div class="regime-detail-header">
+        <span class="regime-detail-title">BTC Regime Detalhado</span>
+        <span class="regime-badge UNKNOWN" id="regimeBadge">—</span>
+      </div>
+      <div class="regime-scores">
+        <div class="regime-score-box">
+          <div class="rsb-label">Bull</div>
+          <div class="rsb-val bull" id="regimeBullScore">—</div>
+        </div>
+        <div class="regime-score-box">
+          <div class="rsb-label">Bear</div>
+          <div class="rsb-val bear" id="regimeBearScore">—</div>
+        </div>
+        <div class="regime-score-box">
+          <div class="rsb-label">Força</div>
+          <div class="rsb-val neutral" id="regimeStrength">—</div>
+        </div>
+      </div>
+      <div class="regime-transition" id="regimeTransition" style="display:none"></div>
+      <div class="regime-layers" id="regimeLayers">
+        <div style="text-align:center;padding:12px;color:var(--text-dim);font-size:12px">Carregando...</div>
+      </div>
+    </div>
+    <!-- Últimos Sinais -->
+    <div class="signals-card">
+      <div class="signals-header">
+        <span class="signals-title">Últimos Sinais</span>
+        <span class="signals-count" id="signalsCount">—</span>
+      </div>
+      <div class="signals-feed" id="signalsFeed">
+        <div class="signals-empty">Carregando...</div>
+      </div>
+    </div>
   </div>`;
+}
+
+function renderRegimeDetailed(data) {
+  const badge    = document.getElementById('regimeBadge');
+  const bullEl   = document.getElementById('regimeBullScore');
+  const bearEl   = document.getElementById('regimeBearScore');
+  const strEl    = document.getElementById('regimeStrength');
+  const transEl  = document.getElementById('regimeTransition');
+  const layersEl = document.getElementById('regimeLayers');
+  if (!badge || !layersEl) return;
+
+  const regime = data.regime || 'UNKNOWN';
+  badge.className = `regime-badge ${regime}`;
+  badge.textContent = regime.replace('_', ' ');
+
+  if (bullEl) bullEl.textContent = (data.bull_score || 0).toFixed(0);
+  if (bearEl) bearEl.textContent = (data.bear_score || 0).toFixed(0);
+  if (strEl)  strEl.textContent  = (data.strength   || 0).toFixed(0);
+
+  if (transEl) {
+    const tr = data.transition || '';
+    if (tr) { transEl.textContent = tr; transEl.style.display = ''; }
+    else    { transEl.style.display = 'none'; }
+  }
+
+  const layers = data.layers || [];
+  if (!layers.length) {
+    layersEl.innerHTML = '<div style="text-align:center;padding:8px;color:var(--text-dim);font-size:11px">Sem dados</div>';
+    return;
+  }
+
+  layersEl.innerHTML = layers.map(l => {
+    const pts  = l.bull > 0 ? l.bull : l.bear > 0 ? -l.bear : 0;
+    const isBull = l.bull > 0;
+    const isBear = l.bear > 0;
+    const active = Math.max(l.bull, l.bear);
+    const pct = l.max > 0 ? Math.round((active / l.max) * 100) : 0;
+    const fillClass = isBull ? 'rl-fill-bull' : isBear ? 'rl-fill-bear' : '';
+    const ptsClass  = isBull ? 'bull' : isBear ? 'bear' : 'zero';
+    const ptsStr    = pts === 0 ? '—' : (isBull ? `+${l.bull}` : `-${l.bear}`);
+    return `<div class="regime-layer-row">
+      <span class="rl-id">${l.id}</span>
+      <span class="rl-name" style="font-size:10px;color:var(--text-muted)">${l.name}</span>
+      <div class="rl-track"><div class="${fillClass}" style="width:${pct}%"></div></div>
+      <span class="rl-pts ${ptsClass}">${ptsStr}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderSignalsFeed(data) {
+  const feed     = document.getElementById('signalsFeed');
+  const countEl  = document.getElementById('signalsCount');
+  if (!feed) return;
+
+  const signals = data.signals || [];
+  if (countEl) countEl.textContent = `${signals.length} sinais`;
+
+  if (!signals.length) {
+    feed.innerHTML = '<div class="signals-empty">Nenhum sinal recente</div>';
+    return;
+  }
+
+  const scoreColor = s => s >= 80 ? 'var(--bull)' : s >= 60 ? 'var(--yellow)' : 'var(--text-muted)';
+  const fmtTs = ts => {
+    if (!ts) return '—';
+    try {
+      const d = new Date(ts);
+      return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } catch (_) { return ts.slice(11, 16) || '—'; }
+  };
+  const sourceLabel = src => {
+    const m = { pump_scanner: 'PUMP', crash_scanner: 'CRASH', fms: 'FMS', funding_scanner: 'FND', tracker: 'TRK' };
+    return m[src] || (src || '?').toUpperCase().slice(0, 4);
+  };
+  const resultClass = r => ({ WIN: 'win', LOSS: 'loss', PENDING: 'pending' }[r] || 'unknown');
+  const resultLabel = r => ({ WIN: 'WIN', LOSS: 'LOSS', PENDING: '⏳' }[r] || r || '?');
+
+  feed.innerHTML = signals.map(s => {
+    const dirClass = (s.direction || '').toLowerCase() === 'long' ? 'long' : 'short';
+    const dirLabel = dirClass === 'long' ? 'L' : 'S';
+    const score    = (s.score || 0);
+    const res      = s.result || 'PENDING';
+    const sym      = (s.symbol || '?').replace('USDT', '').replace('_USDT', '');
+    return `<div class="signal-item">
+      <span class="si-dir ${dirClass}">${dirLabel}</span>
+      <div class="si-body">
+        <div class="si-symbol">${sym}</div>
+        <div class="si-meta">${sourceLabel(s.source)} · ${fmtTs(s.timestamp)}</div>
+      </div>
+      <span class="si-score" style="color:${scoreColor(score)}">${score.toFixed(0)}</span>
+      <span class="si-result ${resultClass(res)}">${resultLabel(res)}</span>
+    </div>`;
+  }).join('');
+}
+
+async function fetchRegimeDetailed() {
+  const layersEl = document.getElementById('regimeLayers');
+  if (!layersEl) return;
+  try {
+    const data = await fetch('/api/btc-regime/detailed').then(r => r.json());
+    renderRegimeDetailed(data);
+  } catch (_) {}
+}
+
+async function fetchRecentSignals() {
+  const feedEl = document.getElementById('signalsFeed');
+  if (!feedEl) return;
+  try {
+    const data = await fetch('/api/signals/recent?limit=10').then(r => r.json());
+    renderSignalsFeed(data);
+  } catch (_) {}
 }
 
 // ── Real-time Price Ticker ─────────────────────────────────────────────────
@@ -984,7 +1129,9 @@ async function refresh() {
     const state = await fetch('/api/status').then(r => r.json());
 
     renderRadar(state);
-    document.getElementById('cardsGrid').innerHTML = renderBTCCard(state) + renderETHCard();
+    document.getElementById('cardsGrid').innerHTML = renderBTCCard(state) + renderRightPanel();
+    fetchRegimeDetailed();
+    fetchRecentSignals();
 
     const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     document.getElementById('updateTime').textContent = `Atualizado ${now}`;
@@ -2346,6 +2493,7 @@ setInterval(updateMacroIndicator,   120_000);      // 2min — sincroniza com ci
 setInterval(loadEquity,             600_000);      // 10min — equity curve (dados lentos)
 setInterval(loadCalendar,           600_000);      // 10min — calendar heatmap
 setInterval(loadHealth,              60_000);      //  1min — exchange health
+setInterval(fetchRecentSignals,      15_000);      // 15s — sinais recentes (painel direito)
 clockTick();
 
 // ─────────────────────────────────────────────────────────────────────────────
