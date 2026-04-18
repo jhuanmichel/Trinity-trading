@@ -1912,6 +1912,46 @@ async def api_deep_dive_test(symbol: str = "BTCUSDT", dry_run: bool = True):
         return JSONResponse(content={"error": str(exc)}, status_code=500)
 
 
+@app.get("/api/deep-dive/test-telegram")
+async def api_deep_dive_test_telegram():
+    """
+    Envia mensagem de teste no Telegram para validar conexão do bot.
+
+    Útil para diagnosticar problemas de envio (token inválido, chat_id errado, etc).
+    Retorna status_code e body da resposta da API do Telegram.
+
+    Exemplo:
+      curl -u "user:pass" "https://trinity-trading.onrender.com/api/deep-dive/test-telegram"
+    """
+    import os as _os
+    token   = _os.getenv("TELEGRAM_TOKEN", "")
+    chat_id = _os.getenv("TELEGRAM_CHAT_ID", "")
+
+    if not token or not chat_id:
+        return JSONResponse(
+            content={"ok": False, "error": "TELEGRAM_TOKEN ou TELEGRAM_CHAT_ID não configurado"},
+            status_code=500,
+        )
+
+    try:
+        import requests as _req
+        r = _req.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={
+                "chat_id": chat_id,
+                "text": "🔬 [Deep Dive] Conexão Telegram OK — teste de diagnóstico.",
+            },
+            timeout=10,
+        )
+        return JSONResponse(content={
+            "ok":          r.status_code == 200,
+            "status_code": r.status_code,
+            "response":    r.text[:500],
+        })
+    except Exception as exc:
+        return JSONResponse(content={"ok": False, "error": str(exc)}, status_code=500)
+
+
 # ── Serve React app v3.0 em /app/ ────────────────────────────────────────────
 REACT_APP_DIR = BASE_DIR / "dashboard" / "static" / "app"
 if REACT_APP_DIR.exists():

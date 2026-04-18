@@ -582,40 +582,98 @@ class DeepDiveTrigger:
 
     # ── Envio Telegram (síncrono, rodado em thread) ───────────────────────────
 
+    @staticmethod
+    def _strip_markdown(text: str) -> str:
+        """Remove formatação markdown do output do Haiku antes de enviar ao Telegram.
+
+        Haiku retorna **, *, #, _, `, > que são inválidos com parse_mode="HTML".
+        Enviamos sem parse_mode (texto puro), mas limpamos os símbolos de qualquer forma.
+        """
+        import re
+        # Cabeçalhos: # Título → Título
+        text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
+        # Negrito: **texto** ou __texto__ → texto
+        text = re.sub(r"\*\*(.+?)\*\*", r"\1", text, flags=re.DOTALL)
+        text = re.sub(r"__(.+?)__", r"\1", text, flags=re.DOTALL)
+        # Itálico: *texto* ou _texto_ → texto (regex look-around p/ não colidir com listas)
+        text = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"\1", text, flags=re.DOTALL)
+        text = re.sub(r"(?<!_)_(?!_)(.+?)(?<!_)_(?!_)", r"\1", text, flags=re.DOTALL)
+        # Código inline: `texto` → texto
+        text = re.sub(r"`(.+?)`", r"\1", text)
+        # Links: [texto](url) → texto
+        text = re.sub(r"\[(.+?)\]\(.+?\)", r"\1", text)
+        # Citações: > texto → texto
+        text = re.sub(r"^>\s*", "", text, flags=re.MULTILINE)
+        # Separadores: --- ou *** (linha inteira) → linha visual
+        text = re.sub(r"^[-*_]{3,}\s*$", "─" * 20, text, flags=re.MULTILINE)
+        return text.strip()
+
     def _send_telegram_sync(self, symbol: str, direction: str,
                              ctx: dict, analysis: str) -> None:
-        """Envia análise no Telegram como mensagem separada após o alerta normal."""
-        try:
-            from alerts import send_message
+        """Envia análise no Telegram como mensagem separada após o alerta normal.
 
-            emoji_dir      = "📈" if direction == "PUMP" else "📉"
-            score          = ctx.get("score", "N/A")
-            classification = ctx.get("classification", "")
-            overext        = ctx.get("overextension_pct", ctx.get("price_change_pct", "N/A"))
+        — NÃO usa alerts.send_message() (que força parse_mode=HTML e falha com markdown Haiku)
+        — Envia texto puro (sem parse_mode) via requests.post direto
+        — Divide em 2 mensagens se body > 3800 chars
+        — Loga o body da resposta do Telegram em caso de erro
+        """
+        token   = os.getenv("TELEGRAM_TOKEN", "")
+        chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+        if not token or not chat_id:
+            log.error("[DeepDive] TELEGRAM_TOKEN ou TELEGRAM_CHAT_ID não configurado — envio cancelado")
+            return
 
-            # Trunca para limite Telegram (4096 chars)
-            max_len = 3500
-            if len(analysis) > max_len:
-                analysis = analysis[:max_len] + "\n\n[...análise truncada]"
+        emoji_dir      = "📈" if direction == "PUMP" else "📉"
+        score          = ctx.get("score", "N/A")
+        classification = ctx.get("classification", "")
+        overext        = ctx.get("overextension_pct", ctx.get("price_change_pct", "N/A"))
 
-            msg = (
-                f"🔬 <b>DEEP DIVE — {symbol}</b>\n"
-                f"{emoji_dir} {direction} | Score: {score} | {classification}\n"
-                f"Movimento: {overext}%\n"
-                f"{'━' * 30}\n\n"
-                f"{analysis}\n\n"
-                f"{'━' * 30}\n"
-                f"⚠️ <i>Análise automática (Claude Haiku) — não é recomendação.</i>"
-            )
+        # Limpa markdown do Haiku (evita símbolos estranhos no texto plano)
+        analysis_clean = self._strip_markdown(analysis)
 
-            ok = send_message(msg)
-            if not ok:
-                # Fallback sem tags HTML
-                msg_plain = (msg.replace("<b>", "").replace("</b>", "")
-                                .replace("<i>", "").replace("</i>", ""))
-                send_message(msg_plain)
-        except Exception as exc:
-            log.error("[DeepDive] Falha ao enviar Telegram: %s", exc)
+        header = (
+            f"🔬 DEEP DIVE — {symbol}\n"
+            f"{emoji_dir} {direction} | Score: {score} | {classification}\n"
+            f"Movimento: {overext}%\n"
+            f"{'─' * 30}\n\n"
+        )
+        footer = (
+            f"\n\n{'─' * 30}\n"
+            f"⚠️ Análise automática (Claude Haiku) — não é recomendação."
+        )
+
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+
+        def _post(text: str) -> bool:
+            try:
+                r = requests.post(
+                    url,
+                    json={"chat_id": chat_id, "text": text},
+                    timeout=15,
+                )
+                if r.status_code != 200:
+                    log.error("[DeepDive] Telegram recusou (HTTP %d): %s",
+                              r.status_code, r.text[:400])
+                    return False
+                log.info("[DeepDive] Telegram OK — %d chars enviados", len(text))
+                return True
+            except Exception as exc:
+                log.error("[DeepDive] requests.post falhou: %s", exc)
+                return False
+
+        MAX_BODY = 3800
+        if len(analysis_clean) <= MAX_BODY:
+            _post(header + analysis_clean + footer)
+        else:
+            # Divide em 2 partes para não ultrapassar 4096 chars
+            part1 = header + analysis_clean[:MAX_BODY] + "\n\n[continua →]"
+            part2 = f"[← continuação {symbol}]\n\n" + analysis_clean[MAX_BODY:] + footer
+            log.info("[DeepDive] Análise longa (%d chars) — enviando em 2 partes",
+                     len(analysis_clean))
+            ok = _post(part1)
+            if ok:
+                time.sleep(1)
+                _post(part2)
 
     # ── Persistência ──────────────────────────────────────────────────────────
 
