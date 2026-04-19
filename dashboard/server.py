@@ -80,7 +80,7 @@ async def basic_auth_middleware(request: Request, call_next):
 @app.get("/health")
 def health():
     """Health check — responde imediatamente, sem I/O nem dependências externas."""
-    return {"status": "ok"}
+    return {"status": "ok", "v": "2026-04-19", "features": ["movers", "regime-cache", "bubbles-async"]}
 
 
 # ── Full Market Scanner singleton ─────────────────────────────────────────────
