@@ -225,10 +225,21 @@ class OutcomeHealthMonitor:
 
 _monitor: Optional[OutcomeHealthMonitor] = None
 
+# Detecta automaticamente o diretório correto (Render persistent disk vs local)
+_OUTCOMES_DIR = Path("/data/logs") if Path("/data").exists() else Path("logs")
+_DEFAULT_PENDING_PATH = str(_OUTCOMES_DIR / "pending_outcomes.jsonl")
 
-def get_monitor(pending_path: str = "logs/pending_outcomes.jsonl") -> OutcomeHealthMonitor:
-    """Retorna instância singleton do OutcomeHealthMonitor."""
+
+def get_monitor(pending_path: Optional[str] = None) -> OutcomeHealthMonitor:
+    """Retorna instância singleton do OutcomeHealthMonitor.
+
+    Se pending_path não for fornecido, detecta automaticamente:
+      - /data/logs/pending_outcomes.jsonl  (Render persistent disk)
+      - logs/pending_outcomes.jsonl        (desenvolvimento local)
+    """
     global _monitor
     if _monitor is None:
-        _monitor = OutcomeHealthMonitor(pending_path=pending_path)
+        _monitor = OutcomeHealthMonitor(
+            pending_path=pending_path if pending_path is not None else _DEFAULT_PENDING_PATH
+        )
     return _monitor

@@ -758,7 +758,7 @@ async def api_outcomes_health():
     """Saúde do registro de outcomes: total, último, fontes ativas, saudável?"""
     try:
         from trinity.modules.outcome_health_monitor import get_monitor as _get_om
-        status = _get_om(pending_path="logs/pending_outcomes.jsonl").check()
+        status = _get_om().check()   # auto-detecta /data/logs ou logs/
         return JSONResponse(content=status)
     except Exception as e:
         return JSONResponse(content={"status": "error", "error": str(e)})

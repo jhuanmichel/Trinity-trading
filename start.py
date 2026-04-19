@@ -93,7 +93,7 @@ def _run_scheduler():
 
     # Outcome Health Monitor — verifica saúde do registro a cada 1h
     from trinity.modules.outcome_health_monitor import get_monitor as _get_outcome_monitor
-    _outcome_health = _get_outcome_monitor(pending_path="logs/pending_outcomes.jsonl")
+    _outcome_health = _get_outcome_monitor()   # auto-detecta /data/logs ou logs/
     schedule.every(1).hours.do(_outcome_health.check)
 
     log.info("Bot scheduler iniciado.")
