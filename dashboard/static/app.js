@@ -1017,6 +1017,7 @@ function renderSignalsFeed(data) {
   if (!feed) return;
 
   const signals = data.signals || [];
+  _recentSignals = signals;  // armazena globalmente para uso nos click handlers
   if (countEl) countEl.textContent = `${signals.length} sinais`;
 
   if (!signals.length) {
@@ -1039,13 +1040,13 @@ function renderSignalsFeed(data) {
   const resultClass = r => ({ WIN: 'win', LOSS: 'loss', PENDING: 'pending' }[r] || 'unknown');
   const resultLabel = r => ({ WIN: 'WIN', LOSS: 'LOSS', PENDING: '⏳' }[r] || r || '?');
 
-  feed.innerHTML = signals.map(s => {
+  feed.innerHTML = signals.map((s, i) => {
     const dirClass = (s.direction || '').toLowerCase() === 'long' ? 'long' : 'short';
     const dirLabel = dirClass === 'long' ? 'L' : 'S';
     const score    = (s.score || 0);
     const res      = s.result || 'PENDING';
     const sym      = (s.symbol || '?').replace('USDT', '').replace('_USDT', '');
-    return `<div class="signal-item">
+    return `<div class="signal-item" style="cursor:pointer" onclick="openSignalModal(_recentSignals[${i}])">
       <span class="si-dir ${dirClass}">${dirLabel}</span>
       <div class="si-body">
         <div class="si-symbol">${sym}</div>
@@ -1458,6 +1459,7 @@ function _fmtAltPrice(p) {
 // ── Estado altcoin ────────────────────────────────────────────────────────────
 let _allAltCandidates = [];  // todos os candidatos do último scan
 let _altFilter        = 'all'; // 'all' | 'LONG' | 'SHORT'
+let _recentSignals    = [];  // últimos sinais — para click nos cards de ÚLTIMOS SINAIS
 
 // ── Estado Full Market Scanner ────────────────────────────────────────────────
 let _fmsItems = {};  // cache items FMS — chave: symbol+'_'+dominant_type
@@ -1745,14 +1747,14 @@ function buildFmsModalHTML(item, dominantType) {
   };
 
   // Planos de entrada
-  const entryA      = levels ? '$' + _fmtAltPrice(levels.entry) : '—';
-  const entryBVal   = levels
+  const entryA      = levels && levels.entry > 0 ? '$' + _fmtAltPrice(levels.entry) : '—';
+  const entryBVal   = levels && levels.entry > 0
     ? (isPump ? '$' + _fmtAltPrice(levels.entry * 1.01) : '$' + _fmtAltPrice(levels.entry * 0.99))
     : '—';
   const entryBLabel = isPump ? 'Fechamento acima de' : 'Fechamento abaixo de';
 
   // Liquidação 5× ISO (~20% de distância)
-  const liqPrice = levels ? (isPump ? levels.entry * 0.80 : levels.entry * 1.20) : null;
+  const liqPrice = levels && levels.entry > 0 ? (isPump ? levels.entry * 0.80 : levels.entry * 1.20) : null;
 
   // ── Colunas de níveis ───────────────────────────────────────────────────
   let tpColHtml, stopColHtml, liqColHtml;
@@ -1764,30 +1766,30 @@ function buildFmsModalHTML(item, dominantType) {
       <div class="fms-levels-title" style="color:var(--bull)">ALVOS TÉCNICOS</div>
       <div class="fms-level-row">
         <span class="fms-level-tag" style="color:var(--bull)">TP1</span>
-        <span style="font-family:var(--mono);font-weight:600;color:var(--bull)">$${_fmtAltPrice(levels.tp1)}</span>
-        <span class="fms-level-pct">${pctRel(levels.entry, levels.tp1)}</span>
+        <span style="font-family:var(--mono);font-weight:600;color:var(--bull)">${levels.tp1 > 0 ? '$' + _fmtAltPrice(levels.tp1) : '—'}</span>
+        <span class="fms-level-pct">${levels.tp1 > 0 && levels.entry > 0 ? pctRel(levels.entry, levels.tp1) : ''}</span>
       </div>
       <div class="fms-level-row">
         <span class="fms-level-tag" style="color:var(--bull)">TP2</span>
-        <span style="font-family:var(--mono);font-weight:600;color:var(--bull)">$${_fmtAltPrice(levels.tp2)}</span>
-        <span class="fms-level-pct">${pctRel(levels.entry, levels.tp2)}</span>
+        <span style="font-family:var(--mono);font-weight:600;color:var(--bull)">${levels.tp2 > 0 ? '$' + _fmtAltPrice(levels.tp2) : '—'}</span>
+        <span class="fms-level-pct">${levels.tp2 > 0 && levels.entry > 0 ? pctRel(levels.entry, levels.tp2) : ''}</span>
       </div>
       <div class="fms-level-row">
         <span class="fms-level-tag" style="color:var(--bull)">TP3</span>
-        <span style="font-family:var(--mono);font-weight:600;color:var(--bull)">$${_fmtAltPrice(levels.tp3)}</span>
-        <span class="fms-level-pct">${pctRel(levels.entry, levels.tp3)}</span>
+        <span style="font-family:var(--mono);font-weight:600;color:var(--bull)">${levels.tp3 > 0 ? '$' + _fmtAltPrice(levels.tp3) : '—'}</span>
+        <span class="fms-level-pct">${levels.tp3 > 0 && levels.entry > 0 ? pctRel(levels.entry, levels.tp3) : ''}</span>
       </div>`;
 
     stopColHtml = `
       <div class="fms-levels-title" style="color:var(--bear)">STOP LOSS</div>
-      <div class="fms-stop-price" style="color:var(--bear)">$${_fmtAltPrice(levels.stop)}</div>
-      <div class="fms-level-meta">${pctRel(levels.entry, levels.stop)}</div>
+      <div class="fms-stop-price" style="color:var(--bear)">${levels.stop > 0 ? '$' + _fmtAltPrice(levels.stop) : '—'}</div>
+      <div class="fms-level-meta">${levels.stop > 0 && levels.entry > 0 ? pctRel(levels.entry, levels.stop) : ''}</div>
       <div class="fms-level-meta">Move: ~${move.toFixed(1)}%</div>
       <div class="fms-level-meta">Prob: ${prob}%</div>`;
 
     liqColHtml = `
       <div class="fms-levels-title" style="color:var(--yellow)">LIQUIDAÇÃO (5×)</div>
-      <div class="fms-liq-price" style="color:var(--yellow)">$${_fmtAltPrice(liqPrice)}</div>
+      <div class="fms-liq-price" style="color:var(--yellow)">${liqPrice != null && liqPrice > 0 ? '$' + _fmtAltPrice(liqPrice) : '—'}</div>
       <div class="fms-level-meta" style="margin-top:4px">5× ISO — ~20%</div>`;
   } else {
     tpColHtml   = `<div class="fms-levels-title" style="color:var(--bull)">ALVOS TÉCNICOS</div><div class="fms-unavailable">Níveis indisponíveis</div>`;
@@ -1894,6 +1896,43 @@ function openFmsModal(symbol, dominantType) {
 function closeFmsModal(event) {
   if (event && event.target !== document.getElementById('fmsDetailModal')) return;
   document.getElementById('fmsDetailModal').style.display = 'none';
+}
+
+// ── Modal a partir de card de ÚLTIMOS SINAIS ──────────────────────────────────
+// Reutiliza buildFmsModalHTML e o modal do FMS (mesmo overlay/box).
+// Se o símbolo existir no cache FMS, usa dados ricos; caso contrário,
+// constrói item sintético com o que o sinal disponibiliza.
+function openSignalModal(signal) {
+  if (!signal) return;
+  const direction    = (signal.direction || '').toUpperCase();
+  const dominantType = direction === 'LONG' ? 'PUMP' : 'CRASH';
+
+  // Tenta cache FMS primeiro (dados completos)
+  const fmsKey  = signal.symbol + '_' + dominantType;
+  const fmsItem = _fmsItems[fmsKey];
+  if (fmsItem) {
+    openFmsModal(signal.symbol, dominantType);
+    return;
+  }
+
+  // Fallback: item sintético — levels=null, modal mostra "Indisponível"
+  const syntheticItem = {
+    symbol:      signal.symbol || '?',
+    pump_score:  dominantType === 'PUMP'  ? (signal.score || 0) : 0,
+    crash_score: dominantType === 'CRASH' ? (signal.score || 0) : 0,
+    dna:         (signal.source || '—').replace(/_?scanner/, '').toUpperCase() || '—',
+    levels:      null,
+    detectors:   {},
+    last_price:  signal.price || 0,
+    funding_rate: 0,
+    rise_fall:   0,
+  };
+
+  const modal = document.getElementById('fmsDetailModal');
+  const box   = document.getElementById('fmsModalBox');
+  if (!modal || !box) return;
+  box.innerHTML = buildFmsModalHTML(syntheticItem, dominantType);
+  modal.style.display = 'flex';
 }
 
 async function updateAltcoinRadar() {
