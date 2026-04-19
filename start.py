@@ -82,6 +82,10 @@ def _run_scheduler():
 
     schedule.every(90).seconds.do(_run_fms_cycle)
 
+    # Parabolic Scanner — detecta movimentos parabólicos a cada 15 min (RAVE-type)
+    from trinity.modules.parabolic_scanner import run_parabolic_scan
+    schedule.every(15).minutes.do(run_parabolic_scan)
+
     log.info("Bot scheduler iniciado.")
     run_institutional_analysis()   # roda imediatamente ao subir
     run_optimization_report()      # gera relatório inicial (pode ser "insufficient_data")

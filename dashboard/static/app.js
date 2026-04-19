@@ -19,13 +19,11 @@ let _tvPriceLines   = [];     // referências às price lines ativas
 let _chartLevels    = {};     // {entry, stop, tp1, tp2, tp3} do card BTC
 
 // Responsive resize — atualiza largura do chart quando janela muda
-let _lastEquityCurve = null;
 window.addEventListener('resize', () => {
   if (_tvChart) {
     const el = document.getElementById('sparklineChart');
     if (el) _tvChart.applyOptions({ width: el.clientWidth });
   }
-  if (_lastEquityCurve !== null) drawEquity(_lastEquityCurve);
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -1448,258 +1446,6 @@ async function updatePumpRadar() {
   }
 }
 
-// ── Backtest Performance ─────────────────────────────────────────────────────
-
-let _btChart = null;
-let _btChartCont = null;
-
-function _initBtChart(el) {
-  if (_btChart) { try { _btChart.remove(); } catch (_) {} }
-  _btChart = null;
-
-  const chart = LightweightCharts.createChart(el, {
-    width:  el.clientWidth || 600,
-    height: 200,
-    layout: {
-      background: { type: 'solid', color: '#0B0F14' },
-      textColor: '#8B98A5',
-      fontSize: 10,
-      fontFamily: "JetBrains Mono, monospace",
-    },
-    grid: {
-      vertLines: { color: 'rgba(26,34,45,0.8)' },
-      horzLines: { color: 'rgba(26,34,45,0.6)' },
-    },
-    crosshair: {
-      mode: 1,
-      vertLine: { color: 'rgba(139,152,165,0.35)', labelBackgroundColor: '#161C25' },
-      horzLine: { color: 'rgba(139,152,165,0.35)', labelBackgroundColor: '#161C25' },
-    },
-    rightPriceScale: { borderColor: '#1A222D', textColor: '#8B98A5' },
-    timeScale: { borderColor: '#1A222D', timeVisible: false, rightOffset: 4 },
-    handleScroll: true,
-    handleScale:  true,
-  });
-
-  const areaSeries = chart.addAreaSeries({
-    lineColor:  '#00FFB2',
-    topColor:   'rgba(0,255,178,0.20)',
-    bottomColor:'rgba(0,255,178,0.00)',
-    lineWidth: 2,
-    priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
-  });
-
-  _btChart     = chart;
-  _btChartCont = el;
-  return areaSeries;
-}
-
-function renderBtEquityCurve(equityCurve) {
-  const el = document.getElementById('btChartWrap');
-  if (!el || !equityCurve || equityCurve.length < 2) return;
-
-  const areaSeries = (_btChartCont !== el) ? _initBtChart(el) : (() => {
-    // Reusa chart existente — recria series
-    if (_btChart) { try { _btChart.remove(); } catch (_) {} }
-    return _initBtChart(el);
-  })();
-
-  // Converte datas para epoch segundos (YYYY-MM-DD → timestamp)
-  const data = equityCurve.map(p => ({
-    time:  Math.floor(new Date(p.date + 'T12:00:00Z').getTime() / 1000),
-    value: p.equity,
-  })).sort((a, b) => a.time - b.time);
-
-  // Remove duplicatas de mesmo dia (mantém último)
-  const deduped = [];
-  const seen = new Set();
-  for (const pt of data) {
-    if (!seen.has(pt.time)) { seen.add(pt.time); deduped.push(pt); }
-  }
-
-  areaSeries.setData(deduped);
-  if (_btChart) _btChart.timeScale().fitContent();
-}
-
-function renderBtMetrics(metrics) {
-  const el = document.getElementById('btMetrics');
-  if (!el || !metrics) return;
-
-  const wr   = metrics.win_rate_pct   ?? 0;
-  const sh   = metrics.sharpe_ratio   ?? 0;
-  const exp  = metrics.expectancy_r   ?? 0;
-  const dd   = metrics.max_drawdown_pct ?? 0;
-  const pf   = metrics.profit_factor  ?? 0;
-  const ret  = metrics.total_return_pct ?? 0;
-  const aw   = metrics.avg_win_r      ?? 0;
-  const al   = metrics.avg_loss_r     ?? 0;
-  const tot  = metrics.total_trades   ?? 0;
-  const wins = metrics.wins           ?? 0;
-  const loss = metrics.losses         ?? 0;
-
-  function card(label, value, sub, cls = 'bt-neutral') {
-    return `<div class="bt-metric-card ${cls}">
-      <div class="bt-metric-label">${label}</div>
-      <div class="bt-metric-value">${value}</div>
-      <div class="bt-metric-sub">${sub}</div>
-    </div>`;
-  }
-
-  el.innerHTML = [
-    card('Win Rate',    `${wr.toFixed(1)}%`,       `${wins}W / ${loss}L`,         wr >= 50 ? 'bt-positive' : 'bt-negative'),
-    card('Sharpe',      sh.toFixed(2),              sh >= 1 ? 'Sólido' : sh >= 0.5 ? 'Razoável' : 'Fraco',  sh >= 1 ? 'bt-positive' : sh >= 0.5 ? 'bt-neutral' : 'bt-negative'),
-    card('Expectância', `${exp >= 0 ? '+' : ''}${exp.toFixed(3)}R`, 'por trade',  exp > 0 ? 'bt-positive' : 'bt-negative'),
-    card('Max DD',      `${dd.toFixed(1)}%`,        'drawdown máx.',               dd > -5 ? 'bt-positive' : dd > -15 ? 'bt-neutral' : 'bt-negative'),
-    card('Trades',      tot,                        `${metrics.period_days ?? 180} dias`, 'bt-neutral'),
-    card('Profit F.',   pf.toFixed(2),              pf >= 1.5 ? 'Excelente' : pf >= 1 ? 'Positivo' : 'Negativo', pf >= 1.5 ? 'bt-positive' : pf >= 1 ? 'bt-neutral' : 'bt-negative'),
-    card('Avg Win',     `+${aw.toFixed(2)}R`,       'por trade ganho',             'bt-positive'),
-    card('Retorno',     `${ret >= 0 ? '+' : ''}${ret.toFixed(1)}%`, `capital: $${(metrics.final_capital ?? 0).toLocaleString('pt-BR', {maximumFractionDigits:0})}`, ret > 0 ? 'bt-positive' : 'bt-negative'),
-  ].join('');
-}
-
-// Renderiza cards das 4 janelas walk-forward
-function renderBtWindows(windows) {
-  const el = document.getElementById('btWindowsGrid');
-  if (!el || !windows || windows.length === 0) {
-    if (el) el.style.display = 'none';
-    return;
-  }
-  el.style.display = 'grid';
-
-  const nameMap = {
-    'COVID_Crash':    'COVID-19',
-    'Bull_Run_2021':  'Bull 2021',
-    'Bear_LUNA_FTX':  'Bear+FTX',
-    'Recovery_ETF':   'ETF 2023-24',
-  };
-
-  el.innerHTML = windows.map(w => {
-    const m   = w.metrics || {};
-    const wr  = m.win_rate_pct ?? 0;
-    const cls = wr >= 50 ? 'bt-win-card' : 'bt-loss-card';
-    const label = nameMap[w.name] || w.name;
-    const period = (w.period || '').split(' → ').map(d => d.slice(0,4)).join('→');
-    return `<div class="bt-window-card ${cls}">
-      <div class="bt-window-name">${label}</div>
-      <div class="bt-window-period">${period}</div>
-      <div class="bt-window-wr">${wr.toFixed(0)}%</div>
-      <div class="bt-window-sub">${m.total_trades ?? 0}T · PF ${(m.profit_factor ?? 0).toFixed(1)}</div>
-    </div>`;
-  }).join('');
-}
-
-// Renderiza linha de parâmetros ótimos
-function renderBtOptimal(data) {
-  const row = document.getElementById('btOptimalRow');
-  const val = document.getElementById('btOptimalValue');
-  const btn = document.getElementById('btApplyBtn');
-  if (!row || !val) return;
-
-  const opt = data.optimal_params;
-  if (!opt) { row.style.display = 'none'; return; }
-
-  const p = opt.optimal_params || opt;
-  const m = data.metrics || {};
-
-  row.style.display = 'flex';
-  val.textContent = `threshold=${p.score_threshold ?? '—'} · ATR×${p.atr_mult ?? '—'} · TP1=${p.tp1_ratio ?? '—'}R · TP2=${p.tp2_ratio ?? '—'}R`;
-
-  // Botão aplicar: mostra somente se wr≥60% E trades≥50 E dd≤30%
-  const canApply = (
-    m.win_rate_pct >= 60 &&
-    m.total_trades >= 50 &&
-    m.max_drawdown_pct <= 30
-  );
-  if (btn) btn.style.display = canApply ? 'inline-flex' : 'none';
-
-  // Armazena parâmetros para uso no onclick
-  if (btn) btn.dataset.params = JSON.stringify(p);
-}
-
-// Exibe modal com parâmetros ótimos (sem modificar config automaticamente)
-function showOptimalParams() {
-  const btn = document.getElementById('btApplyBtn');
-  if (!btn) return;
-  try {
-    const p = JSON.parse(btn.dataset.params || '{}');
-    const msg = [
-      '=== PARÂMETROS ÓTIMOS ENCONTRADOS ===',
-      '',
-      `  score_threshold: ${p.score_threshold}`,
-      `  atr_mult:        ${p.atr_mult}`,
-      `  tp1_ratio:       ${p.tp1_ratio}`,
-      `  tp2_ratio:       ${p.tp2_ratio}`,
-      '',
-      'Para aplicar, atualize DEFAULT_PARAMS em backtesting_engine.py',
-      'ou ajuste DEFAULT_PARAMS em backtesting_engine.py.',
-    ].join('\n');
-    alert(msg);
-  } catch (_) {}
-}
-
-// Dispara backtest assíncrono via API
-async function triggerBacktest() {
-  const btn = document.getElementById('btRunBtn');
-  if (btn) { btn.disabled = true; btn.textContent = '⟳ RODANDO...'; }
-  try {
-    const resp = await fetch('/api/run-backtest');
-    if (resp.status === 202) {
-      console.info('[Trinity] Backtest iniciado. Aguardando 90s...');
-      setTimeout(() => {
-        updateBacktestResults();
-        if (btn) { btn.disabled = false; btn.innerHTML = '▶ RODAR BACKTEST'; }
-      }, 90_000);
-    } else if (resp.status === 409) {
-      alert('Backtest já em execução. Aguarde...');
-      if (btn) { btn.disabled = false; btn.innerHTML = '▶ RODAR BACKTEST'; }
-    } else {
-      alert(`Erro ao iniciar backtest: HTTP ${resp.status}`);
-      if (btn) { btn.disabled = false; btn.innerHTML = '▶ RODAR BACKTEST'; }
-    }
-  } catch (e) {
-    console.warn('[Trinity] triggerBacktest error:', e);
-    if (btn) { btn.disabled = false; btn.innerHTML = '▶ RODAR BACKTEST'; }
-  }
-}
-
-async function updateBacktestResults() {
-  try {
-    const data = await fetch('/api/backtest-results').then(r => r.json());
-
-    if (data.status === 'no_data' || !data.metrics || !data.metrics.total_trades) {
-      document.getElementById('btMetrics').innerHTML =
-        '<div class="bt-metric-card bt-neutral" style="grid-column:1/-1;text-align:center">' +
-        '<div class="bt-metric-label">STATUS</div>' +
-        '<div class="bt-metric-value" style="font-size:14px">Backtest não executado</div>' +
-        '<div class="bt-metric-sub">Use o botão ▶ RODAR BACKTEST para executar</div>' +
-        '</div>';
-      const wg = document.getElementById('btWindowsGrid');
-      if (wg) wg.style.display = 'none';
-      const or = document.getElementById('btOptimalRow');
-      if (or) or.style.display = 'none';
-      return;
-    }
-
-    const m = data.metrics;
-    renderBtMetrics({ ...m, period_days: data.config?.period_days });
-    renderBtEquityCurve(data.equity_curve || []);
-    renderBtWindows(data.windows || []);
-    renderBtOptimal(data);
-
-    const subtitle = document.getElementById('btSubtitle');
-    if (subtitle && data.config) {
-      const gen = data.generated_at ? new Date(data.generated_at) : null;
-      const genStr = gen ? gen.toLocaleDateString('pt-BR') : '';
-      const engine = data.config.engine === 'legacy_mexc' ? 'MEXC/CCXT' : 'Walk-Forward 4×';
-      subtitle.textContent =
-        `${data.config.period_days} dias · BTC/USDT · ${engine} · ` +
-        `${data.config.risk_per_trade_pct}% risco/trade · ${genStr}`;
-    }
-  } catch (e) {
-    console.warn('[Trinity] Backtest fetch error:', e);
-  }
-}
-
 // ── Altcoin Radar ─────────────────────────────────────────────────────────────
 
 function _fmtAltPrice(p) {
@@ -2303,90 +2049,6 @@ async function updateMacroIndicator() {
   }
 }
 
-// ── Equity Curve (Trinity v7) ─────────────────────────────────────────────────
-
-function drawEquity(curve) {
-  _lastEquityCurve = curve;
-  const canvas = document.getElementById('equityCanvas');
-  const empty  = document.getElementById('equityEmpty');
-  if (!canvas) return;
-  if (!curve || curve.length === 0) {
-    canvas.style.display = 'none';
-    if (empty) empty.style.display = 'flex';
-    return;
-  }
-  canvas.style.display = 'block';
-  if (empty) empty.style.display = 'none';
-
-  const dpr  = window.devicePixelRatio || 1;
-  const rect = canvas.parentElement.getBoundingClientRect();
-  const W = rect.width, H = rect.height || 200;
-  canvas.width  = W * dpr;
-  canvas.height = H * dpr;
-  canvas.style.width  = W + 'px';
-  canvas.style.height = H + 'px';
-
-  const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
-
-  const vals   = curve.map(p => p.pnl);
-  const vMin   = Math.min(0, ...vals);
-  const vMax   = Math.max(0, ...vals);
-  const range  = vMax - vMin || 1;
-  const pad    = { t: 16, r: 12, b: 24, l: 48 };
-  const iW     = W - pad.l - pad.r;
-  const iH     = H - pad.t - pad.b;
-
-  const toX = i => pad.l + (i / (vals.length - 1 || 1)) * iW;
-  const toY = v => pad.t + (1 - (v - vMin) / range) * iH;
-
-  // Grid
-  ctx.strokeStyle = '#1A222D';
-  ctx.lineWidth   = 1;
-  [0, 0.25, 0.5, 0.75, 1].forEach(f => {
-    const y = pad.t + f * iH;
-    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
-    const label = (vMax - f * range).toFixed(1) + '%';
-    ctx.fillStyle = '#6e7681'; ctx.font = '10px monospace'; ctx.textAlign = 'right';
-    ctx.fillText(label, pad.l - 4, y + 4);
-  });
-
-  // Linha zero
-  const zeroY = toY(0);
-  ctx.strokeStyle = '#2a3444'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(pad.l, zeroY); ctx.lineTo(W - pad.r, zeroY); ctx.stroke();
-
-  // Fill área
-  const isPositive = vals[vals.length - 1] >= 0;
-  const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + iH);
-  grad.addColorStop(0,   isPositive ? 'rgba(0,255,178,.35)' : 'rgba(255,77,79,.35)');
-  grad.addColorStop(1,   'rgba(0,0,0,0)');
-  ctx.beginPath();
-  ctx.moveTo(toX(0), zeroY);
-  vals.forEach((v, i) => ctx.lineTo(toX(i), toY(v)));
-  ctx.lineTo(toX(vals.length - 1), zeroY);
-  ctx.closePath();
-  ctx.fillStyle = grad;
-  ctx.fill();
-
-  // Linha principal
-  ctx.strokeStyle = isPositive ? '#00FFB2' : '#FF4D4F';
-  ctx.lineWidth   = 2;
-  ctx.beginPath();
-  vals.forEach((v, i) => i === 0 ? ctx.moveTo(toX(i), toY(v)) : ctx.lineTo(toX(i), toY(v)));
-  ctx.stroke();
-}
-
-async function loadEquity() {
-  try {
-    const d = await fetch('/api/equity-curve').then(r => r.json());
-    drawEquity(d.curve || []);
-  } catch (e) {
-    console.error('[loadEquity] fetch falhou:', e);
-    drawEquity([]);
-  }
-}
-
 // ── Calendar Heatmap (Trinity v7) ─────────────────────────────────────────────
 
 async function loadCalendar() {
@@ -2476,11 +2138,9 @@ updateLiqHeatmap();
 updateLiqScreenshot();                          // busca URL da screenshot Apify
 updateCrashRadar();                             // Crash Radar — primeiro carregamento
 updatePumpRadar();                              // Pump Radar — primeiro carregamento
-updateBacktestResults();                        // Backtest Performance — primeiro carregamento
 updateAltcoinRadar();                           // Altcoin Radar — primeiro carregamento
 updateWinRate();                                // Performance Real — primeiro carregamento
 updateMacroIndicator();                         // News Sentinel — primeiro carregamento
-loadEquity();                                   // Equity Curve — primeiro carregamento
 loadCalendar();                                 // Calendar Heatmap — primeiro carregamento
 loadHealth();                                   // Exchange Health — primeiro carregamento
 setInterval(refresh,                REFRESH_MS);
@@ -2491,11 +2151,9 @@ setInterval(updateLiqHeatmap,       300_000);      // 5min — respeita rate lim
 setInterval(updateLiqScreenshot,    300_000);      // 5min — sincroniza com ciclo do servidor
 setInterval(updateCrashRadar,       CRASH_REFRESH_MS); // 30s — sincroniza com ciclo do scanner
 setInterval(updatePumpRadar,        PUMP_REFRESH_MS);  // 30s — sincroniza com ciclo do scanner
-setInterval(updateBacktestResults,  120_000);      // 2min — atualiza métricas de backtest
 setInterval(updateAltcoinRadar,     300_000);      // 5min — sincroniza com ciclo do scanner
 setInterval(updateWinRate,          300_000);      // 5min — sincroniza com ciclo do OutcomeTracker
 setInterval(updateMacroIndicator,   120_000);      // 2min — sincroniza com ciclo do News Sentinel
-setInterval(loadEquity,             600_000);      // 10min — equity curve (dados lentos)
 setInterval(loadCalendar,           600_000);      // 10min — calendar heatmap
 setInterval(loadHealth,              60_000);      //  1min — exchange health
 setInterval(fetchRecentSignals,      15_000);      // 15s — sinais recentes (painel direito)

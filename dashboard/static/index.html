@@ -182,19 +182,6 @@
       </div>
     </section>
 
-    <!-- ── EQUITY CURVE (Trinity v7) ────────────────────────────────────────── -->
-    <section class="section" id="equitySection">
-      <div class="section-header">
-        <h2 class="section-title">EQUITY CURVE</h2>
-        <span class="section-divider"></span>
-        <span class="section-sub">P&amp;L acumulado por trade</span>
-      </div>
-      <div class="equity-container">
-        <canvas id="equityCanvas"></canvas>
-        <div class="equity-empty" id="equityEmpty">Sem trades resolvidos ainda</div>
-      </div>
-    </section>
-
     <!-- ── CALENDAR HEATMAP (Trinity v7) ──────────────────────────────────── -->
     <section class="section" id="calendarSection">
       <div class="section-header">
@@ -221,43 +208,6 @@
         <span class="section-sub" id="healthTs">—</span>
       </div>
       <div class="health-grid" id="healthGrid"></div>
-    </section>
-
-    <!-- ── SECTION 4c: BACKTEST WALK-FORWARD ────────────────────────────────── -->
-    <section class="section" id="backtestSection">
-      <div class="section-header">
-        <h2 class="section-title">BACKTEST PERFORMANCE</h2>
-        <span class="section-divider"></span>
-        <span class="section-sub" id="btSubtitle">Walk-forward · BTC/USDT · SMC Engine</span>
-        <!-- Botão disparar backtest -->
-        <button class="bt-run-btn" id="btRunBtn" onclick="triggerBacktest()" title="Executar backtest walk-forward">
-          ▶ RODAR BACKTEST
-        </button>
-      </div>
-
-      <!-- Métricas globais (8 cards) -->
-      <div class="bt-metrics-grid" id="btMetrics">
-        <div class="bt-metric-card bt-neutral" style="grid-column:1/-1;text-align:center">
-          <div class="bt-metric-label">STATUS</div>
-          <div class="bt-metric-value" style="font-size:14px">Backtest não executado</div>
-          <div class="bt-metric-sub">Use o botão ▶ RODAR BACKTEST para executar</div>
-        </div>
-      </div>
-
-      <!-- Equity curve (LightweightCharts) -->
-      <div class="bt-chart-wrap" id="btChartWrap" style="height:200px;margin:10px 0 6px"></div>
-
-      <!-- Walk-Forward Windows (4 períodos) -->
-      <div class="bt-windows-grid" id="btWindowsGrid" style="display:none"></div>
-
-      <!-- Parâmetros ótimos + botão aplicar -->
-      <div class="bt-optimal-row" id="btOptimalRow" style="display:none">
-        <span class="bt-optimal-label">PARÂMETROS ÓTIMOS:</span>
-        <span class="bt-optimal-value" id="btOptimalValue"></span>
-        <button class="bt-apply-btn" id="btApplyBtn" onclick="showOptimalParams()"
-          style="display:none">APLICAR PARÂMETROS ÓTIMOS</button>
-      </div>
-
     </section>
 
     <!-- ── SECTION 6: FULL MARKET SCANNER (MERCADO COMPLETO) ───────────────── -->
