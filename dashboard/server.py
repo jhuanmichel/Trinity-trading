@@ -1,6 +1,7 @@
 """
 dashboard/server.py — Servidor do Dashboard de Trading
 Execute com: uvicorn dashboard.server:app --host 0.0.0.0 --port 8000 --reload
+v2026-04-19: Market Movers Scanner, BTC Regime cache 2-nível, Mercado MEXC async
 """
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
