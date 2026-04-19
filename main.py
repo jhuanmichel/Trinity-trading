@@ -972,6 +972,7 @@ def run_institutional_analysis():
                 "timestamp":       datetime.now(timezone.utc).isoformat(),
                 "conviction_tier": conviction_tier,
                 "layer_scores":    _layer_scores_ot,
+                "source":          "institutional",
             }
             _sid = _ot.register_signal(_signal_ot)
             log.info(f"   OutcomeTracker: sinal {_sid[:8]} registrado para tracking.")

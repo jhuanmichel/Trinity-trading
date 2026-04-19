@@ -61,7 +61,7 @@ class OutcomeTracker:
             "registered_at":  datetime.now(timezone.utc).isoformat(),
             "direction":      signal.get("direction", ""),
             "score":          signal.get("score", 0),
-            "entry_price":    signal.get("entry_price", 0),
+            "entry_price":    signal.get("entry_price", signal.get("entry", 0)),
             "stop_loss":      signal.get("stop_loss"),
             "tp1":            signal.get("tp1"),
             "tp2":            signal.get("tp2"),
@@ -69,6 +69,9 @@ class OutcomeTracker:
             "timestamp":      signal.get("timestamp", datetime.now(timezone.utc).isoformat()),
             "conviction_tier": signal.get("conviction_tier", "MEDIUM"),
             "layer_scores":   signal.get("layer_scores", {}),
+            # ── Campos adicionais para ML (ignorados se não fornecidos) ──────
+            "source":         signal.get("source", "unknown"),
+            "btc_regime":     signal.get("btc_regime", ""),
         }
         try:
             PENDING_FILE.parent.mkdir(exist_ok=True)

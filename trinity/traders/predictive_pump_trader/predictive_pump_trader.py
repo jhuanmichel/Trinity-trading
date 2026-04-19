@@ -49,7 +49,7 @@ log = logging.getLogger(__name__)
 SCAN_INTERVAL_S    = 90
 TOP_RESULTS        = 5         # top N oportunidades institucionais
 OPP_THRESHOLD      = 35        # mínimo para aparecer no dashboard
-ALERT_THRESHOLD    = 80        # mínimo para disparar alerta Telegram
+ALERT_THRESHOLD    = 75        # mínimo para disparar alerta Telegram
 LAUNCH_THRESHOLD   = 80        # alerta urgente (cooldown reduzido)
 BASE_DIR           = Path(__file__).parent.parent.parent.parent
 SCAN_OUTPUT_FILE   = BASE_DIR / "dashboard" / "pump_scan_latest.json"
@@ -568,6 +568,7 @@ def _register_outcome_pump(c: dict):
             "dna_pattern":     c.get("dna_pattern", ""),
             "layer_scores":    c.get("component_scores", {}),
             "btc_regime":      _btc_regime,
+            "source":          "pump_trader",
         })
         log.info(
             f"[PumpTrader] Outcome registrado: {c.get('symbol','')} LONG "

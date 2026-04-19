@@ -51,7 +51,7 @@ log = logging.getLogger(__name__)
 SCAN_INTERVAL_S      = 90       # ciclo de scan em segundos (A: 60→90s)
 TOP_RESULTS          = 5        # top N oportunidades institucionais
 OPP_THRESHOLD        = 35        # mínimo para aparecer no dashboard
-ALERT_THRESHOLD      = 80        # mínimo para disparar alerta Telegram
+ALERT_THRESHOLD      = 75        # mínimo para disparar alerta Telegram
 CRITICAL_THRESHOLD   = 80        # alerta urgente (cooldown reduzido)
 BASE_DIR             = Path(__file__).parent.parent.parent.parent  # raiz do projeto
 SCAN_OUTPUT_FILE     = BASE_DIR / "dashboard" / "crash_scan_latest.json"
@@ -596,6 +596,7 @@ def _register_outcome_crash(c: dict):
             "dna_pattern":     c.get("dna_pattern", ""),
             "layer_scores":    c.get("component_scores", {}),
             "btc_regime":      _btc_regime,
+            "source":          "crash_trader",
         })
         log.info(
             f"[CrashTrader] Outcome registrado: {c.get('symbol','')} SHORT "

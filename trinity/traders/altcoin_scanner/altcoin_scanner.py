@@ -486,6 +486,7 @@ def run_altcoin_scan() -> dict:
                     "symbol":         _c["symbol"],   # ex: "LINK" → normalizado em _fetch_candles_since
                     "timestamp":      datetime.now(timezone.utc).isoformat(),
                     "conviction_tier": _c.get("conviction", "MEDIUM"),
+                    "source":         "altcoin_scanner",
                 }
                 _ot.register_signal(_sig)
     except Exception as _ot_err:
