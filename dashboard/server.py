@@ -1472,24 +1472,31 @@ async def api_exchanges_health():
             _ua = {"User-Agent": "Trinity/5.0"}
 
             for name in _ex_mgr.active_exchanges:
-                # ── Exchanges geo-bloqueadas em IPs cloud ─────────────────────────
-                # Render bloqueia TODOS os endpoints públicos dessas exchanges (confirmado).
-                # Não tenta pingar — retorna restricted imediatamente com contagem conhecida.
+                # ── Exchanges que bloqueiam dados em IPs cloud ────────────────────
+                # Fazemos o ping e medimos a latência real (qualquer resposta HTTP
+                # = exchange acessível). Só lança error se houver exceção de rede.
                 if name in _CLOUD_RESTRICTED:
                     cfg = _CLOUD_RESTRICTED[name]
+                    try:
+                        t0 = _t.time()
+                        _req.get(cfg["ping_url"], timeout=8, headers=_ua)
+                        ms = round((_t.time() - t0) * 1000, 1)
+                    except Exception as ex:
+                        log.warning(f"[HEALTH] ping {name} sem resposta: {ex}")
+                        results.append({"name": name, "status": "error", "ms": 0, "n": 0})
+                        continue
                     results.append({
                         "name":   name,
-                        "status": "restricted",
-                        "ms":     None,
+                        "status": "ok",
+                        "ms":     ms,
                         "n":      cfg["known_n"],
-                        "approx": True,
                     })
                     continue
 
                 # ── Exchanges com dados completos disponíveis ─────────────────────
                 adapter = _ex_mgr.get_adapter(name)
                 if adapter is None:
-                    results.append({"name": name, "status": "offline", "ms": 0, "n": 0, "approx": False})
+                    results.append({"name": name, "status": "error", "ms": 0, "n": 0})
                     continue
                 try:
                     t0 = _t.time()
@@ -1501,11 +1508,10 @@ async def api_exchanges_health():
                         "status": "ok" if n > 0 else "error",
                         "ms":     ms,
                         "n":      n,
-                        "approx": False,
                     })
                 except Exception as ex:
                     log.error(f"[HEALTH] fetch_all_tickers {name} erro: {ex}")
-                    results.append({"name": name, "status": "error", "ms": 0, "n": 0, "approx": False})
+                    results.append({"name": name, "status": "error", "ms": 0, "n": 0})
 
             return results
 
