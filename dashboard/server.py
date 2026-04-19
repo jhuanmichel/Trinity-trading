@@ -753,6 +753,17 @@ async def api_movers_trending():
         return JSONResponse(content={"trending": [], "count": 0, "error": str(e)})
 
 
+@app.get("/api/outcomes/health")
+async def api_outcomes_health():
+    """Saúde do registro de outcomes: total, último, fontes ativas, saudável?"""
+    try:
+        from trinity.modules.outcome_health_monitor import get_monitor as _get_om
+        status = _get_om(pending_path="logs/pending_outcomes.jsonl").check()
+        return JSONResponse(content=status)
+    except Exception as e:
+        return JSONResponse(content={"status": "error", "error": str(e)})
+
+
 @app.get("/api/full-market-scan")
 async def api_full_market_scan():
     """Status completo do último ciclo do Full Market Scanner."""
