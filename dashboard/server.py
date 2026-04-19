@@ -728,6 +728,30 @@ async def get_crypto_bubbles():
     return JSONResponse(content={"fetched_at": None, "coins": [], "status": "aguardando_dados"})
 
 
+@app.get("/api/movers/status")
+async def api_movers_status():
+    """Status do Market Movers Scanner (última varredura, contadores por tier)."""
+    try:
+        from trinity.modules.market_movers import get_scanner as _get_movers
+        s = _get_movers().get_status()
+        # Remover trending (pesado) — usar /api/movers/trending para a lista
+        s.pop("trending", None)
+        return JSONResponse(content=s)
+    except Exception as e:
+        return JSONResponse(content={"status": "error", "error": str(e)})
+
+
+@app.get("/api/movers/trending")
+async def api_movers_trending():
+    """Top movers da última varredura (max 50, ordenado por |change_pct|)."""
+    try:
+        from trinity.modules.market_movers import get_scanner as _get_movers
+        trending = _get_movers().get_trending(limit=50)
+        return JSONResponse(content={"trending": trending, "count": len(trending)})
+    except Exception as e:
+        return JSONResponse(content={"trending": [], "count": 0, "error": str(e)})
+
+
 @app.get("/api/full-market-scan")
 async def api_full_market_scan():
     """Status completo do último ciclo do Full Market Scanner."""

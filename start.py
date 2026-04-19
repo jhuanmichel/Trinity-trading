@@ -86,6 +86,11 @@ def _run_scheduler():
     from trinity.modules.parabolic_scanner import run_parabolic_scan
     schedule.every(15).minutes.do(run_parabolic_scan)
 
+    # Market Movers Scanner — escaneia todos os contratos MEXC a cada 10 min
+    from trinity.modules.market_movers import get_scanner as _get_movers_scanner
+    _movers_scanner = _get_movers_scanner()
+    schedule.every(10).minutes.do(_movers_scanner.scan)
+
     log.info("Bot scheduler iniciado.")
     run_institutional_analysis()   # roda imediatamente ao subir
     run_optimization_report()      # gera relatório inicial (pode ser "insufficient_data")
