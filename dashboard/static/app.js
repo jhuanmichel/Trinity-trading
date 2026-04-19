@@ -1002,10 +1002,12 @@ function renderRegimeDetailed(data) {
     const fillClass = isBull ? 'rl-fill-bull' : isBear ? 'rl-fill-bear' : '';
     const ptsClass  = isBull ? 'bull' : isBear ? 'bear' : 'zero';
     const ptsStr    = pts === 0 ? '—' : (isBull ? `+${l.bull}` : `-${l.bear}`);
+    const valStr    = l.value || '';
     return `<div class="regime-layer-row">
       <span class="rl-id">${l.id}</span>
       <span class="rl-name" style="font-size:10px;color:var(--text-muted)">${l.name}</span>
       <div class="rl-track"><div class="${fillClass}" style="width:${pct}%"></div></div>
+      <span class="rl-value">${valStr}</span>
       <span class="rl-pts ${ptsClass}">${ptsStr}</span>
     </div>`;
   }).join('');
@@ -1059,12 +1061,15 @@ function renderSignalsFeed(data) {
 }
 
 async function fetchRegimeDetailed() {
-  const layersEl = document.getElementById('regimeLayers');
-  if (!layersEl) return;
   try {
-    const data = await fetch('/api/btc-regime/detailed').then(r => r.json());
+    const res  = await fetch('/api/btc-regime/detailed');
+    if (!res.ok) { console.error('[Regime] HTTP', res.status); return; }
+    const data = await res.json();
+    if (data.error) console.warn('[Regime] backend error:', data.error);
     renderRegimeDetailed(data);
-  } catch (_) {}
+  } catch (e) {
+    console.error('[Regime] fetch error:', e.message);
+  }
 }
 
 async function fetchRecentSignals() {
@@ -2196,6 +2201,7 @@ setInterval(updateMacroIndicator,   120_000);      // 2min — sincroniza com ci
 setInterval(loadCalendar,           600_000);      // 10min — calendar heatmap
 setInterval(loadHealth,              60_000);      //  1min — exchange health
 setInterval(fetchRecentSignals,      15_000);      // 15s — sinais recentes (painel direito)
+setInterval(fetchRegimeDetailed,     60_000);      // 60s — regime BTC detalhado (independente do refresh)
 clockTick();
 
 // ─────────────────────────────────────────────────────────────────────────────

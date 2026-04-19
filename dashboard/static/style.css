@@ -3111,9 +3111,9 @@ body {
 
 .regime-layer-row {
   display: grid;
-  grid-template-columns: 16px 90px 1fr 36px;
+  grid-template-columns: 16px 80px 1fr 68px 36px;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   padding: 2px 0;
 }
 .rl-value {
@@ -3207,6 +3207,6 @@ body {
 
 @media (max-width: 768px) {
   .right-panel { height: auto; }
-  .regime-layer-row { grid-template-columns: 16px 80px 1fr; }
+  .regime-layer-row { grid-template-columns: 16px 80px 1fr 36px; }
   .rl-value { display: none; }
 }
