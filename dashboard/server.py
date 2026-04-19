@@ -308,6 +308,8 @@ async def startup_event():
     asyncio.create_task(_news_sentinel_loop())
     # Full Market Scanner — varre todos os contratos MEXC a cada 90s
     asyncio.create_task(_fms_loop())
+    # Mercado MEXC Futures — atualiza cache de bubbles a cada 60s
+    asyncio.create_task(_bubbles_loop())
     # Funding Extreme Scanner — detecta funding extremo em todos contratos a cada 120s
     asyncio.create_task(_funding_scan_loop())
     # Daily Summary — resumo diário às 08:00 UTC via Telegram
@@ -636,35 +638,29 @@ def get_funding_extreme():
 _bubbles_cache: dict = {"data": None, "cached_at": 0.0}
 _BUBBLES_TTL = 60  # segundos — atualiza a cada 1 min
 
-@app.get("/api/crypto-bubbles")
-def get_crypto_bubbles():
-    """
-    Retorna top 80 coins por volume para o Crypto Bubbles chart.
-    Usa MEXC Futures ticker (contract.mexc.com) — 1 request, todos os dados.
-    Campos: symbol, price, change_pct_24h, volume_usd_24h, bubble_size, oi_usd.
-    """
-    now = _time.time()
-    cached = _bubbles_cache.get("data")
-    if cached and (now - _bubbles_cache.get("cached_at", 0)) < _BUBBLES_TTL:
-        return JSONResponse(content=cached)
+_BUBBLES_EXCLUDE = {
+    'STOCK', 'ETF', 'NVDA', 'TSLA', 'AAPL', 'AMZN', 'GOOGL', 'GOOGLSTOCK',
+    'META', 'MSTR', 'MSFT', 'NFLX', 'AMD', 'INTC', 'BABA', 'SNDK',
+    'PYPL', 'UBER', 'ABNB', 'PLTR', 'SNAP', 'SHOP', 'HOOD', 'RBLX', 'PINS',
+    'GOLD', 'SILVER', 'OIL', 'USOIL', 'UKOIL', 'COPPER', 'NATGAS',
+    'SPX', 'SPY', 'NDX', 'DJI', 'VIX', 'EWY', 'EWJ', 'US30',
+}
 
+
+def _is_bubble_excluded(sym_base: str) -> bool:
+    u = sym_base.upper()
+    if u in _BUBBLES_EXCLUDE:
+        return True
+    return any(kw in u for kw in ['STOCK', 'SPX', 'NDX', 'EWJ', 'EWY', 'GOOGLSTOCK'])
+
+
+def _refresh_bubbles_cache() -> bool:
+    """Busca tickers MEXC Futures e atualiza _bubbles_cache. Retorna True se OK."""
     try:
-        r    = _req.get("https://contract.mexc.com/api/v1/contract/ticker", timeout=8)
+        r    = _req.get("https://contract.mexc.com/api/v1/contract/ticker", timeout=15)
         data = r.json().get("data", [])
-
-        _BUBBLES_EXCLUDE = {
-            'STOCK', 'ETF', 'NVDA', 'TSLA', 'AAPL', 'AMZN', 'GOOGL', 'GOOGLSTOCK',
-            'META', 'MSTR', 'MSFT', 'NFLX', 'AMD', 'INTC', 'BABA', 'SNDK',
-            'PYPL', 'UBER', 'ABNB', 'PLTR', 'SNAP', 'SHOP', 'HOOD', 'RBLX', 'PINS',
-            'GOLD', 'SILVER', 'OIL', 'USOIL', 'UKOIL', 'COPPER', 'NATGAS',
-            'SPX', 'SPY', 'NDX', 'DJI', 'VIX', 'EWY', 'EWJ', 'US30',
-        }
-
-        def _is_bubble_excluded(sym_base: str) -> bool:
-            u = sym_base.upper()
-            if u in _BUBBLES_EXCLUDE:
-                return True
-            return any(kw in u for kw in ['STOCK', 'SPX', 'NDX', 'EWJ', 'EWY', 'GOOGLSTOCK'])
+        if not data:
+            return False
 
         bubbles = []
         for item in data:
@@ -684,38 +680,52 @@ def get_crypto_bubbles():
                     continue
                 oi_usd = hold_vol * price
                 bubbles.append({
-                    "symbol":        sym_base,
-                    "price":         price,
-                    "change_pct":    round(rfr * 100, 2),
-                    "volume_usd":    round(amount24, 0),
-                    "oi_usd":        round(oi_usd, 0),
-                    "funding_rate":  round(funding, 6),
+                    "symbol":       sym_base,
+                    "price":        price,
+                    "change_pct":   round(rfr * 100, 2),
+                    "volume_usd":   round(amount24, 0),
+                    "oi_usd":       round(oi_usd, 0),
+                    "funding_rate": round(funding, 6),
                 })
             except Exception:
                 continue
 
-        # Sort by volume desc, top 80
         bubbles.sort(key=lambda x: x["volume_usd"], reverse=True)
         bubbles = bubbles[:80]
 
-        # Normalizar bubble_size (0-100) baseado em volume
         if bubbles:
             max_vol = bubbles[0]["volume_usd"]
             for b in bubbles:
                 b["bubble_size"] = round(b["volume_usd"] / max_vol * 100, 1)
 
-        result = {
+        _bubbles_cache["data"] = {
             "fetched_at": _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime()),
-            "coins": bubbles
+            "coins": bubbles,
         }
-        _bubbles_cache["data"]      = result
-        _bubbles_cache["cached_at"] = now
-        return JSONResponse(content=result)
-
+        _bubbles_cache["cached_at"] = _time.time()
+        return True
     except Exception as e:
-        if cached:
-            return JSONResponse(content=cached)
-        return JSONResponse(content={"fetched_at": None, "coins": [], "error": str(e)})
+        log.warning(f"[BUBBLES] Refresh falhou: {e}")
+        return False
+
+
+@app.get("/api/crypto-bubbles")
+async def get_crypto_bubbles():
+    """
+    Retorna top 80 coins por volume — Mercado MEXC Futures.
+    Serve do cache (atualizado em background a cada 60s).
+    """
+    cached = _bubbles_cache.get("data")
+    if cached:
+        return JSONResponse(content=cached)
+    # Cache vazio (cold start): tentar refresh síncrono via thread
+    try:
+        ok = await asyncio.to_thread(_refresh_bubbles_cache)
+        if ok:
+            return JSONResponse(content=_bubbles_cache["data"])
+    except Exception:
+        pass
+    return JSONResponse(content={"fetched_at": None, "coins": [], "status": "aguardando_dados"})
 
 
 @app.get("/api/full-market-scan")
@@ -783,6 +793,24 @@ async def _fms_loop():
         except Exception as _e:
             _fmslog.error(f"[FMS] Loop error: {_e}")
         await asyncio.sleep(90)
+
+
+async def _bubbles_loop():
+    """Atualiza cache de Mercado MEXC Futures a cada 60s em background."""
+    import logging as _log
+    _blog = _log.getLogger("bubbles")
+    await asyncio.sleep(5)   # offset curto: começa 5s após startup
+    while True:
+        try:
+            ok = await asyncio.to_thread(_refresh_bubbles_cache)
+            if ok:
+                n = len((_bubbles_cache.get("data") or {}).get("coins", []))
+                _blog.info(f"[BUBBLES] Cache atualizado: {n} coins")
+            else:
+                _blog.warning("[BUBBLES] Refresh retornou falso — MEXC sem dados")
+        except Exception as _e:
+            _blog.error(f"[BUBBLES] Loop error: {_e}")
+        await asyncio.sleep(60)
 
 
 async def _altcoin_scan_loop():

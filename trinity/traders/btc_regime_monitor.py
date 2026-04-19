@@ -26,7 +26,9 @@ Transições (o sinal de ouro):
   BULL → NEUTRAL     = "BTC MOMENTUM FADING"       → reduzir confiança pump
   BEAR → NEUTRAL     = "BTC SELLING EXHAUSTION"    → reduzir confiança crash
 """
+import json
 import logging
+import os
 import time
 from typing import Dict, Optional, Tuple
 
@@ -48,6 +50,49 @@ _previous_regime: Dict  = {"direction": "NEUTRAL", "ts": 0.0}
 _funding_history: list  = []  # últimos 10 funding rates para detectar aceleração
 CACHE_TTL               = 30
 TRANSITION_MEMORY_S     = 300  # transição é "recente" por 5 minutos
+
+# ── Cache persistente (2 níveis) ──────────────────────────────────────────
+# Nível 1: variável em RAM — sobrevive entre chamadas, morre no restart
+_last_valid_regime: Dict  = {}
+_last_valid_ts:     float = 0.0
+# Nível 2: arquivo em disco — sobrevive entre restarts (limitado a 2h)
+_REGIME_CACHE_FILE = (
+    "/data/cache/btc_regime_last.json"
+    if os.path.isdir("/data/cache")
+    else os.path.join(os.path.dirname(__file__), "..", "..", "cache", "btc_regime_last.json")
+)
+_DISK_CACHE_MAX_AGE = 7200  # 2 horas — além disso considera dados obsoletos
+
+
+def _load_regime_disk_cache() -> Dict:
+    """Carrega o último regime válido do disco. Retorna {} se inexistente/obsoleto."""
+    try:
+        path = os.path.abspath(_REGIME_CACHE_FILE)
+        if not os.path.exists(path):
+            return {}
+        with open(path, "r") as f:
+            data = json.load(f)
+        age = time.time() - data.get("_cached_at", 0)
+        if age > _DISK_CACHE_MAX_AGE:
+            log.warning(f"[BTCRegime] Cache disco obsoleto ({age/3600:.1f}h) — ignorando")
+            return {}
+        log.info(f"[BTCRegime] Cache disco carregado (age={age:.0f}s)")
+        return data
+    except Exception as e:
+        log.debug(f"[BTCRegime] Erro ao ler cache disco: {e}")
+        return {}
+
+
+def _save_regime_disk_cache(regime: Dict) -> None:
+    """Salva o regime válido em disco para sobreviver ao restart."""
+    try:
+        path = os.path.abspath(_REGIME_CACHE_FILE)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        payload = {**regime, "_cached_at": time.time()}
+        with open(path, "w") as f:
+            json.dump(payload, f)
+    except Exception as e:
+        log.debug(f"[BTCRegime] Erro ao salvar cache disco: {e}")
 
 # ── Rate limit adaptativo ─────────────────────────────────────────────────
 # Após _API_MAX_ERRORS falhas consecutivas, o endpoint entra em backoff
@@ -74,10 +119,16 @@ _MONTHLY_SEASONALITY = {
 }
 
 
+def _is_valid_regime(regime: dict) -> bool:
+    """Considera válido se pelo menos um score > 0 (dados reais, não zeros)."""
+    return bool(regime) and (regime.get("bull_score", 0) > 0 or regime.get("bear_score", 0) > 0)
+
+
 def get_btc_regime() -> dict:
     """
     Retorna regime BTC com detecção de transição.
-    Cache de 30s — nunca faz request por candidato.
+    Cache de 30s em RAM. Quando API falha, retorna último resultado válido
+    (nível 1: RAM, nível 2: disco) em vez de zeros.
 
     Returns:
         {
@@ -101,9 +152,12 @@ def get_btc_regime() -> dict:
             "confirmations":    int,    # quantas camadas concordam (0-5)
         }
     """
+    global _last_valid_regime, _last_valid_ts
+
     now = time.time()
+
+    # ── Cache quente de 30s (hit mais frequente) ──────────────────────────
     if _regime_cache["data"] and (now - _regime_cache["ts"]) < CACHE_TTL:
-        # ── Stale data alert: avisa se o cache tem mais de 2 min ──────────
         cache_age_s = now - _regime_cache["ts"]
         if cache_age_s > 120:
             log.warning(
@@ -112,13 +166,58 @@ def get_btc_regime() -> dict:
             )
         return _regime_cache["data"]
 
+    # ── Tentar análise completa ───────────────────────────────────────────
     try:
         regime = _full_analysis()
         _regime_cache.update({"data": regime, "ts": now})
+
+        # Salvar no cache de 2 níveis se resultado for válido
+        if _is_valid_regime(regime):
+            _last_valid_regime = regime
+            _last_valid_ts     = now
+            regime["source"]   = "live"
+            _save_regime_disk_cache(regime)
+        else:
+            # Análise retornou zeros — tentar retornar último válido
+            log.warning("[BTCRegime] Análise retornou zeros — usando cache persistente")
+            return _get_cached_fallback()
+
         return regime
+
     except Exception as e:
         log.warning(f"[BTCRegime] Erro na análise: {e}")
-        return _default_regime()
+        return _get_cached_fallback()
+
+
+def _get_cached_fallback() -> dict:
+    """
+    Retorna o último regime válido disponível:
+    1. RAM (_last_valid_regime)
+    2. Disco (_REGIME_CACHE_FILE)
+    3. _default_regime() como último recurso
+    """
+    global _last_valid_regime, _last_valid_ts
+
+    # Nível 1: RAM
+    if _is_valid_regime(_last_valid_regime):
+        age = time.time() - _last_valid_ts
+        log.info(f"[BTCRegime] Usando cache RAM (age={age:.0f}s)")
+        fallback = {**_last_valid_regime, "source": "cache_memory"}
+        return fallback
+
+    # Nível 2: Disco
+    disk = _load_regime_disk_cache()
+    if _is_valid_regime(disk):
+        age = time.time() - disk.get("_cached_at", 0)
+        log.info(f"[BTCRegime] Usando cache disco (age={age:.0f}s)")
+        # Popular nível 1 com dados do disco
+        _last_valid_regime = disk
+        _last_valid_ts     = disk.get("_cached_at", 0)
+        return {**disk, "source": "cache_disk"}
+
+    # Último recurso
+    log.warning("[BTCRegime] Nenhum cache válido — retornando default (zeros)")
+    return _default_regime()
 
 
 def _full_analysis() -> dict:

@@ -2385,7 +2385,7 @@ setInterval(updateFundingExtreme, FUNDING_REFRESH_MS);
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const MARKET_REFRESH_MS = 60_000; // 1 min
-let _marketData = [];
+let _marketData = null;  // null = nunca carregou, [] = carregou mas vazio
 let _marketTf   = 'change_pct'; // 'change_pct' ou 'funding_rate'
 
 function _fmtPrice(p) {
@@ -2401,8 +2401,12 @@ function renderMarketTable() {
   if (!container) return;
 
   const coins = _marketData;
-  if (!coins || !coins.length) {
+  if (coins === null) {
     container.innerHTML = '<p class="no-data" style="padding:24px 16px">Carregando mercado...</p>';
+    return;
+  }
+  if (!coins.length) {
+    container.innerHTML = '<p class="no-data" style="padding:24px 16px">Aguardando dados de mercado MEXC...</p>';
     return;
   }
 
@@ -2478,6 +2482,7 @@ async function updateMarketTable() {
     renderMarketTable();
   } catch (e) {
     console.error('[MarketTable] fetch falhou:', e);
+    if (_marketData === null) { _marketData = []; renderMarketTable(); }
   }
 }
 
