@@ -3,7 +3,7 @@ dashboard/server.py — Servidor do Dashboard de Trading
 Execute com: uvicorn dashboard.server:app --host 0.0.0.0 --port 8000 --reload
 v2026-04-19: Market Movers Scanner, BTC Regime cache 2-nível, Mercado MEXC async
 """
-from fastapi import FastAPI, Request
+from fastapi import BackgroundTasks, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, Response
 from pathlib import Path
@@ -191,6 +191,7 @@ async def _apify_loop():
 
 
 _analysis_running = False   # flag para evitar runs concorrentes
+_movers_scan_running = False  # flag para /api/movers/run
 
 
 async def _crash_scan_loop():
@@ -751,6 +752,32 @@ async def api_movers_trending():
         return JSONResponse(content={"trending": trending, "count": len(trending)})
     except Exception as e:
         return JSONResponse(content={"trending": [], "count": 0, "error": str(e)})
+
+
+@app.get("/api/movers/run")
+async def api_movers_run(background_tasks: BackgroundTasks):
+    """Força scan imediato do Market Movers Scanner.
+
+    Retorna 202 {"status":"started"} ou 409 {"status":"already_running"}.
+    """
+    global _movers_scan_running
+    if _movers_scan_running:
+        return JSONResponse(content={"status": "already_running"}, status_code=409)
+
+    async def _do_scan():
+        global _movers_scan_running
+        _movers_scan_running = True
+        try:
+            from trinity.modules.market_movers import get_scanner as _get_movers
+            await asyncio.to_thread(_get_movers().scan)
+        except Exception as _e:
+            import logging as _log
+            _log.getLogger(__name__).warning(f"[movers/run] scan falhou: {_e}")
+        finally:
+            _movers_scan_running = False
+
+    background_tasks.add_task(_do_scan)
+    return JSONResponse(content={"status": "started"}, status_code=202)
 
 
 @app.get("/api/outcomes/health")
