@@ -235,7 +235,9 @@ class MarketMoversScanner:
 
         # ── 1. Tickers MEXC ───────────────────────────────────────────────
         try:
-            resp = requests.get(MEXC_TICKER_URL, timeout=15, headers=_HEADERS)
+            # Sem headers customizados — igual ao FMS (evita bloqueio de WAF)
+            resp = requests.get(MEXC_TICKER_URL, timeout=20)
+            resp.raise_for_status()
             tickers = resp.json().get("data", [])
         except Exception as e:
             log.error(f"[Movers] Falha ao buscar tickers MEXC: {e}")
