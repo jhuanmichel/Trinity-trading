@@ -780,6 +780,134 @@ async def api_movers_run(background_tasks: BackgroundTasks):
     return JSONResponse(content={"status": "started"}, status_code=202)
 
 
+@app.get("/api/pump-radar/test")
+async def api_pump_radar_test():
+    """Envia sinal de teste do Pump Radar pro Telegram com dados dummy (BTC).
+
+    Confirma que o pipeline de envio (formatação + Telegram) funciona.
+    Retorna 200 {"status":"sent"} ou 500 {"status":"error", "error": "..."}.
+    """
+    _DUMMY_PUMP = {
+        "symbol":            "BTC",
+        "price":             67_250.0,
+        "price_change_pct":  2.8,
+        "opportunity_score": 82.0,
+        "expected_move_pct": 7.5,
+        "move_classification": "STRONG",
+        "recommended_action":  "Aguardar reteste de $66,800 para entrada confirmada",
+        "dna_pattern":       "SILENT_ACCUM + SQUEEZE",
+        "probability_pct":   74,
+        "component_scores": {
+            "silent_acc": 21.5,
+            "squeeze":    19.0,
+            "gravity":    22.0,
+            "breakout":   19.5,
+        },
+        "top_signals": [
+            "Funding negativo extremo -0.08% (shorts pagando)",
+            "OI crescendo +12% em 4h sem movimento de preço",
+            "Liquidity cluster acima $68,500 — alvo gravitacional",
+            "Volume spot divergindo: preço flat + acumulação silenciosa",
+        ],
+        "_smart_plans": {
+            "recommended_plan": "A",
+            "plan_a": {
+                "label":       "Entrada Conservadora",
+                "instruction": "limit em reteste do suporte",
+                "entry":  66_800.0,
+                "stop":   65_900.0,
+                "tp1":    68_200.0,
+                "tp2":    69_500.0,
+                "tp3":    71_000.0,
+                "rr_ratio": 2.8,
+            },
+            "plan_b": {
+                "label":       "Entrada Agressiva",
+                "instruction": "market order agora",
+                "entry":  67_250.0,
+                "stop":   66_100.0,
+                "tp1":    68_800.0,
+                "tp2":    70_200.0,
+                "tp3":    72_000.0,
+                "rr_ratio": 2.2,
+            },
+        },
+    }
+    try:
+        from trinity.traders.predictive_pump_trader.predictive_pump_trader import _send_pump_telegram
+        import asyncio as _asyncio
+        await _asyncio.to_thread(_send_pump_telegram, _DUMMY_PUMP)
+        return JSONResponse(content={"status": "sent", "symbol": "BTC", "type": "pump_test"})
+    except Exception as e:
+        import logging as _log
+        _log.getLogger(__name__).warning(f"[pump-radar/test] erro: {e}")
+        return JSONResponse(content={"status": "error", "error": str(e)}, status_code=500)
+
+
+@app.get("/api/crash-radar/test")
+async def api_crash_radar_test():
+    """Envia sinal de teste do Crash Radar pro Telegram com dados dummy (BTC).
+
+    Confirma que o pipeline de envio (formatação + Telegram) funciona.
+    Retorna 200 {"status":"sent"} ou 500 {"status":"error", "error": "..."}.
+    """
+    _DUMMY_CRASH = {
+        "symbol":            "BTC",
+        "price":             67_250.0,
+        "price_change_pct":  -3.2,
+        "opportunity_score": 80.0,
+        "expected_move_pct": 8.0,
+        "move_classification": "STRONG",
+        "recommended_action":  "Short confirmado abaixo de $66,900 — bearish engulfing 4H",
+        "dna_pattern":       "LEVERAGE_OVERLOAD + WHALE_DUMP",
+        "probability_pct":   71,
+        "component_scores": {
+            "cascade":    21.0,
+            "collapse":   19.5,
+            "whale":      18.5,
+            "volatility": 21.0,
+        },
+        "top_signals": [
+            "OI +25% últimas 4h — alavancagem extrema acumulada",
+            "Funding positivo 0.15% (longs pagando muito)",
+            "Whale dump: $12M vendidos em bloco nos últimos 30min",
+            "Orderbook fino — spread alargando, suporte se dissolvendo",
+        ],
+        "_smart_plans": {
+            "recommended_plan": "A",
+            "plan_a": {
+                "label":       "Short Conservador",
+                "instruction": "limit no reteste da resistência",
+                "entry":  67_500.0,
+                "stop":   68_400.0,
+                "tp1":    66_000.0,
+                "tp2":    64_500.0,
+                "tp3":    62_800.0,
+                "rr_ratio": 2.6,
+            },
+            "plan_b": {
+                "label":       "Short Agressivo",
+                "instruction": "market order agora",
+                "entry":  67_250.0,
+                "stop":   68_100.0,
+                "tp1":    65_700.0,
+                "tp2":    64_000.0,
+                "tp3":    62_000.0,
+                "rr_ratio": 2.1,
+            },
+        },
+    }
+    try:
+        from trinity.traders.predictive_crash_trader.predictive_crash_trader import _send_crash_telegram
+        import asyncio as _asyncio
+        await _asyncio.to_thread(_send_crash_telegram, _DUMMY_CRASH)
+        return JSONResponse(content={"status": "sent", "symbol": "BTC", "type": "crash_test"})
+    except Exception as e:
+        import logging as _log
+        _log.getLogger(__name__).warning(f"[crash-radar/test] erro: {e}")
+        return JSONResponse(content={"status": "error", "error": str(e)}, status_code=500)
+
+
 @app.get("/api/outcomes/health")
 async def api_outcomes_health():
     """Saúde do registro de outcomes: total, último, fontes ativas, saudável?"""
