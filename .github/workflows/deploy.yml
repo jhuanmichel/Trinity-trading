@@ -1,0 +1,15 @@
+name: Deploy to Render
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        run: |
+          curl -sf --max-time 30 -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+          echo "✅ Deploy acionado no Render"
