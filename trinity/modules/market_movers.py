@@ -22,13 +22,10 @@ import requests
 log = logging.getLogger(__name__)
 
 # ── Configuração ───────────────────────────────────────────────────────────
-MEXC_TICKER_URL = "https://contract.mexc.com/api/v1/contract/ticker"
-MIN_VOLUME_USDT = 500_000  # ignorar contratos com volume < 500k USD 24h
-
-_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; TradingBot/1.0)",
-    "Accept": "application/json",
-}
+# MEXC Spot 24h ticker — api.mexc.com não sofre geo-blocking no Render
+# (contract.mexc.com/api/v1/contract/ticker retorna 403 de IPs cloud)
+MEXC_TICKER_URL = "https://api.mexc.com/api/v3/ticker/24hr"
+MIN_VOLUME_USDT = 500_000  # ignorar pares com volume < 500k USD 24h
 
 # Limites de variação absoluta 24h por tier
 TIER_THRESHOLDS = {
@@ -235,10 +232,12 @@ class MarketMoversScanner:
 
         # ── 1. Tickers MEXC ───────────────────────────────────────────────
         try:
-            # Sem headers customizados — igual ao FMS (evita bloqueio de WAF)
+            # api.mexc.com/v3 (Spot) — não bloqueado por geo-IP no Render
             resp = requests.get(MEXC_TICKER_URL, timeout=20)
             resp.raise_for_status()
-            tickers = resp.json().get("data", [])
+            raw = resp.json()
+            # Resposta é lista plana (sem wrapper {"data": [...]})
+            tickers = raw if isinstance(raw, list) else raw.get("data", [])
         except Exception as e:
             log.error(f"[Movers] Falha ao buscar tickers MEXC: {e}")
             with self._lock:
@@ -265,20 +264,22 @@ class MarketMoversScanner:
 
         for item in tickers:
             try:
-                sym = item.get("symbol", "")
-                if not sym.endswith("_USDT"):
+                # Spot API retorna símbolo sem underscore: "SOLUSDT" → "SOL_USDT"
+                sym_raw = item.get("symbol", "")
+                if not sym_raw.endswith("USDT"):
                     continue
+                sym = sym_raw[:-4] + "_USDT"  # "SOLUSDT" → "SOL_USDT"
 
-                price    = float(item.get("lastPrice",   0) or 0)
-                rfr      = float(item.get("riseFallRate", 0) or 0)
-                amount24 = float(item.get("amount24",    0) or 0)
-                funding  = float(item.get("fundingRate", 0) or 0)
-                hold_vol = float(item.get("holdVol",     0) or 0)
+                price    = float(item.get("lastPrice",          0) or 0)
+                pcp      = float(item.get("priceChangePercent", 0) or 0)
+                amount24 = float(item.get("quoteVolume",        0) or 0)
+                funding  = 0.0   # não disponível na Spot API
+                hold_vol = 0.0   # OI não disponível na Spot API
 
                 if price <= 0 or amount24 < MIN_VOLUME_USDT:
                     continue
 
-                change_pct = rfr * 100   # riseFallRate é decimal (ex: -0.0117 → -1.17%)
+                change_pct = pcp * 100   # priceChangePercent é decimal (ex: -0.0373 → -3.73%)
                 tier = self._get_tier(change_pct)
                 if not tier:
                     continue
