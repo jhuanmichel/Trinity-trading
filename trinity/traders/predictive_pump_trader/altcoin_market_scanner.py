@@ -37,8 +37,15 @@ import requests
 log = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-MEXC_FUTURES         = "https://contract.mexc.com/api/v1/contract"
+# MEXC_FUTURES bloqueado por geo-IP no Render — usar apenas MEXC_SPOT (api.mexc.com)
+MEXC_FUTURES         = "https://contract.mexc.com/api/v1/contract"  # referência apenas
 MEXC_SPOT            = "https://api.mexc.com/api/v3"
+
+# Mapeamento de intervalos MEXC Futures → MEXC Spot
+_INTERVAL_MAP = {
+    "Min1": "1m", "Min5": "5m", "Min15": "15m", "Min30": "30m",
+    "Min60": "60m", "Hour4": "4h", "Day1": "1d",
+}
 CG_BASE              = "https://open-api-v3.coinglass.com/api"
 BINANCE_FAPI         = "https://fapi.binance.com"
 
@@ -357,29 +364,40 @@ def _get_spot_volume_mexc(symbol: str) -> float:
 # ── MEXC Futures helpers ──────────────────────────────────────────────────────
 
 def _fetch_universe() -> List[dict]:
-    """Busca todos os tickers MEXC Futures USDT."""
+    """Busca todos os tickers via MEXC Spot 24h (api.mexc.com — sem geo-block no Render)."""
     try:
         r = requests.get(
-            f"{MEXC_FUTURES}/ticker",
-            headers=_HEADERS,
+            f"{MEXC_SPOT}/ticker/24hr",   # sem params → retorna todos os símbolos
             timeout=REQUEST_TIMEOUT,
         )
         r.raise_for_status()
-        payload = r.json()
-        # MEXC wrapper: {"success": true, "data": [...]}
-        tickers = payload.get("data", payload) if isinstance(payload, dict) else payload
-        if not isinstance(tickers, list):
-            log.error(f"[PumpScanner] Formato inesperado MEXC: {type(tickers)}")
+        raw = r.json()
+        tickers_raw = raw if isinstance(raw, list) else raw.get("data", [])
+        if not isinstance(tickers_raw, list):
+            log.error(f"[PumpScanner] Formato inesperado: {type(tickers_raw)}")
             return []
-        return [
-            t for t in tickers
-            if isinstance(t, dict)
-            and str(t.get("symbol", "")).endswith("_USDT")
-            and not _is_synthetic(_from_mexc(str(t.get("symbol", ""))))
-            and _from_mexc(str(t.get("symbol", ""))) not in EXCLUDED_KEYWORDS
-        ]
+
+        # Normaliza campos Spot → formato Futures esperado pelos filtros
+        tickers = []
+        for item in tickers_raw:
+            spot_sym = str(item.get("symbol", ""))
+            if not spot_sym.endswith("USDT"):
+                continue
+            mexc_sym = spot_sym[:-4] + "_USDT"   # "SOLUSDT" → "SOL_USDT"
+            coin = _from_mexc(mexc_sym)
+            if _is_synthetic(coin) or coin in EXCLUDED_KEYWORDS:
+                continue
+            tickers.append({
+                "symbol":       mexc_sym,
+                "lastPrice":    item.get("lastPrice", 0),
+                "riseFallRate": float(item.get("priceChangePercent", 0) or 0),
+                "amount24":     float(item.get("quoteVolume", 0) or 0),
+                "fundingRate":  0.0,   # não disponível em Spot API
+                "holdVol":      0.0,   # OI não disponível em Spot API
+            })
+        return tickers
     except Exception as e:
-        log.error(f"[PumpScanner] Erro ao buscar universo MEXC: {e}")
+        log.error(f"[PumpScanner] Erro ao buscar universo: {e}")
         return []
 
 
@@ -472,22 +490,28 @@ def _filter_pump_candidates(tickers: List[dict]) -> List[dict]:
 
 
 def _get_ticker(mexc_symbol: str) -> dict:
-    """Busca ticker de um símbolo específico."""
+    """Busca ticker via MEXC Spot 24h (api.mexc.com — sem geo-block)."""
     try:
+        spot_sym = mexc_symbol.replace("_", "")   # "SOL_USDT" → "SOLUSDT"
         r = requests.get(
-            f"{MEXC_FUTURES}/ticker",
-            params={"symbol": mexc_symbol},
-            headers=_HEADERS,
+            f"{MEXC_SPOT}/ticker/24hr",
+            params={"symbol": spot_sym},
             timeout=REQUEST_TIMEOUT,
         )
         r.raise_for_status()
-        payload = r.json()
-        data = payload.get("data", payload) if isinstance(payload, dict) else payload
-        if isinstance(data, list):
-            return data[0] if data else {}
-        if isinstance(data, dict):
-            return data
-        return {}
+        item = r.json()
+        if not isinstance(item, dict):
+            return {}
+        # Mapeia campos Spot → campos Futures esperados pelos detectores
+        return {
+            "symbol":       mexc_symbol,
+            "lastPrice":    item.get("lastPrice", 0),
+            "riseFallRate": float(item.get("priceChangePercent", 0) or 0),
+            "amount24":     float(item.get("quoteVolume", 0) or 0),
+            "volume24":     float(item.get("volume", 0) or 0),
+            "fundingRate":  0.0,   # não disponível em Spot API
+            "holdVol":      0.0,   # OI não disponível em Spot API
+        }
     except Exception as e:
         log.debug(f"[PumpScanner] Ticker error {mexc_symbol}: {e}")
         return {}
@@ -495,19 +519,18 @@ def _get_ticker(mexc_symbol: str) -> dict:
 
 def _get_orderbook(mexc_symbol: str) -> dict:
     """
-    Busca orderbook MEXC Futures.
-    MEXC depth: {"asks": [{price, vol}, ...], "bids": [...]}
-    ou listas [[price, vol], ...]
+    Busca orderbook via MEXC Spot (api.mexc.com — sem geo-block).
+    Spot depth: {"bids": [["price", "qty"], ...], "asks": [...]}
     """
     try:
+        spot_sym = mexc_symbol.replace("_", "")   # "SOL_USDT" → "SOLUSDT"
         r = requests.get(
-            f"{MEXC_FUTURES}/depth/{mexc_symbol}",
-            headers=_HEADERS,
+            f"{MEXC_SPOT}/depth",
+            params={"symbol": spot_sym, "limit": 5},
             timeout=REQUEST_TIMEOUT,
         )
         r.raise_for_status()
-        payload = r.json()
-        data = payload.get("data", payload) if isinstance(payload, dict) else payload
+        data = r.json()
 
         def normalize_side(side_list):
             result = []
@@ -534,41 +557,28 @@ def _get_orderbook(mexc_symbol: str) -> dict:
 
 def _get_klines(mexc_symbol: str, interval: str = "Min15", limit: int = 48) -> list:
     """
-    Busca klines MEXC Futures.
-    MEXC retorna dict com arrays paralelos: {time:[...], open:[...], high:[...], ...}
-    Normaliza para formato [[ts, o, h, l, c, v], ...]
+    Busca klines via MEXC Spot (api.mexc.com — sem geo-block).
+    Spot retorna lista: [[openTime, open, high, low, close, volume, closeTime, ...], ...]
+    Normaliza para [[ts, o, h, l, c, v], ...] compatível com os detectores.
     """
     try:
+        spot_sym = mexc_symbol.replace("_", "")          # "SOL_USDT" → "SOLUSDT"
+        spot_int = _INTERVAL_MAP.get(interval, "15m")    # "Min15" → "15m"
         r = requests.get(
-            f"{MEXC_FUTURES}/kline/{mexc_symbol}",
-            params={"interval": interval, "limit": limit},
-            headers=_HEADERS,
+            f"{MEXC_SPOT}/klines",
+            params={"symbol": spot_sym, "interval": spot_int, "limit": limit},
             timeout=REQUEST_TIMEOUT,
         )
         r.raise_for_status()
-        payload = r.json()
-        data = payload.get("data", payload) if isinstance(payload, dict) else payload
+        data = r.json()
 
-        if isinstance(data, dict):
-            # MEXC kline dict: {time, open, high, low, close, vol, ...}
-            times  = data.get("time",  [])
-            opens  = data.get("open",  [])
-            highs  = data.get("high",  [])
-            lows   = data.get("low",   [])
-            closes = data.get("close", [])
-            vols   = data.get("vol",   data.get("volume", []))
-            n = min(len(times), len(opens), len(highs), len(lows), len(closes), len(vols))
-            return [
-                [str(times[i]), str(opens[i]), str(highs[i]),
-                 str(lows[i]),  str(closes[i]), str(vols[i])]
-                for i in range(n)
-            ]
-
+        result = []
         if isinstance(data, list):
-            # Formato lista de objetos ou listas
-            result = []
             for k in data:
-                if isinstance(k, dict):
+                if isinstance(k, (list, tuple)) and len(k) >= 6:
+                    # Spot: [openTime, open, high, low, close, volume, ...]
+                    result.append([str(x) for x in k[:6]])
+                elif isinstance(k, dict):
                     result.append([
                         str(k.get("t", k.get("time", 0))),
                         str(k.get("o", k.get("open",  0))),
@@ -577,11 +587,7 @@ def _get_klines(mexc_symbol: str, interval: str = "Min15", limit: int = 48) -> l
                         str(k.get("c", k.get("close", 0))),
                         str(k.get("v", k.get("vol",   0))),
                     ])
-                elif isinstance(k, (list, tuple)) and len(k) >= 6:
-                    result.append([str(x) for x in k[:6]])
-            return result
-
-        return []
+        return result
     except Exception as e:
         log.debug(f"[PumpScanner] Klines error {mexc_symbol}: {e}")
         return []
@@ -589,26 +595,20 @@ def _get_klines(mexc_symbol: str, interval: str = "Min15", limit: int = 48) -> l
 
 def _get_recent_trades(mexc_symbol: str, limit: int = 100) -> list:
     """
-    Busca trades recentes MEXC Futures.
-    MEXC deals: [{p: preço, v: qty (com sinal), T: ts, ...}]
-    v positivo = buy, v negativo = sell (não há campo 'm' como Binance).
-    Normaliza para formato {"p", "q", "m"} compatível com detectores.
+    Busca trades recentes via MEXC Spot (api.mexc.com — sem geo-block).
+    Spot trades: [{price, qty, isBuyerMaker, time, ...}]
+    isBuyerMaker=True → buyer é maker → agressão de venda (is_sell=True)
+    Normaliza para {"p", "q", "m"} compatível com detectores.
     """
     try:
+        spot_sym = mexc_symbol.replace("_", "")   # "SOL_USDT" → "SOLUSDT"
         r = requests.get(
-            f"{MEXC_FUTURES}/deals/{mexc_symbol}",
-            params={"limit": limit},
-            headers=_HEADERS,
+            f"{MEXC_SPOT}/trades",
+            params={"symbol": spot_sym, "limit": limit},
             timeout=REQUEST_TIMEOUT,
         )
         r.raise_for_status()
-        payload = r.json()
-        data = payload.get("data", payload) if isinstance(payload, dict) else payload
-
-        # MEXC pode retornar {"resultList": [...]} dentro de data
-        if isinstance(data, dict):
-            data = data.get("resultList", data.get("list", []))
-
+        data = r.json()
         if not isinstance(data, list):
             return []
 
@@ -617,27 +617,13 @@ def _get_recent_trades(mexc_symbol: str, limit: int = 100) -> list:
             if not isinstance(t, dict):
                 continue
             try:
-                price_val = float(t.get("p", t.get("price", 0)))
-                # MEXC: v é sempre positivo — direção fica em T (1=buy, 2=sell)
-                size_raw  = t.get("v", t.get("size", t.get("vol", 0)))
-                qty       = abs(float(size_raw))
-
-                # T=1 → taker buy (is_sell=False), T=2 → taker sell (is_sell=True)
-                t_field = t.get("T")
-                if t_field is not None:
-                    is_sell = (int(t_field) == 2)
-                else:
-                    # Fallback: sign de v caso seja negativo (outras versões da API)
-                    is_sell = float(size_raw) < 0
-
-                result.append({
-                    "p": str(price_val),
-                    "q": str(qty),
-                    "m": is_sell,   # True=sell, False=buy
-                })
+                price_val = float(t.get("price", t.get("p", 0)))
+                qty       = abs(float(t.get("qty", t.get("q", t.get("size", 0)))))
+                # isBuyerMaker=True → buyer era o maker → side agressora = venda
+                is_sell   = bool(t.get("isBuyerMaker", False))
+                result.append({"p": str(price_val), "q": str(qty), "m": is_sell})
             except (ValueError, TypeError):
                 continue
-
         return result
     except Exception as e:
         log.debug(f"[PumpScanner] Trades error {mexc_symbol}: {e}")

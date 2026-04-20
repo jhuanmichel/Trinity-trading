@@ -36,6 +36,7 @@ from morning_brief       import run_morning_brief
 from cycle_intelligence import run_cycle_intelligence
 from funding_rate_manager import get_manager as _get_funding_manager
 from trinity.traders.predictive_pump_trader.predictive_pump_trader import run_pump_cycle as _run_pump_cycle
+from trinity.traders.predictive_crash_trader.predictive_crash_trader import run_crash_cycle as _run_crash_cycle
 from outcome_tracker import get_tracker as _get_tracker
 from high_conviction_filter import get_filter as _get_hcf
 
@@ -1027,6 +1028,33 @@ def run_pump_radar():
         log.info("✅ Pump Radar concluído.\n")
     except Exception as e:
         log.error(f"💥 ERRO (pump_radar): {e}", exc_info=True)
+
+
+def run_crash_radar():
+    """
+    Tarefa 5: Crash Radar — detecta crash institucional antes de acontecer.
+    Scan de altcoins + alertas Telegram para candidatos com score >= 75.
+    """
+    log.info("📉 [CRASH RADAR] Scan de altcoins para crash iminente...")
+    try:
+        result = _run_crash_cycle()
+        candidates = result.get("candidates", [])
+        log.info(
+            f"[CrashRadar] {result.get('coins_scanned', 0)} coins scaneadas | "
+            f"{len(candidates)} candidatos qualificados | "
+            f"duração: {result.get('scan_duration_s', 0):.1f}s"
+        )
+        if candidates:
+            top = candidates[0]
+            log.info(
+                f"[CrashRadar] Top: {top.get('symbol')} | "
+                f"score {top.get('opportunity_score', 0):.0f} | "
+                f"{top.get('move_classification', top.get('crash_classification', '?'))} | "
+                f"-{top.get('expected_move_pct', 0):.1f}%"
+            )
+        log.info("✅ Crash Radar concluído.\n")
+    except Exception as e:
+        log.error(f"💥 ERRO (crash_radar): {e}", exc_info=True)
 
 
 if __name__ == "__main__":
