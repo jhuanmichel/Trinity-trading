@@ -25,6 +25,9 @@ import MarketContext from './components/charts/MarketContext'
 // UI primitives
 import ErrorBoundary from './components/ui/ErrorBoundary'
 
+// V2 design system showcase (rota ?showcase=1 — nao afeta dashboard normal)
+import { Showcase } from './screens/Showcase'
+
 // Store + hooks
 import useSignalStore from './store/useSignalStore'
 import useMarketContext from './hooks/useMarketContext'
@@ -98,6 +101,12 @@ const TAB_VIEWS = {
 // ── Root ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
+  // V2 Design System Showcase — gate via query string (?showcase=1)
+  // Bypassa dashboard normal, nao consome hooks/polls. Valida primitives isolados.
+  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('showcase') === '1') {
+    return <Showcase />
+  }
+
   const { activeTab, sidebarOpen } = useSignalStore()
 
   // Inicializa todos os polls de dados
