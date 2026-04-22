@@ -22,6 +22,9 @@ import AltcoinRadar from './components/radar/AltcoinRadar'
 // Market context
 import MarketContext from './components/charts/MarketContext'
 
+// UI primitives
+import ErrorBoundary from './components/ui/ErrorBoundary'
+
 // Store + hooks
 import useSignalStore from './store/useSignalStore'
 import useMarketContext from './hooks/useMarketContext'
@@ -86,10 +89,10 @@ const MarketView = memo(() => {
 })
 
 const TAB_VIEWS = {
-  signals:  <SignalsView />,
-  altcoins: <AltcoinsView />,
-  radar:    <RadarView />,
-  market:   <MarketView />,
+  signals:  <ErrorBoundary label="Signals — erro ao carregar"><SignalsView /></ErrorBoundary>,
+  altcoins: <ErrorBoundary label="Altcoins — erro ao carregar"><AltcoinsView /></ErrorBoundary>,
+  radar:    <ErrorBoundary label="Radar — erro ao carregar"><RadarView /></ErrorBoundary>,
+  market:   <ErrorBoundary label="Market — erro ao carregar"><MarketView /></ErrorBoundary>,
 }
 
 // ── Root ───────────────────────────────────────────────────────────────────────
