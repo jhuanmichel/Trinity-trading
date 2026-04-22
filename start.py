@@ -97,6 +97,17 @@ def _run_scheduler():
     _outcome_health = _get_outcome_monitor()   # auto-detecta /data/logs ou logs/
     schedule.every(1).hours.do(_outcome_health.check)
 
+    # Reversal Hunter — diagnostico horario (Go/No-Go gate) acumula por 24h antes de decidir
+    # Implementacao do Reversal Hunter em si fica aguardando analyze_pump_diag.py
+    def run_pump_diag():
+        try:
+            from scripts.diag_pump_candidates_hourly import run_pump_diag as _run
+            _run()
+        except Exception as _e:
+            log.error(f"[DiagHourly] Erro: {_e}")
+
+    schedule.every(1).hours.do(run_pump_diag)
+
     log.info("Bot scheduler iniciado.")
     run_institutional_analysis()   # roda imediatamente ao subir
     run_optimization_report()      # gera relatório inicial (pode ser "insufficient_data")
