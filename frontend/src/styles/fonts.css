@@ -1,0 +1,5 @@
+/* Trinity V2 — Fontes adicionais ao design system institucional.
+   IBM Plex Mono e Inter ja sao carregados em globals.css (V1).
+   Space Grotesk e a unica fonte nova, usada em display headlines V2. */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
