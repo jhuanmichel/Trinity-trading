@@ -57,7 +57,8 @@ log = logging.getLogger(__name__)
 
 # ─── Cache ────────────────────────────────────────────────────────────────────
 _cache: Dict[str, Any] = {}
-CACHE_TTL = 300  # segundos
+CACHE_TTL                  = 60    # segundos — reduzido de 300 (stale demais)
+CACHE_PRICE_INVALIDATE_PCT = 0.5   # % — invalida cache se preço moveu mais que isto
 
 
 # ─── Setups neurais raros ─────────────────────────────────────────────────────
@@ -101,6 +102,27 @@ class NeuralEngine:
             cnn_model         = self.cnn_model,
             mlp_model         = self.mlp_model,
         )
+
+        # Log estado real de treino dos modelos PyTorch.
+        # Se PyTorch esta disponivel mas nenhum modelo tem pesos treinados,
+        # os modelos delegam para fallbacks estatisticos em tempo de inferencia.
+        try:
+            from .retraining_pipeline import TORCH_AVAILABLE as _TA
+        except Exception:
+            _TA = False
+        _wrappers = [self.lstm_model, self.transformer, self.cnn_model, self.mlp_model]
+        _trained = sum(
+            1 for w in _wrappers
+            if hasattr(w, "_model") and getattr(w._model, "_has_trained_weights", False)
+        )
+        if _TA and _trained == 0:
+            log.warning(
+                "[NeuralEngine] PyTorch disponível mas 0/4 modelos têm pesos treinados. "
+                "Rodando 100% em fallback estatístico (honesto)."
+            )
+        elif _TA:
+            log.info(f"[NeuralEngine] {_trained}/4 modelos PyTorch com pesos treinados.")
+
         log.info("[NeuralEngine] ✅ Inicialização completa.")
 
     def analyze(
@@ -423,14 +445,27 @@ def run_neural_analysis(
     Returns:
         Dict com análise neural completa
     """
-    # Verifica cache
+    # Verifica cache (TTL + invalidação por movimento de preço)
     cache_key = f"neural_{symbol}"
     now = time.time()
     if cache_key in _cache:
         cached_at, cached_data = _cache[cache_key]
-        if now - cached_at < CACHE_TTL:
-            log.debug(f"[NeuralEngine] Cache hit: {symbol} ({now - cached_at:.0f}s)")
-            return cached_data
+        age = now - cached_at
+        if age < CACHE_TTL:
+            cached_price = cached_data.get("_price_at_cache", price)
+            if cached_price and cached_price > 0:
+                pct_move = abs(price - cached_price) / cached_price * 100
+                if pct_move < CACHE_PRICE_INVALIDATE_PCT:
+                    log.debug(
+                        f"[NeuralEngine] Cache hit: {symbol} "
+                        f"({age:.0f}s, Δ{pct_move:.2f}%)"
+                    )
+                    return cached_data
+                else:
+                    log.debug(
+                        f"[NeuralEngine] Cache invalidado por movimento: "
+                        f"Δ{pct_move:.2f}% ≥ {CACHE_PRICE_INVALIDATE_PCT}%"
+                    )
 
     # Executa análise
     engine = _get_engine()
@@ -453,5 +488,7 @@ def run_neural_analysis(
         smc_mtf_data=smc_mtf_data,
     )
 
+    # Armazena preço no resultado pra invalidação de cache no próximo ciclo
+    result["_price_at_cache"] = price
     _cache[cache_key] = (now, result)
     return result

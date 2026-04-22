@@ -29,7 +29,10 @@ from .feature_engine import FeatureSet, _safe
 log = logging.getLogger(__name__)
 
 # ─── Regimes ──────────────────────────────────────────────────────────────────
-REGIME_TRENDING             = "TRENDING"
+# TRENDING dividido em UP/DOWN para que RegimeResult.to_neural_output()
+# possa mapear direcionalmente (antes: bias bull fixo em tendencia de baixa)
+REGIME_TRENDING_UP          = "TRENDING_UP"
+REGIME_TRENDING_DOWN        = "TRENDING_DOWN"
 REGIME_RANGING              = "RANGING"
 REGIME_REVERSAL             = "REVERSAL"
 REGIME_ACCUMULATION         = "ACCUMULATION"
@@ -38,7 +41,8 @@ REGIME_VOLATILITY_EXPANSION = "VOLATILITY_EXPANSION"
 REGIME_MANIPULATION         = "MANIPULATION"
 
 ALL_REGIMES = [
-    REGIME_TRENDING, REGIME_RANGING, REGIME_REVERSAL,
+    REGIME_TRENDING_UP, REGIME_TRENDING_DOWN,
+    REGIME_RANGING, REGIME_REVERSAL,
     REGIME_ACCUMULATION, REGIME_DISTRIBUTION,
     REGIME_VOLATILITY_EXPANSION, REGIME_MANIPULATION,
 ]
@@ -55,15 +59,25 @@ class RegimeResult:
 
     def to_neural_output(self) -> Dict[str, float]:
         """Mapeia regime para as probabilidades do output neural padrão."""
-        bull = self.probs.get(REGIME_TRENDING, 0) * 0.6 + self.probs.get(REGIME_ACCUMULATION, 0) * 0.8
-        bear = self.probs.get(REGIME_TRENDING, 0) * 0.4 + self.probs.get(REGIME_DISTRIBUTION, 0) * 0.7
-        side = self.probs.get(REGIME_RANGING, 0)  * 0.9 + self.probs.get(REGIME_ACCUMULATION, 0) * 0.2
-        vexp = self.probs.get(REGIME_VOLATILITY_EXPANSION, 0)
+        tr_up = self.probs.get(REGIME_TRENDING_UP, 0)
+        tr_dn = self.probs.get(REGIME_TRENDING_DOWN, 0)
+        acc   = self.probs.get(REGIME_ACCUMULATION, 0)
+        dist  = self.probs.get(REGIME_DISTRIBUTION, 0)
+        rng   = self.probs.get(REGIME_RANGING, 0)
+        vexp  = self.probs.get(REGIME_VOLATILITY_EXPANSION, 0)
         manip = self.probs.get(REGIME_MANIPULATION, 0)
-        rev  = self.probs.get(REGIME_REVERSAL, 0)
-        # Redistribui reversão proporcionalmente
-        bull += rev * 0.5
-        bear += rev * 0.5
+        rev   = self.probs.get(REGIME_REVERSAL, 0)
+
+        # Trending direcional: 85% pro lado consistente, 5% de leak pro oposto
+        bull = tr_up * 0.85 + tr_dn * 0.05 + acc * 0.75
+        bear = tr_dn * 0.85 + tr_up * 0.05 + dist * 0.75
+        side = rng * 0.90 + acc * 0.15
+
+        # Reversão: incerteza — divide entre bull/bear/side (nao mais fixo 50/50)
+        bull += rev * 0.35
+        bear += rev * 0.35
+        side += rev * 0.30
+
         return {
             "bull_probability":                 round(min(bull * 100, 100), 1),
             "bear_probability":                 round(min(bear * 100, 100), 1),
@@ -110,7 +124,9 @@ class RegimeDetector:
         try:
             scores = {}
 
-            scores[REGIME_TRENDING]             = self._score_trending(df, regime_data, trend_data)
+            tr = self._score_trending(df, regime_data, trend_data)
+            scores[REGIME_TRENDING_UP]   = tr["trending_up"]
+            scores[REGIME_TRENDING_DOWN] = tr["trending_down"]
             scores[REGIME_RANGING]              = self._score_ranging(df, regime_data, volume_data)
             scores[REGIME_REVERSAL]             = self._score_reversal(df, smc_data, mm_data, volume_data)
             scores[REGIME_ACCUMULATION]         = self._score_accumulation(df, volume_data, direction_data, cycle_data, inst_data)
@@ -154,40 +170,71 @@ class RegimeDetector:
 
     # ─── Scorers por regime ───────────────────────────────────────────────────
 
-    def _score_trending(self, df, regime_data, trend_data) -> float:
-        """TRENDING: tendência direcional forte com volume e momentum."""
-        score = 0.0
+    def _score_trending(self, df, regime_data, trend_data) -> Dict[str, float]:
+        """
+        TRENDING direcional.
+        Retorna {'trending_up': score_up, 'trending_down': score_down} — apenas
+        um lado e significativo. Direção vem do slope real + EMA + Ichimoku.
+        """
+        # Forca de tendencia (agnostica de direcao)
+        strength = 0.0
 
-        # ADX > 25 indica tendência
         adx = _safe(regime_data.get("adx", 20) if regime_data else 20)
-        if adx >= 40: score += 35
-        elif adx >= 25: score += 20
-        elif adx >= 18: score += 8
+        if adx >= 40: strength += 35
+        elif adx >= 25: strength += 20
+        elif adx >= 18: strength += 8
 
-        # EMA alinhado
-        ema_sig = trend_data.get("ema_signal", "") if trend_data else ""
-        if "BULL" in str(ema_sig).upper() or "BEAR" in str(ema_sig).upper():
-            score += 20
-
-        # ATR% indica movimento real
         atr_pct = _safe(regime_data.get("atr_pct", 1.0) if regime_data else 1.0)
-        if atr_pct >= 2.0: score += 15
-        elif atr_pct >= 1.0: score += 8
+        if atr_pct >= 2.0: strength += 15
+        elif atr_pct >= 1.0: strength += 8
 
-        # Análise de slope da sequência
+        # Direcao via slope real (polyfit)
+        direction = 0   # +1 up, -1 down, 0 indeterminado
+        slope_contrib = 0.0
         if len(df) >= 20:
             closes = df["close"].values[-20:]
             slope = np.polyfit(np.arange(20), closes, 1)[0]
-            slope_pct = abs(slope) / (closes.mean() + 1e-8) * 100
-            if slope_pct >= 0.3: score += 15
-            elif slope_pct >= 0.1: score += 8
+            slope_pct = slope / (closes.mean() + 1e-8) * 100
+            if slope_pct >= 0.10:
+                direction = 1
+                slope_contrib = min(slope_pct * 50, 30)
+            elif slope_pct <= -0.10:
+                direction = -1
+                slope_contrib = min(abs(slope_pct) * 50, 30)
 
-        # Ichimoku
+        # EMA alinhamento direcional
+        ema_up = 0.0
+        ema_dn = 0.0
         if trend_data:
-            if trend_data.get("ichimoku_above_cloud") or trend_data.get("ichimoku_below_cloud"):
-                score += 15
+            ema_sig = str(trend_data.get("ema_signal", "")).upper()
+            if "BULL" in ema_sig:
+                ema_up = 20
+            elif "BEAR" in ema_sig:
+                ema_dn = 20
 
-        return min(score, 100.0)
+        # Ichimoku direcional
+        ichi_up = 0.0
+        ichi_dn = 0.0
+        if trend_data:
+            if trend_data.get("ichimoku_above_cloud"):
+                ichi_up = 15
+            if trend_data.get("ichimoku_below_cloud"):
+                ichi_dn = 15
+
+        # Combina: direção determina lado primario, com penalty para o oposto
+        if direction == 1:
+            score_up = min(strength + slope_contrib + ema_up + ichi_up, 100.0)
+            score_dn = max(ema_dn + ichi_dn - strength * 0.3, 0.0)
+        elif direction == -1:
+            score_dn = min(strength + slope_contrib + ema_dn + ichi_dn, 100.0)
+            score_up = max(ema_up + ichi_up - strength * 0.3, 0.0)
+        else:
+            # Slope ambiguo: distribui igual mas limita ao total
+            half = (strength + ema_up + ichi_up + ema_dn + ichi_dn) * 0.25
+            score_up = min(half + ema_up + ichi_up, 60.0)
+            score_dn = min(half + ema_dn + ichi_dn, 60.0)
+
+        return {"trending_up": score_up, "trending_down": score_dn}
 
     def _score_ranging(self, df, regime_data, volume_data) -> float:
         """RANGING: mercado lateral / consolidação."""
@@ -410,9 +457,10 @@ class RegimeDetector:
 
     def _neutral_result(self) -> RegimeResult:
         uniform = 1.0 / len(ALL_REGIMES)
+        sub_score = round(100.0 * uniform, 1)
         return RegimeResult(
             regime=REGIME_RANGING,
             confidence=30.0,
-            sub_regimes={r: 14.0 for r in ALL_REGIMES},
+            sub_regimes={r: sub_score for r in ALL_REGIMES},
             probs={r: uniform for r in ALL_REGIMES},
         )

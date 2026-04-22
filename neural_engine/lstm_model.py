@@ -218,7 +218,10 @@ if TORCH_AVAILABLE:
             self.model  = _TorchLSTM()
             self.model.eval()
             self._initialized = False
+            self._has_trained_weights = False  # True apenas apos load_weights bem sucedido
             self._init_weights()
+            # Fallback estatistico pre-instanciado (pra delegar sem pesos treinados)
+            self._fallback = StatisticalLSTM()
 
         def _init_weights(self):
             """Inicialização Xavier para convergência estável."""
@@ -231,6 +234,11 @@ if TORCH_AVAILABLE:
 
         def predict(self, sequence: np.ndarray) -> Dict[str, float]:
             """Inferência em modo eval (sem gradientes)."""
+            # Sem pesos treinados: PyTorch retorna softmax aleatorio (xavier init).
+            # Delega pro fallback estatistico — honesto e mais util.
+            if not self._has_trained_weights:
+                log.debug("[LSTM] Pesos não-treinados → delegando StatisticalLSTM")
+                return self._fallback.predict(sequence)
             try:
                 with torch.no_grad():
                     x   = torch.FloatTensor(sequence).unsqueeze(0)  # [1, seq, feat]
@@ -279,7 +287,8 @@ class LSTMModel:
             state = torch.load(path, map_location="cpu")
             self._model.model.load_state_dict(state)
             self._model.model.eval()
-            log.info(f"[LSTM] Pesos carregados: {path}")
+            self._model._has_trained_weights = True
+            log.info(f"[LSTM] Pesos treinados carregados: {path}")
             return True
         except Exception as e:
             log.warning(f"[LSTM] Falha ao carregar pesos {path}: {e}")

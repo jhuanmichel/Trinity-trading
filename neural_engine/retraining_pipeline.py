@@ -20,6 +20,8 @@ Modo sem PyTorch:
 
 import logging
 import json
+import os
+import shutil
 import time
 import threading
 from datetime import datetime, timedelta
@@ -40,14 +42,56 @@ try:
 except ImportError:
     TORCH_AVAILABLE = False
 
+# ─── Persistência ─────────────────────────────────────────────────────────────
+# /data/ no Render é persistent disk. /tmp é ephemeral (perde em redeploy).
+# Fallback pra /tmp se /data/ não está montado (dev local).
+def _data_root() -> Path:
+    try:
+        candidate = Path("/data")
+        if candidate.exists() and os.access(str(candidate), os.W_OK):
+            return candidate
+    except Exception:
+        pass
+    return Path("/tmp")
+
+_DATA_ROOT = _data_root()
+
+WEIGHTS_DIR         = _DATA_ROOT / "neural" / "weights"
+SIGNAL_LOG_PATH     = _DATA_ROOT / "neural" / "signal_log.jsonl"
+PERFORMANCE_PATH    = _DATA_ROOT / "neural" / "performance.json"
+
+# Caminhos legados (pre-FIX B) para migracao one-shot
+_LEGACY_WEIGHTS_DIR = Path("/tmp/neural_weights")
+_LEGACY_SIGNAL_LOG  = Path("/tmp/neural_signal_log.jsonl")
+
 # ─── Constantes ───────────────────────────────────────────────────────────────
-WEIGHTS_DIR         = Path("/tmp/neural_weights")
-SIGNAL_LOG_PATH     = Path("/tmp/neural_signal_log.jsonl")
 RETRAIN_INTERVAL_H  = 24    # horas entre retreinamentos
 LABEL_DELAY_H       = 12    # horas após sinal para atribuir label
 MIN_SAMPLES_RETRAIN = 50    # mínimo de amostras para retreinar
 MAX_BUFFER_SIZE     = 500   # máximo de amostras no buffer
 LABEL_THRESHOLD_PCT = 2.0   # % de movimento para classificar BULL/BEAR
+
+
+def _migrate_legacy_paths() -> None:
+    """Copia pesos/log de /tmp para /data/neural/ uma vez (idempotente)."""
+    try:
+        if _LEGACY_WEIGHTS_DIR.exists() and _LEGACY_WEIGHTS_DIR != WEIGHTS_DIR:
+            migrated = 0
+            for f in _LEGACY_WEIGHTS_DIR.glob("*.pt"):
+                dest = WEIGHTS_DIR / f.name
+                if not dest.exists():
+                    shutil.copy2(str(f), str(dest))
+                    migrated += 1
+            if migrated:
+                log.info(f"[Retrain] Migrado {migrated} peso(s) /tmp → {WEIGHTS_DIR}")
+
+        if (_LEGACY_SIGNAL_LOG.exists()
+                and _LEGACY_SIGNAL_LOG != SIGNAL_LOG_PATH
+                and not SIGNAL_LOG_PATH.exists()):
+            shutil.copy2(str(_LEGACY_SIGNAL_LOG), str(SIGNAL_LOG_PATH))
+            log.info(f"[Retrain] Log de sinais migrado: {SIGNAL_LOG_PATH}")
+    except Exception as e:
+        log.warning(f"[Retrain] Migração legacy falhou: {e}")
 
 
 # ─── Pipeline de Retreinamento ────────────────────────────────────────────────
@@ -79,8 +123,15 @@ class RetrainingPipeline:
         self._total_signals: int = 0
         self._correct_predictions: int = 0
 
-        # Carrega pesos existentes
-        WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
+        # Carrega pesos existentes (com persistência em /data/ se disponível)
+        try:
+            WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
+            SIGNAL_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            log.info(f"[Retrain] Persistência em: {_DATA_ROOT}/neural/")
+        except Exception as e:
+            log.error(f"[Retrain] Falha criando dirs em {_DATA_ROOT}/neural/: {e}")
+
+        _migrate_legacy_paths()
         self._load_all_weights()
 
     # ── API Pública ────────────────────────────────────────────────────────────

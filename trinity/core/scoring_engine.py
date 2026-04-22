@@ -43,7 +43,9 @@ BEARISH_STRONG_THR  = 28.0   # score ≤ 28 = STRONG BEARISH
 
 # Modificadores de regime de mercado
 REGIME_MODIFIERS = {
-    "TRENDING":             1.08,   # amplifica em tendência
+    "TRENDING_UP":          1.08,   # amplifica em tendência de alta
+    "TRENDING_DOWN":        1.08,   # amplifica em tendência de baixa
+    "TRENDING":             1.08,   # compat retroativa (pode aparecer em logs antigos)
     "RANGING":              0.92,   # atenua em lateral
     "REVERSAL":             0.88,   # máxima cautela em reversão
     "ACCUMULATION":         1.04,

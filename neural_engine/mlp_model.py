@@ -277,8 +277,13 @@ if TORCH_AVAILABLE:
                     nn.init.xavier_normal_(p)
                 elif "bias" in name:
                     nn.init.zeros_(p)
+            self._has_trained_weights = False
+            self._fallback = StatisticalMLP()
 
         def predict(self, feature_set: FeatureSet) -> Dict[str, float]:
+            if not self._has_trained_weights:
+                log.debug("[MLP] Pesos não-treinados → delegando StatisticalMLP")
+                return self._fallback.predict(feature_set)
             try:
                 with torch.no_grad():
                     x   = torch.FloatTensor(feature_set.tabular).unsqueeze(0)
@@ -320,6 +325,8 @@ class MLPModel:
             import torch
             self._model.model.load_state_dict(torch.load(path, map_location="cpu"))
             self._model.model.eval()
+            self._model._has_trained_weights = True
+            log.info(f"[MLP] Pesos treinados carregados: {path}")
             return True
         except Exception as e:
             log.warning(f"[MLP] Falha ao carregar pesos: {e}")

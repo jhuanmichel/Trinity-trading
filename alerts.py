@@ -545,6 +545,8 @@ def send_institutional_signal(
         # Emojis
         bias_emoji = {"LONG": "🟢", "SHORT": "🔴", "NEUTRAL": "⚪️"}.get(n_bias, "⚪️")
         regime_emoji = {
+            "TRENDING_UP":          "📈",
+            "TRENDING_DOWN":        "📉",
             "TRENDING":             "📈",
             "RANGING":              "↔️",
             "REVERSAL":             "🔄",
@@ -683,6 +685,8 @@ def send_trinity_signal(
     priority_label = priority_map.get(alert_priority, alert_priority)
 
     regime_emoji = {
+        "TRENDING_UP":          "📈",
+        "TRENDING_DOWN":        "📉",
         "TRENDING":             "📈",
         "RANGING":              "↔️",
         "REVERSAL":             "🔄",
@@ -840,6 +844,7 @@ def send_status_update(
 
         bias_emoji = {"LONG": "🟢", "SHORT": "🔴", "NEUTRAL": "⚪️"}.get(n_bias, "⚪️")
         regime_emoji = {
+            "TRENDING_UP": "📈", "TRENDING_DOWN": "📉",
             "TRENDING": "📈", "RANGING": "↔️", "REVERSAL": "🔄",
             "ACCUMULATION": "🟡", "DISTRIBUTION": "🟠",
             "VOLATILITY_EXPANSION": "💥", "MANIPULATION": "🎭",

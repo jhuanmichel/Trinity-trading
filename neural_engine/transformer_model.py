@@ -242,8 +242,14 @@ if TORCH_AVAILABLE:
                     nn.init.xavier_uniform_(p)
                 elif "bias" in name:
                     nn.init.zeros_(p)
+            self._has_trained_weights = False
+            self._fallback = StatisticalTransformer()
 
         def predict(self, feature_set: FeatureSet) -> Dict[str, float]:
+            # Sem pesos treinados: delega pro fallback estatistico
+            if not self._has_trained_weights:
+                log.debug("[Transformer] Pesos não-treinados → delegando StatisticalTransformer")
+                return self._fallback.predict(feature_set)
             try:
                 with torch.no_grad():
                     seq = torch.FloatTensor(feature_set.sequence).unsqueeze(0)
@@ -286,6 +292,8 @@ class TransformerModel:
             import torch
             self._model.model.load_state_dict(torch.load(path, map_location="cpu"))
             self._model.model.eval()
+            self._model._has_trained_weights = True
+            log.info(f"[Transformer] Pesos treinados carregados: {path}")
             return True
         except Exception as e:
             log.warning(f"[Transformer] Falha ao carregar pesos: {e}")

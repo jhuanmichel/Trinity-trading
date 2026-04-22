@@ -384,8 +384,13 @@ if TORCH_AVAILABLE:
                     nn.init.kaiming_normal_(p)
                 elif "bias" in name:
                     nn.init.zeros_(p)
+            self._has_trained_weights = False
+            self._fallback = StatisticalCNN()
 
         def predict(self, feature_set: FeatureSet) -> Dict[str, float]:
+            if not self._has_trained_weights:
+                log.debug("[CNN] Pesos não-treinados → delegando StatisticalCNN")
+                return self._fallback.predict(feature_set)
             try:
                 with torch.no_grad():
                     x   = torch.FloatTensor(feature_set.sequence).unsqueeze(0)
@@ -427,6 +432,8 @@ class CNNModel:
             import torch
             self._model.model.load_state_dict(torch.load(path, map_location="cpu"))
             self._model.model.eval()
+            self._model._has_trained_weights = True
+            log.info(f"[CNN] Pesos treinados carregados: {path}")
             return True
         except Exception as e:
             log.warning(f"[CNN] Falha ao carregar pesos: {e}")
