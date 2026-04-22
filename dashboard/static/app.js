@@ -2093,6 +2093,105 @@ async function updateMacroIndicator() {
   }
 }
 
+// ── Equity Curve (Trinity v7) ─────────────────────────────────────────────────
+
+async function loadEquity() {
+  try {
+    const r = await fetch('/api/equity-curve');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+
+    const totalEl = document.getElementById('equityTotal');
+    const total = Number(data.total || 0);
+    if (totalEl) {
+      const n = data.n || 0;
+      totalEl.textContent = `${total >= 0 ? '+' : ''}${total.toFixed(2)}% — ${n} trades`;
+      totalEl.style.color = total >= 0 ? 'var(--bull)' : 'var(--bear)';
+    }
+    drawEquity(data.curve || []);
+  } catch (e) {
+    console.error('[loadEquity] fetch falhou:', e);
+  }
+}
+
+function drawEquity(curve) {
+  const c = document.getElementById('equityCanvas');
+  if (!c) return;
+  const dpr  = window.devicePixelRatio || 1;
+  const rect = c.parentElement.getBoundingClientRect();
+  const Wcss = Math.max(320, rect.width - 24);   // menos padding do wrap
+  const Hcss = 240;
+  c.width  = Wcss * dpr;
+  c.height = Hcss * dpr;
+  c.style.width  = Wcss + 'px';
+  c.style.height = Hcss + 'px';
+  const ctx = c.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, Wcss, Hcss);
+
+  if (!curve.length) {
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.font = '13px var(--font, sans-serif)';
+    ctx.textAlign = 'center';
+    ctx.fillText('Sem trades resolvidos ainda', Wcss / 2, Hcss / 2);
+    return;
+  }
+
+  const P  = 28;
+  const vals = curve.map(p => Number(p.pnl) || 0);
+  const mn = Math.min(0, ...vals);
+  const mx = Math.max(0, ...vals);
+  const range = (mx - mn) || 1;
+  const x = i => P + (i / Math.max(1, curve.length - 1)) * (Wcss - 2 * P);
+  const y = v => Hcss - P - ((v - mn) / range) * (Hcss - 2 * P);
+
+  // Grid horizontal (3 linhas)
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 3; i++) {
+    const gy = P + (i / 3) * (Hcss - 2 * P);
+    ctx.beginPath();
+    ctx.moveTo(P, gy); ctx.lineTo(Wcss - P, gy);
+    ctx.stroke();
+  }
+
+  // Linha zero destaque
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(P, y(0)); ctx.lineTo(Wcss - P, y(0));
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Fill colorido sob a curva
+  ctx.beginPath();
+  ctx.moveTo(x(0), y(0));
+  curve.forEach((p, i) => ctx.lineTo(x(i), y(Number(p.pnl) || 0)));
+  ctx.lineTo(x(curve.length - 1), y(0));
+  ctx.closePath();
+  const lastPnl = vals[vals.length - 1];
+  ctx.fillStyle = lastPnl >= 0 ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.18)';
+  ctx.fill();
+
+  // Linha da curva
+  ctx.beginPath();
+  curve.forEach((p, i) => {
+    const px = x(i), py = y(Number(p.pnl) || 0);
+    if (i === 0) ctx.moveTo(px, py);
+    else         ctx.lineTo(px, py);
+  });
+  ctx.strokeStyle = lastPnl >= 0 ? 'var(--bull)' : 'var(--bear)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Labels Y (min/max)
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.font = '11px var(--mono, monospace)';
+  ctx.textAlign = 'left';
+  ctx.fillText(`${mx >= 0 ? '+' : ''}${mx.toFixed(1)}%`, 4, y(mx) + 4);
+  ctx.fillText(`${mn >= 0 ? '+' : ''}${mn.toFixed(1)}%`, 4, y(mn));
+}
+
 // ── Calendar Heatmap (Trinity v7) ─────────────────────────────────────────────
 
 async function loadCalendar() {
@@ -2185,6 +2284,7 @@ updatePumpRadar();                              // Pump Radar — primeiro carre
 updateAltcoinRadar();                           // Altcoin Radar — primeiro carregamento
 updateWinRate();                                // Performance Real — primeiro carregamento
 updateMacroIndicator();                         // News Sentinel — primeiro carregamento
+loadEquity();                                   // Equity Curve — primeiro carregamento
 loadCalendar();                                 // Calendar Heatmap — primeiro carregamento
 loadHealth();                                   // Exchange Health — primeiro carregamento
 setInterval(refresh,                REFRESH_MS);
@@ -2198,6 +2298,7 @@ setInterval(updatePumpRadar,        PUMP_REFRESH_MS);  // 30s — sincroniza com
 setInterval(updateAltcoinRadar,     300_000);      // 5min — sincroniza com ciclo do scanner
 setInterval(updateWinRate,          300_000);      // 5min — sincroniza com ciclo do OutcomeTracker
 setInterval(updateMacroIndicator,   120_000);      // 2min — sincroniza com ciclo do News Sentinel
+setInterval(loadEquity,             600_000);      // 10min — equity curve
 setInterval(loadCalendar,           600_000);      // 10min — calendar heatmap
 setInterval(loadHealth,              60_000);      //  1min — exchange health
 setInterval(fetchRecentSignals,      15_000);      // 15s — sinais recentes (painel direito)

@@ -2957,6 +2957,21 @@ body {
 }
 
 
+/* ── Equity Curve (Trinity v7) ──────────────────────────────────────── */
+.equity-wrap {
+  width: 100%;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+#equityCanvas {
+  width: 100%;
+  height: 240px;
+  display: block;
+}
+
+
 /* ── Calendar Heatmap (Trinity v7) ──────────────────────────────────── */
 .cal-wrap   { display: flex; flex-direction: column; gap: 8px; }
 .cal-grid   { display: flex; flex-wrap: wrap; gap: 3px; }
