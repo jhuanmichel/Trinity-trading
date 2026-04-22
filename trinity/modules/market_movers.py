@@ -1,21 +1,21 @@
 """
-market_movers.py — Market Movers Scanner v1
+market_movers.py — Market Movers Scanner v2 (Futures-only)
 
-Escaneia todos os 800+ contratos MEXC Futures a cada 10 minutos.
-Detecta movimentos de preço ≥5% em 24h e classifica em tiers.
+Escaneia todos os contratos MEXC FUTUROS a cada 10 minutos.
+Detecta movimentos de preço em 24h e classifica em tiers.
+Filtra agressivamente contra lista de símbolos com contrato futuro ativo —
+Trinity opera apenas futuros, então moedas spot-only são descartadas.
 
 Tiers:
-  PARABOLIC  ≥60%  → Telegram + Deep Dive + crash watchlist
-  EXTREME    ≥30%  → Telegram + crash watchlist (se em alta)
-  STRONG     ≥15%  → Telegram
-  MOVER      ≥5%   → apenas OutcomeTracker (sem Telegram) — ML data
-
-Gera 50-100 outcomes/dia para alimentar o modelo de ML.
+  PARABOLIC  ≥80%  → Telegram + Deep Dive + crash watchlist
+  EXTREME    ≥40%  → Telegram + crash watchlist (se em alta)
+  STRONG     ≥20%  → Telegram (se volume > 500k)
+  MOVER      ≥10%  → apenas OutcomeTracker (sem Telegram) — ML data
 """
 import logging
 import threading
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 import requests
 
@@ -24,15 +24,19 @@ log = logging.getLogger(__name__)
 # ── Configuração ───────────────────────────────────────────────────────────
 # MEXC Spot 24h ticker — api.mexc.com não sofre geo-blocking no Render
 # (contract.mexc.com/api/v1/contract/ticker retorna 403 de IPs cloud)
-MEXC_TICKER_URL = "https://api.mexc.com/api/v3/ticker/24hr"
-MIN_VOLUME_USDT = 500_000  # ignorar pares com volume < 500k USD 24h
+MEXC_TICKER_URL     = "https://api.mexc.com/api/v3/ticker/24hr"
+MEXC_CONTRACT_URL   = "https://contract.mexc.com/api/v1/contract/detail"  # pode falhar no Render
+MIN_VOLUME_USDT     = 500_000  # ignorar pares com volume < 500k USD 24h
+STRONG_MIN_VOLUME   = 500_000  # STRONG só envia Telegram se volume > 500k
 
-# Limites de variação absoluta 24h por tier
+FUTURES_REFRESH_INTERVAL = 3600  # 1h
+
+# Limites de variação absoluta 24h por tier (elevados para reduzir spam)
 TIER_THRESHOLDS = {
-    "PARABOLIC": 60.0,
-    "EXTREME":   30.0,
-    "STRONG":    15.0,
-    "MOVER":      5.0,
+    "PARABOLIC": 80.0,
+    "EXTREME":   40.0,
+    "STRONG":    20.0,
+    "MOVER":     10.0,
 }
 
 # Cooldown por símbolo por tier (segundos) — evita re-alertar o mesmo tier
@@ -46,6 +50,17 @@ _COOLDOWN_S = {
 # Tiers que enviam Telegram
 _TELEGRAM_TIERS = {"PARABOLIC", "EXTREME", "STRONG"}
 
+# Fallback hardcoded — top futuros garantidos caso CCXT e REST falhem no Render
+_FUTURES_FALLBACK: Set[str] = {
+    "BTC","ETH","SOL","XRP","DOGE","ADA","AVAX","DOT","LINK","MATIC",
+    "UNI","ATOM","FIL","APT","ARB","OP","SUI","SEI","TIA","INJ",
+    "NEAR","FTM","RUNE","AAVE","MKR","LDO","CRV","SNX","COMP","SUSHI",
+    "PEPE","SHIB","FLOKI","WIF","BONK","MEME","ORDI","1000SATS","RATS",
+    "BNB","LTC","BCH","ETC","TRX","TON","ALGO","VET","ICP","SAND",
+    "MANA","AXS","GALA","CHZ","ENJ","IMX","BLUR","JUP","JTO","PYTH",
+    "DYDX","GMX","STX","KAS","BEAM","ONDO","ENA","W","TNSR","REZ",
+}
+
 
 # ── MarketMoversScanner ────────────────────────────────────────────────────
 
@@ -55,6 +70,8 @@ class MarketMoversScanner:
     def __init__(self):
         self._lock      = threading.Lock()
         self._cooldowns: Dict[tuple, float] = {}
+        self._futures_symbols:       Set[str] = set()
+        self._futures_last_refresh:  float    = 0.0
         self._state: dict = {
             "status":          "idle",
             "last_scan_ts":    0.0,
@@ -64,7 +81,70 @@ class MarketMoversScanner:
             "trending":        [],
             "crash_watchlist": [],
             "tiers":           {"PARABOLIC": 0, "EXTREME": 0, "STRONG": 0, "MOVER": 0},
+            "futures_universe_size": 0,
         }
+
+    # ── Filtro de Futuros ──────────────────────────────────────────────────
+
+    def _refresh_futures_list(self) -> None:
+        """
+        Atualiza cache de bases com contrato futuro ativo.
+        Tenta CCXT primeiro (mais completo) → REST contract.mexc.com → fallback hardcoded.
+        Cache válido por FUTURES_REFRESH_INTERVAL segundos.
+        """
+        now = time.time()
+        if self._futures_symbols and (now - self._futures_last_refresh) < FUTURES_REFRESH_INTERVAL:
+            return
+
+        # 1) CCXT (pode falhar em IPs cloud do Render por usar contract.mexc.com)
+        try:
+            import ccxt
+            ex = ccxt.mexc({"options": {"defaultType": "swap"}})
+            markets = ex.load_markets()
+            bases = {
+                m.get("base", "")
+                for m in markets.values()
+                if (m.get("swap") or m.get("linear")) and m.get("base")
+            }
+            if len(bases) >= 100:
+                self._futures_symbols      = bases
+                self._futures_last_refresh = now
+                log.info(f"[Movers] Futures list via CCXT: {len(bases)} bases")
+                return
+        except Exception as e:
+            log.warning(f"[Movers] CCXT futures falhou: {e}")
+
+        # 2) REST contract.mexc.com (geo-block no Render → 403)
+        try:
+            r = requests.get(MEXC_CONTRACT_URL, timeout=10)
+            if r.status_code == 200:
+                data = r.json().get("data", [])
+                bases = {d.get("baseCoin", "") for d in data if d.get("baseCoin")}
+                if len(bases) >= 100:
+                    self._futures_symbols      = bases
+                    self._futures_last_refresh = now
+                    log.info(f"[Movers] Futures list via REST: {len(bases)} bases")
+                    return
+            else:
+                log.warning(f"[Movers] REST contract retornou {r.status_code}")
+        except Exception as e:
+            log.warning(f"[Movers] REST contract falhou: {e}")
+
+        # 3) Fallback hardcoded — garante funcionamento mesmo com geo-block total
+        if not self._futures_symbols:
+            self._futures_symbols      = set(_FUTURES_FALLBACK)
+            self._futures_last_refresh = now
+            log.warning(
+                f"[Movers] Usando fallback hardcoded: "
+                f"{len(self._futures_symbols)} futures bases"
+            )
+
+    def _is_futures_tradeable(self, symbol: str) -> bool:
+        """Verifica se a base do símbolo tem contrato futuro."""
+        self._refresh_futures_list()
+        # symbol pode ser: 'SOL_USDT', 'SOLUSDT', 'SOL'
+        base = symbol.replace("_USDT", "").replace("USDT", "").replace("_", "").upper()
+        return base in self._futures_symbols
 
     # ── Helpers internos ───────────────────────────────────────────────────
 
@@ -248,6 +328,10 @@ class MarketMoversScanner:
             log.warning("[Movers] Nenhum ticker retornado — MEXC vazio")
             return {}
 
+        # ── 1b. Refresh lista de futuros (cache 1h) ───────────────────────
+        self._refresh_futures_list()
+        futures_bases = set(self._futures_symbols)
+
         # ── 2. BTC Regime (contexto) ──────────────────────────────────────
         try:
             from trinity.traders.btc_regime_monitor import get_btc_regime
@@ -261,6 +345,7 @@ class MarketMoversScanner:
         crash_watchlist:   List[dict] = []
         alerts_sent        = 0
         tier_counts        = {t: 0 for t in TIER_THRESHOLDS}
+        rejected_spot_only = 0
 
         for item in tickers:
             try:
@@ -268,7 +353,13 @@ class MarketMoversScanner:
                 sym_raw = item.get("symbol", "")
                 if not sym_raw.endswith("USDT"):
                     continue
-                sym = sym_raw[:-4] + "_USDT"  # "SOLUSDT" → "SOL_USDT"
+                base = sym_raw[:-4].upper()
+                sym  = f"{base}_USDT"
+
+                # FILTRO CRÍTICO: descartar moedas sem contrato futuro
+                if futures_bases and base not in futures_bases:
+                    rejected_spot_only += 1
+                    continue
 
                 price    = float(item.get("lastPrice",          0) or 0)
                 pcp      = float(item.get("priceChangePercent", 0) or 0)
@@ -306,6 +397,10 @@ class MarketMoversScanner:
 
                 # MOVER: apenas OutcomeTracker, sem Telegram
                 if tier not in _TELEGRAM_TIERS:
+                    continue
+
+                # STRONG só envia Telegram se volume for suficiente (reduzir spam)
+                if tier == "STRONG" and amount24 < STRONG_MIN_VOLUME:
                     continue
 
                 # Verificar cooldown antes de processar STRONG+
@@ -365,18 +460,21 @@ class MarketMoversScanner:
         elapsed = round(time.time() - t0, 1)
         with self._lock:
             self._state.update({
-                "status":          "ok",
-                "last_scan_ts":    time.time(),
-                "last_scan_count": len(tickers),
-                "elapsed_s":       elapsed,
-                "alerts_sent":     alerts_sent,
-                "trending":        movers[:50],
-                "crash_watchlist": crash_watchlist,
-                "tiers":           tier_counts,
+                "status":                "ok",
+                "last_scan_ts":          time.time(),
+                "last_scan_count":       len(tickers),
+                "elapsed_s":             elapsed,
+                "alerts_sent":           alerts_sent,
+                "trending":              movers[:50],
+                "crash_watchlist":       crash_watchlist,
+                "tiers":                 tier_counts,
+                "futures_universe_size": len(futures_bases),
+                "rejected_spot_only":    rejected_spot_only,
             })
 
         log.info(
-            f"[Movers] Varredura OK: {len(tickers)} contratos, "
+            f"[Movers] Varredura OK: {len(tickers)} tickers Spot, "
+            f"{rejected_spot_only} rejeitados (sem futuros), "
             f"{len(movers)} movers (P={tier_counts['PARABOLIC']} "
             f"E={tier_counts['EXTREME']} S={tier_counts['STRONG']} "
             f"M={tier_counts['MOVER']}), "
