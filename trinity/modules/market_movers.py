@@ -426,6 +426,7 @@ class MarketMoversScanner:
                 # Deep Dive para PARABOLIC
                 if tier == "PARABOLIC":
                     try:
+                        import asyncio
                         from trinity.modules import get_deep_dive_trigger
                         ctx = {
                             "change_pct":  change_pct,
@@ -436,7 +437,11 @@ class MarketMoversScanner:
                             "btc_bias":    btc_bias,
                             "source":      "market_movers",
                         }
-                        get_deep_dive_trigger().analyze(sym, direction, ctx)
+                        # analyze() é coroutine — Market Movers roda em thread
+                        # daemon sem event loop, então usamos asyncio.run()
+                        # (isolated loop, bloqueia ~2-5s; aceitável pois PARABOLIC
+                        # é raro com threshold 80% + cooldown 30min por símbolo)
+                        asyncio.run(get_deep_dive_trigger().analyze(sym, direction, ctx))
                     except Exception as dd_err:
                         log.debug(f"[Movers] DeepDive {sym}: {dd_err}")
 
