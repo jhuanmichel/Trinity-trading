@@ -1,51 +1,31 @@
 /**
- * fetchFunding.js — Fetch funding rates via MEXC / Binance fallback
+ * fetchFunding.js — Fetch funding rates via backend proxy.
+ * Browser nao pode chamar fapi.binance.com / contract.mexc.com direto (CORS).
+ * /api/funding/{symbol} no backend lida com Binance + fallback MEXC + cache 30s.
  */
-
-const BINANCE_PREMIUM = 'https://fapi.binance.com/fapi/v1/premiumIndex'
-const MEXC_FUNDING    = 'https://contract.mexc.com/api/v1/contract/funding_rate'
 
 /**
  * Busca funding rate para um símbolo
  * @param {string} symbol — ex: 'BTCUSDT'
- * @returns {Promise<{ symbol, fundingRate, nextFundingTime }|null>}
+ * @returns {Promise<{ symbol, fundingRate, nextFundingTime, source }|null>}
  */
 export async function fetchFundingRate(symbol) {
-  // Tenta Binance primeiro (mais confiável para futuros)
   try {
-    const res = await fetch(`${BINANCE_PREMIUM}?symbol=${symbol}`, {
-      signal: AbortSignal.timeout(4000),
+    const res = await fetch(`/api/funding/${symbol}`, {
+      signal: AbortSignal.timeout(6000),
     })
-    if (res.ok) {
-      const data = await res.json()
-      return {
-        symbol,
-        fundingRate:     parseFloat(data.lastFundingRate ?? 0),
-        nextFundingTime: data.nextFundingTime ?? null,
-        source:          'binance',
-      }
+    if (!res.ok) return null
+    const data = await res.json()
+    if (data.error) return null
+    return {
+      symbol:          data.symbol ?? symbol,
+      fundingRate:     parseFloat(data.fundingRate ?? 0),
+      nextFundingTime: data.nextFundingTime ?? null,
+      source:          data.source ?? 'binance',
     }
-  } catch {/* fallthrough */}
-
-  // Fallback MEXC
-  try {
-    const mexcSym = symbol.replace('USDT', '_USDT')
-    const res = await fetch(`${MEXC_FUNDING}/${mexcSym}`, {
-      signal: AbortSignal.timeout(4000),
-    })
-    if (res.ok) {
-      const data = await res.json()
-      const rate  = data?.data?.fundingRate ?? 0
-      return {
-        symbol,
-        fundingRate:     parseFloat(rate),
-        nextFundingTime: null,
-        source:          'mexc',
-      }
-    }
-  } catch {/* ignore */}
-
-  return null
+  } catch {
+    return null
+  }
 }
 
 /**

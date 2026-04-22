@@ -1,26 +1,27 @@
 /**
- * fetchOpenInterest.js — Fetch open interest via Binance Futures
+ * fetchOpenInterest.js — Fetch open interest via backend proxy.
+ * Browser nao pode chamar fapi.binance.com direto (CORS).
+ * /api/open-interest/{symbol} backend: Binance + fallback MEXC + cache 30s.
  */
-
-const BINANCE_OI = 'https://fapi.binance.com/fapi/v1/openInterest'
 
 /**
  * Busca open interest de um símbolo
  * @param {string} symbol — ex: 'BTCUSDT'
- * @returns {Promise<{ symbol, openInterest, value }|null>}
+ * @returns {Promise<{ symbol, openInterest, value, source }|null>}
  */
 export async function fetchOpenInterest(symbol) {
   try {
-    const res = await fetch(`${BINANCE_OI}?symbol=${symbol}`, {
-      signal: AbortSignal.timeout(4000),
+    const res = await fetch(`/api/open-interest/${symbol}`, {
+      signal: AbortSignal.timeout(6000),
     })
     if (!res.ok) return null
     const data = await res.json()
+    if (data.error) return null
     return {
-      symbol,
+      symbol:       data.symbol ?? symbol,
       openInterest: parseFloat(data.openInterest ?? 0),
-      value:        null, // OI em USD (requer endpoint /v1/openInterestHist)
-      source:       'binance',
+      value:        null,
+      source:       data.source ?? 'binance',
     }
   } catch {
     return null

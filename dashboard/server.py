@@ -1745,6 +1745,140 @@ async def api_exchanges_health():
         return JSONResponse(content={"exchanges": [], "ts": time.time(), "error": str(e)})
 
 
+# ── Binance/MEXC Proxy (CORS fix — frontend usa /api/funding e /api/open-interest) ──
+
+_FUNDING_CACHE: dict = {}
+_OI_CACHE:      dict = {}
+_FUNDING_TTL_S = 30
+_OI_TTL_S      = 30
+
+
+def _fetch_binance_funding_sync(symbol: str) -> dict:
+    key = f"funding:{symbol}"
+    now = _time.time()
+    cached = _FUNDING_CACHE.get(key)
+    if cached and (now - cached["ts"]) < _FUNDING_TTL_S:
+        return cached["data"]
+    r = _req.get(
+        "https://fapi.binance.com/fapi/v1/premiumIndex",
+        params={"symbol": symbol}, timeout=5,
+    )
+    r.raise_for_status()
+    d = r.json()
+    result = {
+        "symbol":          d.get("symbol", symbol),
+        "fundingRate":     float(d.get("lastFundingRate", 0) or 0),
+        "markPrice":       float(d.get("markPrice", 0) or 0),
+        "nextFundingTime": d.get("nextFundingTime"),
+        "source":          "binance",
+    }
+    _FUNDING_CACHE[key] = {"ts": now, "data": result}
+    return result
+
+
+def _fetch_mexc_funding_sync(symbol: str) -> dict:
+    mexc_sym = symbol.replace("USDT", "_USDT") if "_" not in symbol else symbol
+    r = _req.get(
+        f"https://contract.mexc.com/api/v1/contract/funding_rate/{mexc_sym}",
+        timeout=5,
+    )
+    r.raise_for_status()
+    d = r.json()
+    rate = d.get("data", {}).get("fundingRate", 0)
+    return {
+        "symbol":          symbol,
+        "fundingRate":     float(rate or 0),
+        "markPrice":       0.0,
+        "nextFundingTime": None,
+        "source":          "mexc",
+    }
+
+
+def _fetch_oi_sync(symbol: str) -> dict:
+    key = f"oi:{symbol}"
+    now = _time.time()
+    cached = _OI_CACHE.get(key)
+    if cached and (now - cached["ts"]) < _OI_TTL_S:
+        return cached["data"]
+    # Binance primario
+    try:
+        r = _req.get(
+            "https://fapi.binance.com/fapi/v1/openInterest",
+            params={"symbol": symbol}, timeout=5,
+        )
+        r.raise_for_status()
+        d = r.json()
+        result = {
+            "symbol":       d.get("symbol", symbol),
+            "openInterest": float(d.get("openInterest", 0) or 0),
+            "source":       "binance",
+        }
+        _OI_CACHE[key] = {"ts": now, "data": result}
+        return result
+    except Exception:
+        pass
+    # Fallback MEXC
+    mexc_sym = symbol.replace("USDT", "_USDT") if "_" not in symbol else symbol
+    r = _req.get(
+        f"https://contract.mexc.com/api/v1/contract/open_interest/{mexc_sym}",
+        timeout=5,
+    )
+    r.raise_for_status()
+    d = r.json()
+    hold = d.get("data", {}).get("holdVol", 0)
+    result = {
+        "symbol":       symbol,
+        "openInterest": float(hold or 0),
+        "source":       "mexc",
+    }
+    _OI_CACHE[key] = {"ts": now, "data": result}
+    return result
+
+
+@app.get("/api/funding/{symbol}")
+async def api_funding(symbol: str):
+    """Proxy funding rate. Binance primary, MEXC fallback, cache 30s."""
+    sym = symbol.upper()
+    try:
+        data = await asyncio.to_thread(_fetch_binance_funding_sync, sym)
+        return JSONResponse(content=data)
+    except Exception as e_bin:
+        try:
+            data = await asyncio.to_thread(_fetch_mexc_funding_sync, sym)
+            return JSONResponse(content=data)
+        except Exception as e_mexc:
+            return JSONResponse(
+                status_code=502,
+                content={"error": f"binance: {e_bin}; mexc: {e_mexc}", "symbol": sym},
+            )
+
+
+@app.get("/api/funding-batch")
+async def api_funding_batch(symbols: str):
+    """Batch funding: ?symbols=BTCUSDT,ETHUSDT,SOLUSDT (max 20)."""
+    syms = [s.strip().upper() for s in symbols.split(",") if s.strip()][:20]
+    results = {}
+    for sym in syms:
+        try:
+            results[sym] = await asyncio.to_thread(_fetch_binance_funding_sync, sym)
+        except Exception as e:
+            results[sym] = {"error": str(e), "symbol": sym}
+    return JSONResponse(content={"results": results, "count": len(results)})
+
+
+@app.get("/api/open-interest/{symbol}")
+async def api_open_interest(symbol: str):
+    """Proxy open interest. Binance primary, MEXC fallback, cache 30s."""
+    try:
+        data = await asyncio.to_thread(_fetch_oi_sync, symbol.upper())
+        return JSONResponse(content=data)
+    except Exception as e:
+        return JSONResponse(
+            status_code=502,
+            content={"error": str(e), "symbol": symbol},
+        )
+
+
 # ── Equity Curve (Trinity v7) ──────────────────────────────────────────────────
 
 @app.get("/api/equity-curve")
