@@ -56,6 +56,11 @@ class OutcomeTracker:
         if signal.get("direction") in ("NO_TRADE", "NEUTRO"):
             return None
         signal_id = str(uuid.uuid4())
+
+        # Valida conviction_tier contra whitelist (defende contra corrupção upstream)
+        from trinity.outcomes.tiers import validate_tier
+        conviction_tier = validate_tier(signal.get("conviction_tier"), strict=False)
+
         entry = {
             "signal_id":      signal_id,
             "registered_at":  datetime.now(timezone.utc).isoformat(),
@@ -67,7 +72,7 @@ class OutcomeTracker:
             "tp2":            signal.get("tp2"),
             "symbol":         signal.get("symbol", "BTCUSDT"),
             "timestamp":      signal.get("timestamp", datetime.now(timezone.utc).isoformat()),
-            "conviction_tier": signal.get("conviction_tier", "MEDIUM"),
+            "conviction_tier": conviction_tier,
             "layer_scores":   signal.get("layer_scores", {}),
             # ── Campos adicionais para ML (ignorados se não fornecidos) ──────
             "source":         signal.get("source", "unknown"),
