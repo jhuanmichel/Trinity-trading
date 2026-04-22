@@ -1,10 +1,17 @@
 /**
  * useSignalStore.js — Zustand global store
- * Estado centralizado para todos os dados do Trinity dashboard
+ * Estado centralizado para todos os dados do Trinity dashboard.
+ *
+ * UI state (activeTab, sidebarOpen) persistido via middleware `persist`
+ * em localStorage key 'trinity:ui'. Dados de mercado (signals, smcAnalysis,
+ * etc.) ficam volateis — reidratados pelos hooks polls a cada mount.
  */
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
-const useSignalStore = create((set, get) => ({
+const useSignalStore = create(
+  persist(
+    (set, get) => ({
   // ── Estado principal ──────────────────────────────────────────
   signals:        [],       // histórico de sinais recentes
   currentSignal:  null,     // sinal ativo atual
@@ -60,6 +67,16 @@ const useSignalStore = create((set, get) => ({
 
   // Merge parcial de state externo (para updates batch)
   mergeState: (partial) => set(partial),
-}))
+    }),
+    {
+      name: 'trinity:ui',
+      version: 1,
+      partialize: (state) => ({
+        activeTab:   state.activeTab,
+        sidebarOpen: state.sidebarOpen,
+      }),
+    }
+  )
+)
 
 export default useSignalStore
