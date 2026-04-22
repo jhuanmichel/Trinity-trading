@@ -223,6 +223,10 @@ class OutcomeTracker:
             "exit_price":     exit_price,
             "registered_at":  s.get("registered_at", ""),
             "resolved_at":    now.isoformat(),
+            # Campos preservados do pending record (antes eram dropados
+            # causando 100% dos exports mostrarem source=missing)
+            "source":         s.get("source", "unknown"),
+            "btc_regime":     s.get("btc_regime", ""),
         }
 
     def _parse_ts(self, ts_str: str) -> Optional[datetime]:
