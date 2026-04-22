@@ -21,6 +21,15 @@ import requests
 
 log = logging.getLogger(__name__)
 
+# ========================================================================
+# KILL SWITCH — desativa TODOS os envios Telegram do Market Movers
+# Mudado para False em 22/04/2026 — alertas não-acionáveis (sinais tarde
+# demais, sem TP/SL, revertendo quando chegam). Scanner continua rodando
+# (outcomes são registrados, endpoints /api/movers/* ativos). Reativar
+# flipando para True.
+# ========================================================================
+MARKET_MOVERS_TELEGRAM_ENABLED = False
+
 # ── Configuração ───────────────────────────────────────────────────────────
 # MEXC Spot 24h ticker — api.mexc.com não sofre geo-blocking no Render
 # (contract.mexc.com/api/v1/contract/ticker retorna 403 de IPs cloud)
@@ -411,20 +420,21 @@ class MarketMoversScanner:
                 velocity = self._fetch_velocity(sym)
                 mover_entry["velocity"] = velocity
 
-                # Enviar Telegram
-                try:
-                    from alerts import send_message
-                    msg = self._format_telegram(
-                        sym, tier, change_pct, price, amount24, velocity, btc_bias
-                    )
-                    if send_message(msg):
-                        self._set_cooldown(sym, tier)
-                        alerts_sent += 1
-                except Exception as tg_err:
-                    log.warning(f"[Movers] Telegram {sym}: {tg_err}")
+                # Enviar Telegram (guarded por KILL SWITCH)
+                if MARKET_MOVERS_TELEGRAM_ENABLED:
+                    try:
+                        from alerts import send_message
+                        msg = self._format_telegram(
+                            sym, tier, change_pct, price, amount24, velocity, btc_bias
+                        )
+                        if send_message(msg):
+                            self._set_cooldown(sym, tier)
+                            alerts_sent += 1
+                    except Exception as tg_err:
+                        log.warning(f"[Movers] Telegram {sym}: {tg_err}")
 
-                # Deep Dive para PARABOLIC
-                if tier == "PARABOLIC":
+                # Deep Dive para PARABOLIC (guarded — tambem envia Telegram)
+                if tier == "PARABOLIC" and MARKET_MOVERS_TELEGRAM_ENABLED:
                     try:
                         import asyncio
                         from trinity.modules import get_deep_dive_trigger
