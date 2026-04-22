@@ -64,9 +64,22 @@ export function useCurrentState() {
       ?? (data.price ? data : null)
       ?? null
 
-    // SMC analysis pode estar em vários campos
-    const smc = data.smc_analysis ?? data.smcAnalysis
-      ?? data.smart_money ?? data ?? null
+    // SMC analysis: campos explicitamente nomeados — SEM fallback pro objeto
+    // inteiro (antes: "?? data" vazava 100+ campos pro store quando o backend
+    // nao incluia smart_money no current-state).
+    const smcRaw = data.smc_analysis ?? data.smcAnalysis
+      ?? data.smart_money ?? null
+
+    // Sanity: so aceita se tiver ao menos uma chave SMC-like conhecida.
+    const isValidSmc = smcRaw && typeof smcRaw === 'object' && (
+      'smc_score' in smcRaw ||
+      'liquidity_sweep' in smcRaw ||
+      'order_blocks' in smcRaw ||
+      'fair_value_gaps' in smcRaw ||
+      'bias' in smcRaw ||
+      'narrative' in smcRaw
+    )
+    const smc = isValidSmc ? smcRaw : null
 
     const sig = data.signal ?? data.current_signal ?? data.activeSignal ?? null
 
