@@ -28,6 +28,10 @@ import ErrorBoundary from './components/ui/ErrorBoundary'
 // V2 design system showcase (rota ?showcase=1 — nao afeta dashboard normal)
 import { Showcase } from './screens/Showcase'
 
+// V2 Shell + router (rota ?v2=1 — isolado, nao afeta dashboard normal)
+import { Shell } from './components/shell/Shell'
+import { useRouterStore } from './store/routerStore'
+
 // Store + hooks
 import useSignalStore from './store/useSignalStore'
 import useMarketContext from './hooks/useMarketContext'
@@ -107,6 +111,13 @@ export default function App() {
     return <Showcase />
   }
 
+  // V2 Shell — gate via query string (?v2=1)
+  // Shell institucional (TopBar + Ticker + Footer) envolvendo placeholder.
+  // Sessao 3 substituira o placeholder por screens reais.
+  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('v2') === '1') {
+    return <ShellV2Wrapper />
+  }
+
   const { activeTab, sidebarOpen } = useSignalStore()
 
   // Inicializa todos os polls de dados
@@ -159,5 +170,47 @@ export default function App() {
         }}
       />
     </div>
+  )
+}
+
+// ── V2 Shell wrapper (?v2=1 gate) ────────────────────────────────────────────
+// Isolado do dashboard legacy. Nao chama useSignalStore/useMarketContext/
+// useKeyboard — so os hooks V2 (dentro da Shell). Placeholder no body ate
+// Sessao 3 prover as screens reais.
+
+function ShellV2Wrapper() {
+  const route = useRouterStore((s) => s.route)
+  return (
+    <Shell>
+      <div
+        style={{
+          padding: 60,
+          textAlign: 'center',
+          color: 'var(--t-text-dim)',
+          fontFamily: 'var(--t-font-mono)',
+          fontSize: 11,
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+        }}
+      >
+        <div style={{ marginBottom: 16 }}>
+          SHELL V2 · ROTA ATIVA:{' '}
+          <strong style={{ color: 'var(--t-text)' }}>{route.toUpperCase()}</strong>
+        </div>
+        <div style={{ marginBottom: 24, color: 'var(--t-text-mut)', letterSpacing: '0.1em' }}>
+          Conteúdo será adicionado na Sessão 3.
+        </div>
+        <a
+          href="/app/"
+          style={{
+            color: 'var(--t-cobalt)',
+            letterSpacing: '0.14em',
+            textDecoration: 'none',
+          }}
+        >
+          ← Voltar ao dashboard atual
+        </a>
+      </div>
+    </Shell>
   )
 }
