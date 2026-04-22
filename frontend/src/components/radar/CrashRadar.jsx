@@ -4,6 +4,7 @@
 import React, { memo } from 'react'
 import { motion } from 'framer-motion'
 import { fmtPrice, fmtPct } from '../../engine/formatters'
+import EmptyState from '../ui/EmptyState'
 import './RadarShared.css'
 
 const CrashRadar = memo(({ candidates = [], scanTs }) => {
@@ -18,7 +19,12 @@ const CrashRadar = memo(({ candidates = [], scanTs }) => {
       </div>
 
       {candidates.length === 0 ? (
-        <div className="radar-empty">Sem candidatos</div>
+        <EmptyState
+          icon="🔻"
+          title="Nenhum crash detectado"
+          description="Radar ativo — sinais aparecem quando score bear atinge threshold."
+          compact
+        />
       ) : (
         <div className="radar-list">
           {candidates.map((c, i) => (

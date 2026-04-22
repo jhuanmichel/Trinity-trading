@@ -5,6 +5,7 @@ import React, { memo, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { fmtPrice, fmtPct, pctColor } from '../../engine/formatters'
 import ScoreGauge from '../ui/ScoreGauge'
+import EmptyState from '../ui/EmptyState'
 import './AltcoinRadar.css'
 
 /* ── Modal de detalhe ─────────────────────────────────────────────────────── */
@@ -268,12 +269,17 @@ const AltcoinRadar = memo(({ altcoinScan }) => {
 
       {/* Grid */}
       {coins.length === 0 ? (
-        <div className="alt-empty">
-          <span className="spinner" />
-          <span>Escaneando altcoins...</span>
-        </div>
+        <EmptyState
+          icon="🛰️"
+          title="Escaneando altcoins"
+          description="O scanner está processando o mercado. Resultados aparecem aqui em instantes."
+        />
       ) : filtered.length === 0 ? (
-        <div className="alt-empty">Nenhuma coin encontrada</div>
+        <EmptyState
+          icon="🔍"
+          title="Nenhuma coin encontrada"
+          description="Tente ajustar os filtros ou aguardar o próximo scan."
+        />
       ) : (
         <div className="alt-grid">
           {filtered.map((coin, i) => (

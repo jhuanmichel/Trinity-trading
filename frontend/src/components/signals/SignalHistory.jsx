@@ -4,15 +4,17 @@
 import React, { memo } from 'react'
 import { motion } from 'framer-motion'
 import { fmtPrice, fmtDate, directionColor } from '../../engine/formatters'
+import EmptyState from '../ui/EmptyState'
 import './SignalHistory.css'
 
 const SignalHistory = memo(({ signals = [] }) => {
   if (!signals.length) {
     return (
-      <div className="sh-empty">
-        <span className="spinner" />
-        <span>Aguardando sinais...</span>
-      </div>
+      <EmptyState
+        icon="📡"
+        title="Aguardando sinais"
+        description="O histórico aparecerá aqui conforme novos sinais forem registrados."
+      />
     )
   }
 
