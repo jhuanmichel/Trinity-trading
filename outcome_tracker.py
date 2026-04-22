@@ -58,14 +58,21 @@ class OutcomeTracker:
         signal_id = str(uuid.uuid4())
 
         # Valida conviction_tier contra whitelist (defende contra corrupção upstream)
-        from trinity.outcomes.tiers import validate_tier
+        from trinity.outcomes.tiers import (
+            validate_tier,
+            compute_empirical_tier,
+            get_tier_metadata,
+        )
         conviction_tier = validate_tier(signal.get("conviction_tier"), strict=False)
+        score_val       = signal.get("score", 0)
+        empirical_tier  = compute_empirical_tier(score_val)
+        tier_meta       = get_tier_metadata(score_val)
 
         entry = {
             "signal_id":      signal_id,
             "registered_at":  datetime.now(timezone.utc).isoformat(),
             "direction":      signal.get("direction", ""),
-            "score":          signal.get("score", 0),
+            "score":          score_val,
             "entry_price":    signal.get("entry_price", signal.get("entry", 0)),
             "stop_loss":      signal.get("stop_loss"),
             "tp1":            signal.get("tp1"),
@@ -77,6 +84,9 @@ class OutcomeTracker:
             # ── Campos adicionais para ML (ignorados se não fornecidos) ──────
             "source":         signal.get("source", "unknown"),
             "btc_regime":     signal.get("btc_regime", ""),
+            # Empirical tier dual-write (v1 calibrado em 22/abril/2026, n=2776)
+            "empirical_tier": empirical_tier,
+            "tier_metadata":  tier_meta,
         }
         try:
             PENDING_FILE.parent.mkdir(exist_ok=True)
@@ -232,6 +242,9 @@ class OutcomeTracker:
             # causando 100% dos exports mostrarem source=missing)
             "source":         s.get("source", "unknown"),
             "btc_regime":     s.get("btc_regime", ""),
+            # Empirical tier (V1) — calibrado em WR real, preservado do pending
+            "empirical_tier": s.get("empirical_tier", "UNKNOWN"),
+            "tier_metadata":  s.get("tier_metadata", {}),
         }
 
     def _parse_ts(self, ts_str: str) -> Optional[datetime]:
