@@ -1,68 +1,52 @@
 /**
- * RadarTile.jsx — Card compacto para simbolo secundario (ETH/SOL/etc).
+ * RadarTile.jsx — Tile generico para Radar Global (BTC dom, USDT dom, etc.).
+ * Visual fiel ao mockup Trinity Redesign.
  *
- * Layout: header (symbol + delta) + price grande + footer (sparkline
- * opcional). Sparkline nao disponivel no backend atual — mostra
- * placeholder ate endpoint de time series expor.
+ * Props:
+ *   label:  texto topo-esquerda (ex "BTC · 24H")
+ *   value:  valor grande colorido
+ *   sub:    subtexto monoespacado abaixo do value
+ *   tone:   'long' | 'short' | 'amber' | 'cobalt' | 'neutral'
+ *   spark:  array de numeros para sparkline (opcional)
+ *   spread: label direita topo (ex "Alta", "Estavel")
  */
 import { T } from '@/styles/tokens'
-import { Num, Delta, Sparkline } from '@/components/primitives'
+import { Label, Num, Sparkline } from '@/components/primitives'
 
-export function RadarTile({
-  symbol,
-  price = '—',
-  change24h = 0,
-  sparkData = null,
-  sparkColor,
-}) {
-  const hasSpark = Array.isArray(sparkData) && sparkData.length >= 2
-  const lineColor = sparkColor || (change24h >= 0 ? T.long : T.short)
+function toneToColor(tone) {
+  if (tone === 'long')   return T.long
+  if (tone === 'short')  return T.short
+  if (tone === 'amber')  return T.amber
+  if (tone === 'cobalt') return T.cobalt
+  return T.textMut
+}
 
+export function RadarTile({ label, value, sub, tone, spark, spread }) {
+  const color = toneToColor(tone)
   return (
-    <div
-      className="t-card"
-      style={{
-        padding: 16,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
-      }}
-    >
-      {/* Header: symbol + delta */}
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <span
-          style={{
-            fontFamily: T.font.mono,
-            fontSize: 12,
-            fontWeight: T.fw.medium,
-            letterSpacing: T.ls.label,
-            color: T.text,
-          }}
-        >
-          {symbol}
-          <span style={{ color: T.textDim, marginLeft: 4 }}>/USDT</span>
-        </span>
-        <Delta v={change24h} size={11} />
+    <div className="t-card" style={{ padding: 18, position: 'relative' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <Label>{label}</Label>
+        {spread && (
+          <span className="t-mono" style={{
+            fontSize: 10, color: T.textDim, letterSpacing: '0.1em',
+          }}>
+            {spread}
+          </span>
+        )}
       </div>
-
-      {/* Price */}
-      <Num size={20} weight={400} style={{ lineHeight: 1 }}>
-        {price}
-      </Num>
-
-      {/* Sparkline footer (ou placeholder) */}
-      <div style={{ height: 24, display: 'flex', alignItems: 'center' }}>
-        {hasSpark ? (
-          <Sparkline data={sparkData} w={140} h={24} color={lineColor} />
-        ) : (
-          <div
-            style={{
-              flex: 1,
-              height: 1,
-              background: T.border,
-              opacity: 0.6,
-            }}
-          />
+      <div style={{
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
+        marginTop: 14,
+      }}>
+        <div>
+          <Num size={30} weight={400} style={{ color }}>{value}</Num>
+          <div className="t-mono" style={{
+            fontSize: 10, color: T.textDim, letterSpacing: '0.12em', marginTop: 4,
+          }}>{sub}</div>
+        </div>
+        {Array.isArray(spark) && spark.length >= 2 && (
+          <Sparkline data={spark} w={70} h={28} color={color} />
         )}
       </div>
     </div>

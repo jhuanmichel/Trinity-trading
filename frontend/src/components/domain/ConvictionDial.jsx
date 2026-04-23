@@ -1,130 +1,102 @@
 /**
- * ConvictionDial.jsx — Gauge radial SVG (componente estrela V2).
+ * ConvictionDial.jsx — Radial gauge -220° a 40° (sweep 260°).
+ * Visual fiel ao mockup Trinity Redesign.
  *
- * Arc de -220deg a +40deg (260deg span). Gradient long->amber->short.
- * Needle rotacionada via transform rotate. Ticks a cada 5%.
- * Label central com status + score + confluences count.
+ * Props:
+ *   value: 0-100 (default 52)
+ *   status: texto do pill central (default "AGUARDANDO")
+ *   statusTone: 'amber'|'long'|'short' (default 'amber')
  */
 import { T } from '@/styles/tokens'
-import { Num, Label } from '@/components/primitives'
-import { toneForScore } from '@/lib/backendMapping'
+import { Pill } from '@/components/primitives'
 
-const SIZE      = 240
-const CX        = 120
-const CY        = 120
-const R         = 88
-const ARC_START = -220
-const ARC_END   = 40
+export function ConvictionDial({
+  value = 52,
+  status = 'AGUARDANDO',
+  statusTone = 'amber',
+}) {
+  const size = 240, cx = size / 2, cy = size / 2, r = 88
+  const arcStart = -220, arcEnd = 40
+  const sweep = arcEnd - arcStart
+  const v = Math.max(0, Math.min(100, Number(value) || 0))
+  const valAngle = arcStart + (v / 100) * sweep
 
-function polar(cx, cy, r, angleDeg) {
-  const rad = (angleDeg * Math.PI) / 180
-  return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)]
-}
+  const polar = (deg, rad) => [
+    cx + rad * Math.cos((deg * Math.PI) / 180),
+    cy + rad * Math.sin((deg * Math.PI) / 180),
+  ]
+  const arcPath = (a1, a2, rad) => {
+    const [x1, y1] = polar(a1, rad)
+    const [x2, y2] = polar(a2, rad)
+    const large = Math.abs(a2 - a1) > 180 ? 1 : 0
+    return `M ${x1} ${y1} A ${rad} ${rad} 0 ${large} 1 ${x2} ${y2}`
+  }
 
-function arcPath(cx, cy, r, startDeg, endDeg) {
-  const [x1, y1] = polar(cx, cy, r, startDeg)
-  const [x2, y2] = polar(cx, cy, r, endDeg)
-  const largeArc = Math.abs(endDeg - startDeg) > 180 ? 1 : 0
-  return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`
-}
-
-function centerLabel(direction) {
-  const d = String(direction || '').toUpperCase()
-  if (d === 'LONG' || d === 'SHORT') return 'ATIVO'
-  if (d === 'NEUTRO' || d === 'NEUTRAL') return 'NEUTRO'
-  return 'AGUARDANDO'
-}
-
-export function ConvictionDial({ score = 0, confluences = 0, direction = 'NEUTRO' }) {
-  const s     = Math.max(0, Math.min(100, Number(score) || 0))
-  const angle = ARC_START + (s / 100) * (ARC_END - ARC_START)
-  const tone  = toneForScore(s)
-  const needleColor = tone === 'long' ? T.long : tone === 'short' ? T.short : T.amber
-
-  const ticks = Array.from({ length: 21 }, (_, i) => {
-    const a = ARC_START + (i / 20) * (ARC_END - ARC_START)
-    const [x1, y1] = polar(CX, CY, R - 6, a)
-    const [x2, y2] = polar(CX, CY, R,     a)
-    return { x1, y1, x2, y2, major: i % 4 === 0 }
-  })
+  const ticks = []
+  for (let i = 0; i <= 20; i++) {
+    const a = arcStart + (i / 20) * sweep
+    const big = i % 5 === 0
+    const [x1, y1] = polar(a, r + 6)
+    const [x2, y2] = polar(a, r + (big ? 14 : 10))
+    ticks.push(
+      <line
+        key={i}
+        x1={x1} y1={y1} x2={x2} y2={y2}
+        stroke={T.textDim}
+        strokeWidth={big ? 1.2 : 0.7}
+        opacity={big ? 0.9 : 0.5}
+      />
+    )
+  }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 12, position: 'relative' }}>
-      <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+    <div style={{ position: 'relative', width: size, height: size, margin: '0 auto' }}>
+      <svg width={size} height={size}>
         <defs>
-          <linearGradient id="conviction-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%"   stopColor={T.short}  />
-            <stop offset="50%"  stopColor={T.amber}  />
-            <stop offset="100%" stopColor={T.long}   />
+          <linearGradient id="dialgrad" x1="0" x2="1">
+            <stop offset="0"   stopColor={T.short} />
+            <stop offset="0.5" stopColor={T.amber} />
+            <stop offset="1"   stopColor={T.long} />
           </linearGradient>
         </defs>
-
-        {/* Background arc */}
-        <path
-          d={arcPath(CX, CY, R, ARC_START, ARC_END)}
-          stroke={T.border}
-          strokeWidth="8"
-          fill="none"
-          strokeLinecap="round"
+        <path d={arcPath(arcStart, arcEnd, r)}    stroke={T.border} strokeWidth="10" fill="none" strokeLinecap="round" />
+        <path d={arcPath(arcStart, valAngle, r)}  stroke="url(#dialgrad)" strokeWidth="10" fill="none" strokeLinecap="round" />
+        {ticks}
+        <circle cx={cx} cy={cy} r={r - 20} fill="none" stroke={T.border} strokeWidth="0.8" strokeDasharray="2 4" opacity="0.5" />
+        <line
+          x1={cx} y1={cy}
+          x2={polar(valAngle, r - 6)[0]} y2={polar(valAngle, r - 6)[1]}
+          stroke={T.text} strokeWidth="1.5"
         />
-
-        {/* Progress arc */}
-        <path
-          d={arcPath(CX, CY, R, ARC_START, angle)}
-          stroke="url(#conviction-grad)"
-          strokeWidth="8"
-          fill="none"
-          strokeLinecap="round"
-        />
-
-        {/* Ticks */}
-        {ticks.map((tk, i) => (
-          <line
-            key={i}
-            x1={tk.x1.toFixed(2)} y1={tk.y1.toFixed(2)}
-            x2={tk.x2.toFixed(2)} y2={tk.y2.toFixed(2)}
-            stroke={tk.major ? T.textDim : T.border}
-            strokeWidth={tk.major ? 1.5 : 1}
-          />
-        ))}
-
-        {/* Needle */}
-        <g transform={`rotate(${angle.toFixed(2)} ${CX} ${CY})`}>
-          <line
-            x1={CX} y1={CY}
-            x2={CX + R - 12} y2={CY}
-            stroke={needleColor}
-            strokeWidth="2.5"
-            strokeLinecap="round"
-          />
-          <circle cx={CX} cy={CY} r="5" fill={needleColor} />
-        </g>
+        <circle cx={cx} cy={cy} r="4" fill={T.text} />
+        <circle cx={cx} cy={cy} r="2" fill={T.bg} />
       </svg>
 
-      {/* Center labels (sobreposto no SVG) */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          textAlign: 'center',
-          pointerEvents: 'none',
-          width: 160,
-        }}
-      >
-        <Label>{centerLabel(direction)}</Label>
-        <Num
-          size={48}
-          weight={300}
-          style={{ display: 'block', lineHeight: 1, marginTop: 4, color: needleColor }}
-        >
-          {s.toFixed(0)}
-        </Num>
-        <Label style={{ marginTop: 6, color: T.textDim }}>
-          {confluences}/6 CONFLU.
-        </Label>
+      <div style={{
+        position: 'absolute', inset: 0,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        pointerEvents: 'none', paddingTop: 40,
+      }}>
+        <div className="t-label" style={{ color: T.textDim, marginBottom: 2 }}>CONVICCAO</div>
+        <div className="t-num" style={{
+          fontSize: 48, fontWeight: 300, letterSpacing: '-0.03em', marginTop: 0,
+        }}>
+          {v}<span style={{ fontSize: 18, color: T.textMut, marginLeft: 2 }}>%</span>
+        </div>
+        <div style={{ marginTop: 4 }}>
+          <Pill tone={statusTone}>{status}</Pill>
+        </div>
       </div>
+
+      <div className="t-mono" style={{
+        position: 'absolute', bottom: 8, left: 4, fontSize: 9,
+        color: T.short, letterSpacing: '0.12em',
+      }}>SHORT 0</div>
+      <div className="t-mono" style={{
+        position: 'absolute', bottom: 8, right: 4, fontSize: 9,
+        color: T.long, letterSpacing: '0.12em',
+      }}>LONG 100</div>
     </div>
   )
 }
