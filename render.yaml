@@ -4,7 +4,20 @@ services:
     env: python
     autoDeploy: true
     branch: main
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    buildCommand: |
+      set -e
+      pip install --upgrade pip
+      pip install -r requirements.txt
+      pip install nodeenv
+      nodeenv --node=20.11.1 --prebuilt /tmp/node-env
+      export PATH=/tmp/node-env/bin:$PATH
+      node --version && npm --version
+      cd frontend
+      npm ci
+      npm run build
+      cd ..
+      ls -la dashboard/static/app/
+      echo "Frontend build complete."
     startCommand: python start.py
     healthCheckPath: /health
     envVars:
