@@ -30,7 +30,13 @@ import { Showcase } from './screens/Showcase'
 
 // V2 Shell + router (rota ?v2=1 — isolado, nao afeta dashboard normal)
 import { Shell } from './components/shell/Shell'
-import { useRouterStore } from './store/routerStore'
+import { useRouterStore, ROUTES } from './store/routerStore'
+
+// V2 Screens (S3a: Dashboard real + 3 placeholders)
+import { Dashboard as V2Dashboard } from './screens/Dashboard'
+import { Signals  as V2Signals }   from './screens/Signals'
+import { Landing  as V2Landing }   from './screens/Landing'
+import { Settings as V2Settings }  from './screens/Settings'
 
 // Store + hooks
 import useSignalStore from './store/useSignalStore'
@@ -180,37 +186,13 @@ export default function App() {
 
 function ShellV2Wrapper() {
   const route = useRouterStore((s) => s.route)
-  return (
-    <Shell>
-      <div
-        style={{
-          padding: 60,
-          textAlign: 'center',
-          color: 'var(--t-text-dim)',
-          fontFamily: 'var(--t-font-mono)',
-          fontSize: 11,
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-        }}
-      >
-        <div style={{ marginBottom: 16 }}>
-          SHELL V2 · ROTA ATIVA:{' '}
-          <strong style={{ color: 'var(--t-text)' }}>{route.toUpperCase()}</strong>
-        </div>
-        <div style={{ marginBottom: 24, color: 'var(--t-text-mut)', letterSpacing: '0.1em' }}>
-          Conteúdo será adicionado na Sessão 3.
-        </div>
-        <a
-          href="/app/"
-          style={{
-            color: 'var(--t-cobalt)',
-            letterSpacing: '0.14em',
-            textDecoration: 'none',
-          }}
-        >
-          ← Voltar ao dashboard atual
-        </a>
-      </div>
-    </Shell>
-  )
+  let content
+  switch (route) {
+    case ROUTES.DASHBOARD: content = <V2Dashboard />; break
+    case ROUTES.SIGNALS:   content = <V2Signals   />; break
+    case ROUTES.LANDING:   content = <V2Landing   />; break
+    case ROUTES.SETTINGS:  content = <V2Settings  />; break
+    default:               content = <V2Dashboard />; break
+  }
+  return <Shell>{content}</Shell>
 }
