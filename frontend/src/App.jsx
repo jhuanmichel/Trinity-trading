@@ -1,12 +1,16 @@
 /**
  * App.jsx — Trinity Trading Dashboard v3.0
- * Root component: layout + routing por tabs
+ *
+ * Route gates (S4):
+ *   /app/                → V2 Shell (default)
+ *   /app/?legacy=1       → LegacyApp (V1 dashboard preservado)
+ *   /app/?showcase=1     → V2 design system showcase
  */
 import React, { memo } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Toaster } from 'react-hot-toast'
 
-// Layout
+// Layout (legacy)
 import Header from './components/layout/Header'
 import Sidebar from './components/layout/Sidebar'
 
@@ -25,27 +29,56 @@ import MarketContext from './components/charts/MarketContext'
 // UI primitives
 import ErrorBoundary from './components/ui/ErrorBoundary'
 
-// V2 design system showcase (rota ?showcase=1 — nao afeta dashboard normal)
+// V2 design system showcase (rota ?showcase=1)
 import { Showcase } from './screens/Showcase'
 
-// V2 Shell + router (rota ?v2=1 — isolado, nao afeta dashboard normal)
+// V2 Shell + router
 import { Shell } from './components/shell/Shell'
 import { useRouterStore, ROUTES } from './store/routerStore'
 
-// V2 Screens (S3a: Dashboard real + 3 placeholders)
+// V2 Screens
 import { Dashboard as V2Dashboard } from './screens/Dashboard'
-import { Signals  as V2Signals }   from './screens/Signals'
-import { Landing  as V2Landing }   from './screens/Landing'
-import { Settings as V2Settings }  from './screens/Settings'
+import { Signals  as V2Signals }    from './screens/Signals'
+import { Landing  as V2Landing }    from './screens/Landing'
+import { Settings as V2Settings }   from './screens/Settings'
 
-// Store + hooks
+// Store + hooks (legacy)
 import useSignalStore from './store/useSignalStore'
 import useMarketContext from './hooks/useMarketContext'
 import { useKeyboard } from './hooks/useKeyboard'
 
 import './App.css'
 
-// ── Tab views ──────────────────────────────────────────────────────────────────
+// ── Root ───────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  if (typeof window !== 'undefined') {
+    const q = new URLSearchParams(window.location.search)
+    // Showcase isolado (?showcase=1)
+    if (q.get('showcase') === '1') return <Showcase />
+    // Legacy preservado em ?legacy=1 (rollback rapido)
+    if (q.get('legacy') === '1')   return <LegacyApp />
+  }
+  // V2 default
+  return <ShellV2Wrapper />
+}
+
+// ── V2 Shell wrapper (default) ────────────────────────────────────────────────
+
+function ShellV2Wrapper() {
+  const route = useRouterStore((s) => s.route)
+  let content
+  switch (route) {
+    case ROUTES.DASHBOARD: content = <V2Dashboard />; break
+    case ROUTES.SIGNALS:   content = <V2Signals   />; break
+    case ROUTES.LANDING:   content = <V2Landing   />; break
+    case ROUTES.SETTINGS:  content = <V2Settings  />; break
+    default:               content = <V2Dashboard />; break
+  }
+  return <Shell>{content}</Shell>
+}
+
+// ── Legacy App (preservado em ?legacy=1) ──────────────────────────────────────
 
 const SignalsView = memo(() => {
   const { smcAnalysis, currentSignal, marketContext, signals } = useSignalStore()
@@ -108,28 +141,9 @@ const TAB_VIEWS = {
   market:   <ErrorBoundary label="Market — erro ao carregar"><MarketView /></ErrorBoundary>,
 }
 
-// ── Root ───────────────────────────────────────────────────────────────────────
-
-export default function App() {
-  // V2 Design System Showcase — gate via query string (?showcase=1)
-  // Bypassa dashboard normal, nao consome hooks/polls. Valida primitives isolados.
-  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('showcase') === '1') {
-    return <Showcase />
-  }
-
-  // V2 Shell — gate via query string (?v2=1)
-  // Shell institucional (TopBar + Ticker + Footer) envolvendo placeholder.
-  // Sessao 3 substituira o placeholder por screens reais.
-  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('v2') === '1') {
-    return <ShellV2Wrapper />
-  }
-
+function LegacyApp() {
   const { activeTab, sidebarOpen } = useSignalStore()
-
-  // Inicializa todos os polls de dados
   const { isLoading } = useMarketContext()
-
-  // Keyboard shortcuts
   useKeyboard()
 
   return (
@@ -159,7 +173,6 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      {/* Toast notifications */}
       <Toaster
         position="bottom-right"
         toastOptions={{
@@ -177,22 +190,4 @@ export default function App() {
       />
     </div>
   )
-}
-
-// ── V2 Shell wrapper (?v2=1 gate) ────────────────────────────────────────────
-// Isolado do dashboard legacy. Nao chama useSignalStore/useMarketContext/
-// useKeyboard — so os hooks V2 (dentro da Shell). Placeholder no body ate
-// Sessao 3 prover as screens reais.
-
-function ShellV2Wrapper() {
-  const route = useRouterStore((s) => s.route)
-  let content
-  switch (route) {
-    case ROUTES.DASHBOARD: content = <V2Dashboard />; break
-    case ROUTES.SIGNALS:   content = <V2Signals   />; break
-    case ROUTES.LANDING:   content = <V2Landing   />; break
-    case ROUTES.SETTINGS:  content = <V2Settings  />; break
-    default:               content = <V2Dashboard />; break
-  }
-  return <Shell>{content}</Shell>
 }
