@@ -555,6 +555,29 @@ def _register_outcome_pump(c: dict):
         except Exception:
             pass
 
+        # ── Scoring V2 shadow ──────────────────────────────────────────────
+        # Config flags em config.py:
+        #   SCORING_V2_ENABLED → computa V2 em paralelo com V1 (shadow)
+        #   SCORING_V2_LIVE    → V2 dirige decisao (promocao manual pos-valid)
+        # Fase 2: apenas shadow; score_v1 continua sendo o score persistido.
+        _score_v2, _score_v2_audit = None, None
+        try:
+            from config import SCORING_V2_ENABLED, SCORING_V2_LIVE  # noqa: F401
+            if SCORING_V2_ENABLED:
+                from trinity.scoring.engine_v2 import score_pump_v2
+                _score_v2, _score_v2_audit = score_pump_v2(
+                    base_components=c.get("component_scores", {}) or {},
+                    coin_data={
+                        "pct_change_24h": c.get("price_change_pct", 0),
+                        "funding_rate":   c.get("funding_rate", 0),
+                        "ls_ratio":       c.get("long_short_ratio", 1.0),
+                        "dna_pattern":    c.get("dna_pattern", ""),
+                        "btc_bias":       _btc_regime,
+                    },
+                )
+        except Exception as _sv2:
+            log.debug(f"[PumpTrader] ScoringV2 shadow failed: {_sv2}")
+
         get_tracker().register_signal({
             "symbol":          c.get("symbol", ""),
             "direction":       "LONG",
@@ -569,6 +592,11 @@ def _register_outcome_pump(c: dict):
             "layer_scores":    c.get("component_scores", {}),
             "btc_regime":      _btc_regime,
             "source":          "pump_trader",
+            # Shadow V2 (Fase 2)
+            "score_v1":        c.get("opportunity_score", 0),
+            "score_v2":        _score_v2,
+            "score_v2_audit":  _score_v2_audit,
+            "scoring_v2_live": bool(__import__("config").SCORING_V2_LIVE),
         })
         log.info(
             f"[PumpTrader] Outcome registrado: {c.get('symbol','')} LONG "

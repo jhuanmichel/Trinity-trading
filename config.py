@@ -37,6 +37,12 @@ SIGNAL_INTERVAL_MINUTES  = int(os.getenv("SIGNAL_INTERVAL_MINUTES", "240"))    #
 INST_INTERVAL_MINUTES = int(os.getenv("INST_INTERVAL_MINUTES", "60"))   # análise institucional
 INST_SCORE_THRESHOLD  = int(os.getenv("INST_SCORE_THRESHOLD", "60"))    # mínimo para enviar sinal
 
+# Scoring V2 (BoostManager) — ver trinity/scoring/*.
+# SCORING_V2_ENABLED=True  -> V2 computado em shadow junto com V1 (sem efeito na decisão)
+# SCORING_V2_LIVE=True     -> V2 DIRIGE decisão; V1 vira sombra. (PROMOÇÃO MANUAL pós-validação.)
+SCORING_V2_ENABLED = os.getenv("SCORING_V2_ENABLED", "true").lower() == "true"
+SCORING_V2_LIVE    = os.getenv("SCORING_V2_LIVE", "false").lower() == "true"
+
 # Pesos do score probabilístico (devem somar 100)
 WEIGHTS = {
     "regime":       10,   # Regime de mercado
