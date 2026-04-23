@@ -417,6 +417,32 @@ def _write_dashboard_state(
     state_path.write_text(json.dumps(state, indent=2, ensure_ascii=False, cls=_Enc))
 
 
+def _write_dashboard_state_error(err_msg: str) -> None:
+    """
+    Fallback write quando run_institutional_analysis falha antes do primeiro
+    _write_dashboard_state. Preserva o ultimo state bem-sucedido, apenas
+    atualiza last_updated + injeta last_error para debug. Evita cache stale
+    mesmo quando pipeline quebra em etapa nao-envolta em try interno.
+    """
+    state_path = Path("dashboard/current_state.json")
+    try:
+        existing = json.loads(state_path.read_text()) if state_path.exists() else {}
+    except Exception:
+        existing = {}
+    existing["last_updated"] = datetime.now().isoformat()
+    existing["last_error"] = {
+        "message": str(err_msg)[:500],
+        "at":      datetime.now().isoformat(),
+    }
+    try:
+        state_path.parent.mkdir(exist_ok=True)
+        state_path.write_text(
+            json.dumps(existing, indent=2, ensure_ascii=False, default=str)
+        )
+    except Exception as e:
+        log.error(f"[CurrentState] fallback write falhou: {e}")
+
+
 def _calc_levels(price: float, direction: str, atr: float) -> tuple:
     """Calcula entrada, stop e alvos baseados em ATR."""
     atr = atr or price * 0.005   # fallback 0.5%
@@ -1001,6 +1027,14 @@ def run_institutional_analysis():
     except Exception as e:
         log.error(f"💥 ERRO (institucional): {e}", exc_info=True)
         alerts.send_error(f"[INSTITUCIONAL] {e}")
+        # Evita cache stale: preserva ultimo state bem-sucedido mas atualiza
+        # last_updated + registra last_error para debug sem precisar de Render logs.
+        # Sem esse fallback, um break em qualquer etapa 1-17 do pipeline (linhas
+        # 488-893) congela /api/current-state no ultimo sucesso ate o proximo run OK.
+        try:
+            _write_dashboard_state_error(str(e))
+        except Exception as e2:
+            log.error(f"[CurrentState] fallback write falhou: {e2}")
 
 
 def run_pump_radar():
