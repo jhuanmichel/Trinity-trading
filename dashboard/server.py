@@ -5,7 +5,7 @@ v2026-04-19: Market Movers Scanner, BTC Regime cache 2-nível, Mercado MEXC asyn
 """
 from fastapi import BackgroundTasks, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pathlib import Path
 import json
 import glob
@@ -2339,5 +2339,14 @@ REACT_APP_DIR = BASE_DIR / "dashboard" / "static" / "app"
 if REACT_APP_DIR.exists():
     app.mount("/app", StaticFiles(directory=str(REACT_APP_DIR), html=True), name="react-app")
 
+# ── Root redirect: "/" → "/app/" (V2 redesign default) ────────────────────────
+# Registrar ANTES do mount catch-all em "/" para vencer o match.
+@app.get("/", include_in_schema=False)
+async def _root_redirect():
+    return RedirectResponse(url="/app/", status_code=302)
+
 # Serve frontend (legacy HTML) — deve vir POR ÚLTIMO
+# Catch-all para assets legados (style.css, app.js, index.html em "/").
+# Observacao: "/" e interceptado pelo _root_redirect acima; este mount ainda
+# serve /style.css, /app.js e outros assets relativos que o SPA V2 nao precisa.
 app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
