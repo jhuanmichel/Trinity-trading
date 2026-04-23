@@ -1,0 +1,51 @@
+{
+  "input": "/tmp/outcomes_prod_export.jsonl",
+  "output": "logs/outcomes.clean.jsonl",
+  "input_count": 4171,
+  "output_count": 3846,
+  "filtered_no_symbol": 0,
+  "filtered_no_status": 0,
+  "duplicates_removed": 325,
+  "tier_corrupted_marked": 186,
+  "symbol_normalized": 1673,
+  "suspect_boost_marked": 0,
+  "tier_distribution_clean": {
+    "EXTREME": 282,
+    "TRADEABLE": 168,
+    "MICRO": 748,
+    "WEAK": 748,
+    "HIGH": 1625,
+    "UNKNOWN": 186,
+    "STRONG": 87,
+    "CRITICAL": 2
+  },
+  "source_distribution_clean": {
+    "unknown": 2738,
+    "pump_trader": 287,
+    "crash_trader": 482,
+    "funding_scanner": 326,
+    "altcoin_scanner": 13
+  },
+  "symbol_top20_clean": {
+    "WLDUSDT": 254,
+    "COMPUSDT": 231,
+    "XIONUSDT": 186,
+    "XMRUSDT": 185,
+    "HIGHUSDT": 148,
+    "CHIPUSDT": 106,
+    "APTUSDT": 90,
+    "EDUUSDT": 83,
+    "ALICEUSDT": 68,
+    "ICPUSDT": 67,
+    "TAOUSDT": 67,
+    "RAVEUSDT": 66,
+    "AVAXUSDT": 65,
+    "FLORKUSDT": 63,
+    "OBORTECHUSDT": 57,
+    "GRIFFAINUSDT": 55,
+    "PPTAIUSDT": 50,
+    "DOTUSDT": 49,
+    "PEPEUSDT": 46,
+    "RDNTUSDT": 42
+  }
+}
