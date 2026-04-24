@@ -10,6 +10,10 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Path absoluto do state file, baseado em __file__ (imune a cwd do processo).
+# server.py lê desse mesmo path via BASE_DIR/dashboard/current_state.json.
+_STATE_PATH = Path(__file__).resolve().parent / "dashboard" / "current_state.json"
+
 # Módulos do agente
 from mexc_client    import get_ohlcv, get_current_price, get_orderbook
 from indicators     import regime, trend, momentum, volume, derivatives, onchain, sentiment, liquidations
@@ -209,7 +213,7 @@ def _write_dashboard_state(
     geo_data=None, cycle_data=None, direction_data=None,
     neural_data=None,
 ):
-    """Persiste o estado atual para o dashboard web (dashboard/current_state.json)."""
+    """Persiste o estado atual para o dashboard web (trading/dashboard/current_state.json)."""
     state = {
         "last_updated": datetime.now().isoformat(),
         "btc": {
@@ -412,9 +416,11 @@ def _write_dashboard_state(
             if isinstance(o, (np.floating,)): return float(o)
             return super().default(o)
 
-    state_path = Path("dashboard/current_state.json")
-    state_path.parent.mkdir(exist_ok=True)
-    state_path.write_text(json.dumps(state, indent=2, ensure_ascii=False, cls=_Enc))
+    _STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _STATE_PATH.write_text(
+        json.dumps(state, indent=2, ensure_ascii=False, cls=_Enc),
+        encoding="utf-8",
+    )
 
 
 def _write_dashboard_state_error(err_msg: str) -> None:
@@ -424,9 +430,11 @@ def _write_dashboard_state_error(err_msg: str) -> None:
     atualiza last_updated + injeta last_error para debug. Evita cache stale
     mesmo quando pipeline quebra em etapa nao-envolta em try interno.
     """
-    state_path = Path("dashboard/current_state.json")
     try:
-        existing = json.loads(state_path.read_text()) if state_path.exists() else {}
+        existing = (
+            json.loads(_STATE_PATH.read_text(encoding="utf-8"))
+            if _STATE_PATH.exists() else {}
+        )
     except Exception:
         existing = {}
     existing["last_updated"] = datetime.now().isoformat()
@@ -435,9 +443,10 @@ def _write_dashboard_state_error(err_msg: str) -> None:
         "at":      datetime.now().isoformat(),
     }
     try:
-        state_path.parent.mkdir(exist_ok=True)
-        state_path.write_text(
-            json.dumps(existing, indent=2, ensure_ascii=False, default=str)
+        _STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _STATE_PATH.write_text(
+            json.dumps(existing, indent=2, ensure_ascii=False, default=str),
+            encoding="utf-8",
         )
     except Exception as e:
         log.error(f"[CurrentState] fallback write falhou: {e}")

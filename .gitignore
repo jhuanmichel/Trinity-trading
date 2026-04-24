@@ -27,6 +27,12 @@ logs/pending_outcomes.jsonl
 logs/*.log
 logs/*.csv
 
+# ── Dashboard state files (runtime dynamic state, não commitar) ──────────────
+dashboard/current_state.json
+dashboard/crash_scan_latest.json
+dashboard/pump_scan_latest.json
+dashboard/altcoin_scan_latest.json
+
 # ── Dados históricos OHLCV (parquets grandes — não commitar)
 data/
 data/historical/
