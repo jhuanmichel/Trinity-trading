@@ -357,10 +357,13 @@ def run_crash_cycle() -> dict:
     for s in _expired:
         del _alert_cooldown[s]
 
-    # Outcome Tracker — registra TODOS os candidatos >= OPP_THRESHOLD (35)
-    # Separado do loop de alertas para evitar o break em score < 60
+    # Outcome Tracker — registro estratificado via OutcomeSampler (Fase X)
+    from trinity.utils.outcome_sampler import should_register as _should_reg
     for c in result.get("candidates", []):
-        if c.get("opportunity_score", 0) >= OPP_THRESHOLD:
+        _sc = c.get("opportunity_score", 0) or 0
+        _ok, _bucket = _should_reg(_sc, signal_id=c.get("symbol", ""))
+        c["score_bucket"] = _bucket
+        if _ok:
             _register_outcome_crash(c)
 
     alerted = 0
@@ -633,6 +636,8 @@ def _register_outcome_crash(c: dict):
             "score_v2":        _score_v2,
             "score_v2_audit":  _score_v2_audit,
             "scoring_v2_live": bool(__import__("config").SCORING_V2_LIVE),
+            # Outcome expansion (Fase X): alert|near|low
+            "score_bucket":    c.get("score_bucket", "alert"),
         })
         log.info(
             f"[CrashTrader] Outcome registrado: {c.get('symbol','')} SHORT "

@@ -2333,6 +2333,13 @@ async def api_deep_dive_test_telegram():
         return JSONResponse(content={"ok": False, "error": str(exc)}, status_code=500)
 
 
+@app.get("/api/outcome-sampler/stats")
+def get_outcome_sampler_stats():
+    """Config do OutcomeSampler (stratified registration buckets)."""
+    from trinity.utils.outcome_sampler import stats_for_dashboard
+    return JSONResponse(content=stats_for_dashboard())
+
+
 @app.get("/api/futures-guard/stats")
 def get_futures_guard_stats():
     """Estado do cache do FuturesGuard + configuracao."""
