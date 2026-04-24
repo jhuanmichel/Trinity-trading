@@ -87,6 +87,14 @@ class OutcomeTracker:
             # Empirical tier dual-write (v1 calibrado em 22/abril/2026, n=2776)
             "empirical_tier": empirical_tier,
             "tier_metadata":  tier_meta,
+            # ── Scoring V2 shadow (adicionado 24/abril/2026) ─────────────────
+            # Pump/crash traders computam score V2 em paralelo ao V1 via
+            # trinity.scoring.engine_v2. Preservado aqui pra persistir em
+            # pending_outcomes.jsonl e sobreviver a _make_outcome.
+            "score_v1":        signal.get("score_v1"),
+            "score_v2":        signal.get("score_v2"),
+            "score_v2_audit":  signal.get("score_v2_audit"),
+            "scoring_v2_live": signal.get("scoring_v2_live"),
         }
         try:
             PENDING_FILE.parent.mkdir(exist_ok=True)
@@ -245,6 +253,11 @@ class OutcomeTracker:
             # Empirical tier (V1) — calibrado em WR real, preservado do pending
             "empirical_tier": s.get("empirical_tier", "UNKNOWN"),
             "tier_metadata":  s.get("tier_metadata", {}),
+            # Scoring V2 shadow (preservado do pending)
+            "score_v1":        s.get("score_v1"),
+            "score_v2":        s.get("score_v2"),
+            "score_v2_audit":  s.get("score_v2_audit"),
+            "scoring_v2_live": s.get("scoring_v2_live"),
         }
 
     def _parse_ts(self, ts_str: str) -> Optional[datetime]:
