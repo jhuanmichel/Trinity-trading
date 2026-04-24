@@ -2333,9 +2333,11 @@ async def api_deep_dive_test_telegram():
         return JSONResponse(content={"ok": False, "error": str(exc)}, status_code=500)
 
 
-@app.get("/api/ml/status")
-def get_ml_status():
-    """Saude do pipeline ML + pesos ativos no WeightsLoader cache."""
+@app.get("/api/ml/loader-status")
+def get_ml_loader_status():
+    """Saude do pipeline ML (JSONs em disco) + cache do WeightsLoader.
+    Separado de /api/ml/status (pre-existente) que expoe MLManager.summary_for_api().
+    """
     from trinity.ml.weights_loader import stats as weights_stats
     import time as _time
 
