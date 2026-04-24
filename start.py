@@ -108,35 +108,9 @@ def _run_scheduler():
 
     schedule.every(1).hours.do(run_pump_diag)
 
-    # ML Pipeline — retreino automatico a cada 6h (fecha loop auto-melhoria).
-    # Import lazy dentro da funcao: se MLManager falhar import, scheduler
-    # continua funcional sem derrubar start.py.
-    def run_ml_pipeline():
-        try:
-            from trinity.ml.ml_manager import MLManager
-            mgr = MLManager.get_instance()
-            started = mgr.run_async()  # dispara thread daemon; non-blocking
-            if started:
-                log.info("[MLPipeline] retreino iniciado (thread daemon)")
-            else:
-                log.info("[MLPipeline] ja rodando — skip ciclo atual")
-        except Exception as _e:
-            log.exception(f"[MLPipeline] falhou: {_e}")
-
-    schedule.every(6).hours.do(run_ml_pipeline)
-
     log.info("Bot scheduler iniciado.")
     run_institutional_analysis()   # roda imediatamente ao subir
     run_optimization_report()      # gera relatório inicial (pode ser "insufficient_data")
-
-    # Primeira execucao do ML pipeline ~5min pos-boot (evita congestionar startup)
-    # Usa threading.Timer para disparar one-shot apos delay sem bloquear scheduler.
-    try:
-        import threading as _th
-        _th.Timer(300.0, run_ml_pipeline).start()
-        log.info("[MLPipeline] first-run agendada para T+5min")
-    except Exception as _tmr_e:
-        log.warning(f"[MLPipeline] nao foi possivel agendar first-run: {_tmr_e}")
 
     while True:
         schedule.run_pending()
