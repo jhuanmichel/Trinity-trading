@@ -336,8 +336,10 @@ def run_pump_cycle() -> dict:
         symbol = c.get("symbol", "")
         cls    = c.get("move_classification", "")
 
-        # C2 — threshold diferenciado: 60 para blue chips, ALERT_THRESHOLD para o resto
-        _threshold = 60 if symbol in BLUE_CHIPS else ALERT_THRESHOLD
+        # C2 — threshold unificado: ALERT_THRESHOLD para todos (blue chips incluidos)
+        # Remocao do carve-out '60 if BLUE_CHIPS' pos-observacao de alertas ruins
+        # em scores 60-75 que nao performam melhor que no-alert no dataset limpo.
+        _threshold = ALERT_THRESHOLD
         if score < _threshold:
             if score < 60:  # mínimo absoluto — nada abaixo pode alertar
                 break
@@ -466,8 +468,10 @@ async def _send_telegram_alerts(candidates: list):
         symbol = c.get("symbol", "")              if isinstance(c, dict) else c.symbol
         cls    = c.get("move_classification", "") if isinstance(c, dict) else c.move_classification
 
-        # C2 — threshold diferenciado: 60 para blue chips, ALERT_THRESHOLD para o resto
-        _threshold = 60 if symbol in BLUE_CHIPS else ALERT_THRESHOLD
+        # C2 — threshold unificado: ALERT_THRESHOLD para todos (blue chips incluidos)
+        # Remocao do carve-out '60 if BLUE_CHIPS' pos-observacao de alertas ruins
+        # em scores 60-75 que nao performam melhor que no-alert no dataset limpo.
+        _threshold = ALERT_THRESHOLD
         if score < _threshold:
             if score < 60:  # mínimo absoluto — para o loop
                 break
@@ -485,6 +489,18 @@ async def _send_telegram_alerts(candidates: list):
             score_up   = (score - last_score) >= 15.0
             if not tier_up and not score_up:
                 continue
+
+        # FuturesGuard — bloquear alerta se par futures ausente ou volume < $10M
+        try:
+            from trinity.utils.futures_guard import check as _fg_check
+            from trinity.utils.exchange_registry import get_exchange_fetchers as _fg_fetchers
+            _ok, _reason = _fg_check(symbol, _fg_fetchers(), direction="LONG")
+            if not _ok:
+                log.info(f"[FuturesGuard] blocked LONG {symbol}: {_reason}")
+                continue
+        except Exception as _fg_e:
+            log.warning(f"[FuturesGuard] erro check {symbol}: {_fg_e} — bloqueando (fail-closed)")
+            continue
 
         try:
             await asyncio.to_thread(_send_pump_telegram, c if isinstance(c, dict) else asdict(c))

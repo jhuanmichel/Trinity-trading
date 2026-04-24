@@ -2333,6 +2333,21 @@ async def api_deep_dive_test_telegram():
         return JSONResponse(content={"ok": False, "error": str(exc)}, status_code=500)
 
 
+@app.get("/api/futures-guard/stats")
+def get_futures_guard_stats():
+    """Estado do cache do FuturesGuard + configuracao."""
+    from trinity.utils.futures_guard import (
+        stats,
+        MIN_FUTURES_VOLUME_24H_USD,
+        CACHE_TTL_SECONDS,
+    )
+    return JSONResponse(content={
+        "min_volume_24h_usd": MIN_FUTURES_VOLUME_24H_USD,
+        "cache_ttl_seconds":  CACHE_TTL_SECONDS,
+        "cache":              stats(),
+    })
+
+
 # ── Serve React app v3.0 em /app/ ────────────────────────────────────────────
 REACT_APP_DIR = BASE_DIR / "dashboard" / "static" / "app"
 if REACT_APP_DIR.exists():

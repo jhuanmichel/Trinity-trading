@@ -267,6 +267,18 @@ def run_parabolic_scan() -> None:
                 f"7d={pct_7d_str} | vol=${vol_usd:,.0f} | tier={tier}"
             )
 
+            # FuturesGuard — bloquear se par ausente ou volume < $10M em todas exchanges
+            try:
+                from trinity.utils.futures_guard import check as _fg_check
+                from trinity.utils.exchange_registry import get_exchange_fetchers as _fg_fetchers
+                _ok, _reason = _fg_check(symbol, _fg_fetchers(), direction="SHORT")
+                if not _ok:
+                    log.info(f"[FuturesGuard] blocked PARABOLIC {symbol}: {_reason}")
+                    continue
+            except Exception as _fg_e:
+                log.warning(f"[FuturesGuard] erro check {symbol}: {_fg_e} — bloqueando (fail-closed)")
+                continue
+
             _send_parabolic_alert(symbol, pct_24h, pct_7d, price, vol_usd, tier)
             _set_cooldown(symbol)
 
