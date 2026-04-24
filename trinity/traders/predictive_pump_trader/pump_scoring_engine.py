@@ -99,8 +99,46 @@ def score_pump(
     if gravity_result.get("liquidity_gravity") == "DOWN":
         gravity_score *= 0.3
 
-    # ── Opportunity score base (soma dos 4 componentes) ───────────────────
-    opportunity_score_raw = silent_score + squeeze_score + gravity_score + breakout_score
+    # ── Opportunity score base ────────────────────────────────────────────
+    # Se ML weights otimizados disponiveis + recommend=True, usar.
+    # Senao fallback: soma simples (comportamento legacy).
+    # weight_source sera persistido no signal_dict para auditoria.
+    _component_scores = {
+        "silent_acc": silent_score,
+        "squeeze":    squeeze_score,
+        "gravity":    gravity_score,
+        "breakout":   breakout_score,
+    }
+    try:
+        from trinity.ml.weights_loader import get_weights as _get_ml_weights
+        _ml_w = _get_ml_weights("LONG")
+    except Exception:
+        _ml_w = None
+
+    _weight_source = "legacy"
+    if _ml_w:
+        _matching = set(_ml_w.keys()) & set(_component_scores.keys())
+        # Exigir ≥ metade das keys compativeis, senao fallback
+        if len(_matching) >= max(2, len(_ml_w) // 2):
+            _total_w = sum(abs(w) for w in _ml_w.values())
+            if _total_w > 0:
+                _weighted = sum(_component_scores.get(k, 0) * w for k, w in _ml_w.items())
+                # Normalizar para escala 0-100 (soma dos pesos ~= 100 no optimizer)
+                opportunity_score_raw = _weighted / _total_w * 100.0
+                _weight_source = "ml"
+            else:
+                opportunity_score_raw = silent_score + squeeze_score + gravity_score + breakout_score
+                _weight_source = "legacy_fallback"
+                log.warning(f"[Pump] ML total_weight=0, fallback legacy")
+        else:
+            opportunity_score_raw = silent_score + squeeze_score + gravity_score + breakout_score
+            _weight_source = "legacy_fallback"
+            log.warning(
+                f"[Pump] ML keys {list(_ml_w.keys())} nao batem com "
+                f"component_scores {list(_component_scores.keys())}, fallback"
+            )
+    else:
+        opportunity_score_raw = silent_score + squeeze_score + gravity_score + breakout_score
 
     # ── DNA Pattern Matching ──────────────────────────────────────────────
     dna_bonus, dna_pattern = _detect_pump_dna(
@@ -326,6 +364,7 @@ def score_pump(
         "move_classification": move_classification,
         "tradeable":           tradeable,
         "opportunity_score":   opportunity_score,
+        "weight_source":       _weight_source,  # 'ml' | 'legacy' | 'legacy_fallback'
     }
 
 

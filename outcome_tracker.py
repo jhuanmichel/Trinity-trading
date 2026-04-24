@@ -95,6 +95,8 @@ class OutcomeTracker:
             "score_v2":        signal.get("score_v2"),
             "score_v2_audit":  signal.get("score_v2_audit"),
             "scoring_v2_live": signal.get("scoring_v2_live"),
+            # ML loop (Fase B): source dos pesos aplicados ao score
+            "weight_source":   signal.get("weight_source", "legacy"),
         }
         try:
             PENDING_FILE.parent.mkdir(exist_ok=True)
@@ -258,6 +260,8 @@ class OutcomeTracker:
             "score_v2":        s.get("score_v2"),
             "score_v2_audit":  s.get("score_v2_audit"),
             "scoring_v2_live": s.get("scoring_v2_live"),
+            # ML loop (Fase B)
+            "weight_source":   s.get("weight_source", "legacy"),
         }
 
     def _parse_ts(self, ts_str: str) -> Optional[datetime]:

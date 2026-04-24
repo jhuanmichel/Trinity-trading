@@ -613,6 +613,8 @@ def _register_outcome_pump(c: dict):
             "score_v2":        _score_v2,
             "score_v2_audit":  _score_v2_audit,
             "scoring_v2_live": bool(__import__("config").SCORING_V2_LIVE),
+            # ML loop (Fase B): source dos pesos aplicados ao opportunity_score
+            "weight_source":   c.get("weight_source", "legacy"),
         })
         log.info(
             f"[PumpTrader] Outcome registrado: {c.get('symbol','')} LONG "

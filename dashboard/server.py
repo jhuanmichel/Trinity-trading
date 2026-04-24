@@ -2333,6 +2333,43 @@ async def api_deep_dive_test_telegram():
         return JSONResponse(content={"ok": False, "error": str(exc)}, status_code=500)
 
 
+@app.get("/api/ml/status")
+def get_ml_status():
+    """Saude do pipeline ML + pesos ativos no WeightsLoader cache."""
+    from trinity.ml.weights_loader import stats as weights_stats
+    import time as _time
+
+    base = BASE_DIR / "dashboard"
+
+    def read_json_safe(name):
+        p = base / name
+        if not p.exists():
+            return {"exists": False}
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            age_h = round((_time.time() - p.stat().st_mtime) / 3600, 2)
+            return {
+                "exists": True,
+                "last_modified_ts": int(p.stat().st_mtime),
+                "age_hours": age_h,
+                "summary": {
+                    "status":           data.get("status"),
+                    "recommend_long":   (data.get("LONG")  or {}).get("recommend"),
+                    "recommend_short":  (data.get("SHORT") or {}).get("recommend"),
+                },
+            }
+        except Exception as e:
+            return {"exists": True, "error": str(e)}
+
+    return JSONResponse(content={
+        "weights":            read_json_safe("ml_weight_optimizer.json"),
+        "feature_importance": read_json_safe("ml_feature_importance.json"),
+        "walk_forward":       read_json_safe("ml_walk_forward.json"),
+        "monte_carlo":        read_json_safe("ml_monte_carlo.json"),
+        "weights_loader":     weights_stats(),
+    })
+
+
 @app.get("/api/futures-guard/stats")
 def get_futures_guard_stats():
     """Estado do cache do FuturesGuard + configuracao."""
