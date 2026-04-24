@@ -312,14 +312,10 @@ def run_pump_cycle() -> dict:
     for s in _expired:
         del _alert_cooldown[s]
 
-    # Outcome Tracker — registro estratificado via OutcomeSampler
-    # Substitui 'score >= OPP_THRESHOLD' por buckets: alert(100%)/near(30%)/low(10%)
-    from trinity.utils.outcome_sampler import should_register as _should_reg
+    # Outcome Tracker — registra TODOS os candidatos >= OPP_THRESHOLD (35)
+    # Separado do loop de alertas para evitar o break em score < 60
     for c in result.get("candidates", []):
-        _sc = c.get("opportunity_score", 0) or 0
-        _ok, _bucket = _should_reg(_sc, signal_id=c.get("symbol", ""))
-        c["score_bucket"] = _bucket
-        if _ok:
+        if c.get("opportunity_score", 0) >= OPP_THRESHOLD:
             _register_outcome_pump(c)
 
     # BTC Regime Gate — bloquear alertas LONG em mercado bajista
@@ -617,10 +613,8 @@ def _register_outcome_pump(c: dict):
             "score_v2":        _score_v2,
             "score_v2_audit":  _score_v2_audit,
             "scoring_v2_live": bool(__import__("config").SCORING_V2_LIVE),
-            # ML loop (Fase B)
+            # ML loop (Fase B): source dos pesos aplicados ao opportunity_score
             "weight_source":   c.get("weight_source", "legacy"),
-            # Outcome expansion (Fase X): alert|near|low
-            "score_bucket":    c.get("score_bucket", "alert"),
         })
         log.info(
             f"[PumpTrader] Outcome registrado: {c.get('symbol','')} LONG "
