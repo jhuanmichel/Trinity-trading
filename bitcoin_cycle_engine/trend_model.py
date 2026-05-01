@@ -17,32 +17,18 @@ import pandas as pd
 
 log = logging.getLogger(__name__)
 
-try:
-    import yfinance as yf
-    YFINANCE_OK = True
-except ImportError:
-    YFINANCE_OK = False
-    log.warning("   Trend model: yfinance não disponível — usando dados neutros")
+from ._yf_safe import safe_yf_download
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def _download(period: str, interval: str) -> Optional[pd.DataFrame]:
-    """Baixa dados históricos do BTC via yfinance."""
-    if not YFINANCE_OK:
+    """Baixa dados históricos do BTC via yfinance (com timeout)."""
+    df = safe_yf_download("BTC-USD", period=period, interval=interval)
+    if df is None:
         return None
-    try:
-        df = yf.download("BTC-USD", period=period, interval=interval, progress=False)
-        if df.empty:
-            return None
-        # Flatten multi-index (yfinance v0.2+)
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.droplevel(1)
-        df = df.dropna(subset=["Close"])
-        return df if len(df) >= 4 else None
-    except Exception as e:
-        log.debug(f"   Trend model yfinance ({interval}): {type(e).__name__}: {e}")
-        return None
+    df = df.dropna(subset=["Close"])
+    return df if len(df) >= 4 else None
 
 
 def _trend_direction(df: pd.DataFrame) -> str:

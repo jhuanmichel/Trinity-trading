@@ -36,11 +36,7 @@ import pandas as pd
 
 log = logging.getLogger(__name__)
 
-try:
-    import yfinance as yf
-    YFINANCE_OK = True
-except ImportError:
-    YFINANCE_OK = False
+from ._yf_safe import safe_yf_download
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -50,15 +46,10 @@ def _approximate_realized_price() -> Optional[float]:
     Approximates Realized Price via VWAP anual (365 dias).
     Realized Price ≈ preço médio pago por todos os holders.
     """
-    if not YFINANCE_OK:
+    df = safe_yf_download("BTC-USD", period="2y", interval="1d")
+    if df is None:
         return None
     try:
-        df = yf.download("BTC-USD", period="2y", interval="1d", progress=False)
-        if df.empty:
-            return None
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.droplevel(1)
-
         df_1y   = df.tail(365).copy()
         typical = (df_1y["High"] + df_1y["Low"] + df_1y["Close"]) / 3
         vol     = df_1y["Volume"]
@@ -73,15 +64,11 @@ def _approximate_realized_price() -> Optional[float]:
 
 
 def _get_current_price() -> Optional[float]:
-    """Obtém preço atual do BTC via yfinance."""
-    if not YFINANCE_OK:
+    """Obtém preço atual do BTC via yfinance (com timeout)."""
+    df = safe_yf_download("BTC-USD", period="5d", interval="1d")
+    if df is None:
         return None
     try:
-        df = yf.download("BTC-USD", period="5d", interval="1d", progress=False)
-        if df.empty:
-            return None
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.droplevel(1)
         return float(df["Close"].dropna().iloc[-1])
     except Exception:
         return None

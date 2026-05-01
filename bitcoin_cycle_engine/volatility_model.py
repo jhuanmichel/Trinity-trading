@@ -22,11 +22,7 @@ import pandas as pd
 
 log = logging.getLogger(__name__)
 
-try:
-    import yfinance as yf
-    YFINANCE_OK = True
-except ImportError:
-    YFINANCE_OK = False
+from ._yf_safe import safe_yf_download
 
 # Limiares de ATR% semanal
 ATR_LOW_THRESHOLD  = 3.5    # < 3.5% = baixa volatilidade
@@ -87,18 +83,12 @@ def run_volatility_model() -> dict:
         "vol_trend":        "STABLE",
     }
 
-    if not YFINANCE_OK:
+    df = safe_yf_download("BTC-USD", period="2y", interval="1wk")
+    if df is None or len(df) < 20:
+        log.debug("   Volatility model: dados insuficientes ou yfinance falhou — neutro")
         return _neutral
-
-    try:
-        df = yf.download("BTC-USD", period="2y", interval="1wk", progress=False)
-        if df.empty or len(df) < 20:
-            raise ValueError("dados insuficientes")
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.droplevel(1)
-        df = df.dropna(subset=["Close"])
-    except Exception as e:
-        log.debug(f"   Volatility model: yfinance falhou: {e}")
+    df = df.dropna(subset=["Close"])
+    if len(df) < 20:
         return _neutral
 
     price_now = float(df["Close"].iloc[-1])
