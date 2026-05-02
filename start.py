@@ -83,9 +83,10 @@ def _run_scheduler():
 
     schedule.every(90).seconds.do(_run_fms_cycle)
 
-    # Parabolic Scanner — detecta movimentos parabólicos a cada 15 min (RAVE-type)
-    from trinity.modules.parabolic_scanner import run_parabolic_scan
-    schedule.every(15).minutes.do(run_parabolic_scan)
+    # Parabolic Scanner — DESATIVADO a pedido do usuário (manter só pump/crash trader).
+    # Para reativar: descomentar as 2 linhas abaixo.
+    # from trinity.modules.parabolic_scanner import run_parabolic_scan
+    # schedule.every(15).minutes.do(run_parabolic_scan)
 
     # Market Movers Scanner — escaneia todos os contratos MEXC a cada 10 min
     from trinity.modules.market_movers import get_scanner as _get_movers_scanner
