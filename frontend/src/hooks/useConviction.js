@@ -7,6 +7,7 @@ import {
   extractConvictionData,
   extractLayerScores,
   extractTradePlan,
+  extractMeta,
 } from '@/lib/backendMapping'
 
 async function fetchState() {
@@ -30,6 +31,7 @@ export function useConviction() {
     conviction: extractConvictionData(data),
     layers:     extractLayerScores(data),
     tradePlan:  extractTradePlan(data),
+    meta:       extractMeta(data),
     isLoading,
     error,
   }

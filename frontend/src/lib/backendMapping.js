@@ -39,11 +39,20 @@ export function extractLayerScores(state) {
 export function extractTradePlan(state) {
   const btc = state?.btc || {}
   return {
-    entry: Number(btc.entry) || 0,
-    stop:  Number(btc.stop)  || 0,
-    tp1:   Number(btc.tp1)   || 0,
-    tp2:   Number(btc.tp2)   || 0,
-    tp3:   Number(btc.tp3)   || 0,
+    entry:   Number(btc.entry) || 0,
+    stop:    Number(btc.stop)  || 0,
+    tp1:     Number(btc.tp1)   || 0,
+    tp2:     Number(btc.tp2)   || 0,
+    tp3:     Number(btc.tp3)   || 0,
+    atr_pct: Number(btc.atr_pct) || 0,
+  }
+}
+
+/** Metadata do state (last_updated, last_error) para indicador de freshness. */
+export function extractMeta(state) {
+  return {
+    lastUpdated: state?.last_updated || null,
+    lastError:   state?.last_error || null,
   }
 }
 
