@@ -62,21 +62,8 @@ _last_anthropic_alert: float = 0.0
 
 
 def _alert_anthropic_failure(error_msg: str) -> None:
-    """Envia alerta Telegram quando API Anthropic falha. Máx 1x por hora."""
-    global _last_anthropic_alert
-    if time.time() - _last_anthropic_alert < 3600:
-        return
-    try:
-        alerts.send_message(
-            "⚠️ <b>TRINITY — Anthropic API falhou</b>\n"
-            "A análise de IA está desativada neste ciclo.\n"
-            f"Verificar <code>ANTHROPIC_API_KEY</code> no Render.\n\n"
-            f"Erro: <code>{str(error_msg)[:120]}</code>"
-        )
-        _last_anthropic_alert = time.time()
-        log.warning("[ANTHROPIC] Alerta Telegram enviado (próximo em 1h)")
-    except Exception as e:
-        log.warning(f"[ANTHROPIC] Falha ao enviar alerta Telegram: {e}")
+    """Loga falha da Anthropic API. Telegram desativado (spam de credit balance)."""
+    log.warning(f"[ANTHROPIC] API falhou: {str(error_msg)[:200]}")
 
 
 def run_analysis_summary():
