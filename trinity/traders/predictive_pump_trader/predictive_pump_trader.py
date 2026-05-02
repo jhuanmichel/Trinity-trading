@@ -45,12 +45,15 @@ from trinity.traders.predictive_pump_trader.pump_scoring_engine import BLUE_CHIP
 
 log = logging.getLogger(__name__)
 
+import os as _os
+
 # ── Config ────────────────────────────────────────────────────────────────────
 SCAN_INTERVAL_S    = 90
 TOP_RESULTS        = 5         # top N oportunidades institucionais
 OPP_THRESHOLD      = 35        # mínimo para aparecer no dashboard
-ALERT_THRESHOLD    = 75        # mínimo para disparar alerta Telegram
-LAUNCH_THRESHOLD   = 80        # alerta urgente (cooldown reduzido)
+# Override via env: PUMP_ALERT_THRESHOLD=70 reduz para tier MÉDIO
+ALERT_THRESHOLD    = int(_os.getenv("PUMP_ALERT_THRESHOLD", "70"))   # default 70 (era 75)
+LAUNCH_THRESHOLD   = int(_os.getenv("PUMP_LAUNCH_THRESHOLD", "80"))  # alerta urgente
 BASE_DIR           = Path(__file__).parent.parent.parent.parent
 SCAN_OUTPUT_FILE   = BASE_DIR / "dashboard" / "pump_scan_latest.json"
 
