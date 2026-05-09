@@ -8,22 +8,8 @@ services:
       set -e
       pip install --upgrade pip
       pip install -r requirements.txt
-      # Install Node 20 via direct download (sem nodeenv, menos overhead)
-      NODE_VERSION=20.11.1
-      NODE_DIR=/tmp/node-${NODE_VERSION}
-      mkdir -p $NODE_DIR
-      curl -fsSL https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz -o /tmp/node.tar.xz
-      tar -xf /tmp/node.tar.xz -C $NODE_DIR --strip-components=1
-      export PATH=$NODE_DIR/bin:$PATH
-      node --version
-      npm --version
-      # Build frontend (Vite outputa direto em ../dashboard/static/app)
-      cd frontend
-      npm ci --prefer-offline --no-audit
-      npm run build
-      cd ..
-      ls dashboard/static/app/
-      echo "Frontend build complete."
+      # Frontend removido em 2026-05-03 — backend-only mode.
+      # (Node/npm build e ls dashboard/static/app/ removidos.)
     startCommand: python start.py
     healthCheckPath: /health
     envVars:

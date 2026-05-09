@@ -2357,14 +2357,24 @@ def get_futures_guard_stats():
     })
 
 
-# ── Serve React app v3.0 em /app/ ────────────────────────────────────────────
-REACT_APP_DIR = BASE_DIR / "dashboard" / "static" / "app"
-if REACT_APP_DIR.exists():
-    app.mount("/app", StaticFiles(directory=str(REACT_APP_DIR), html=True), name="react-app")
+# ── Frontend removido em 2026-05-03 — backend-only mode ──────────────────────
+# Reconstrucao planejada apos backend maduro (WR estavel >= 70%).
+# Branch backup: backup-with-frontend-2026-05-03 / tag pre-frontend-removal-2026-05-03
 
-# ── Root redirect: "/" → "/app/" (V2 redesign default) ────────────────────────
-# Dashboard V1 (dashboard/static/{index.html,app.js,style.css}) removido;
-# unico SPA servido e o V2 em /app/.
 @app.get("/", include_in_schema=False)
-async def _root_redirect():
-    return RedirectResponse(url="/app/", status_code=302)
+async def _root_status():
+    """Status da API. UI removida — backend continua servindo Telegram + scanners."""
+    return {
+        "service": "trinity-trading",
+        "status":  "running",
+        "mode":    "backend-only",
+        "ui":      "removed_2026-05-03",
+        "endpoints": {
+            "health":           "/health",
+            "current_state":    "/api/current-state",
+            "win_rate":         "/api/win-rate",
+            "ml_status":        "/api/ml/status",
+            "outcomes_health":  "/api/outcomes/health",
+            "outcomes_export":  "/api/outcomes/export",
+        },
+    }
