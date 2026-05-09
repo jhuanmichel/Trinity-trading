@@ -768,6 +768,23 @@ def _send_crash_telegram(c: dict):
             )
 
         msg += f"\n\n💡 _{action}_"
+
+        # Contexto extra: regime BTC, link MEXC, timestamp UTC
+        try:
+            from trinity.traders.btc_regime_monitor import get_btc_regime as _gbr
+            _br = _gbr()
+            _reg = _br.get("regime") or _br.get("direction", "—")
+            _str = _br.get("strength", 0)
+            msg += f"\n🌐 *BTC regime:* {_reg} (str {_str})"
+        except Exception:
+            pass
+
+        from datetime import datetime as _dt, timezone as _tz
+        _now_utc = _dt.now(_tz.utc).strftime("%d/%m %H:%M UTC")
+        _mexc_sym = symbol.replace("/", "").replace(":USDT", "").replace("USDT", "_USDT") if "_" not in symbol else symbol
+        msg += f"\n🔗 https://www.mexc.com/exchange/{_mexc_sym}"
+        msg += f"\n⏱ {_now_utc}"
+
         if len(msg) > 4000:
             msg = msg[:3950] + "\n\n_...truncado_"
 

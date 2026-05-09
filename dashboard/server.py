@@ -305,8 +305,10 @@ async def startup_event():
     asyncio.create_task(_altcoin_scan_loop())
     # Outcome Tracker — verifica pendentes a cada 15 min
     asyncio.create_task(_outcome_check_loop())
-    # News Sentinel — monitoramento de notícias macro a cada 2 min
-    asyncio.create_task(_news_sentinel_loop())
+    # News Sentinel — DESATIVADO (queima créditos Anthropic via news_classifier).
+    # Telegram macro alerts já estavam comentados no news_sentinel.py:254.
+    # Pra reativar: descomentar linha abaixo + recarregar saldo Anthropic.
+    # asyncio.create_task(_news_sentinel_loop())
     # Full Market Scanner — varre todos os contratos MEXC a cada 90s
     asyncio.create_task(_fms_loop())
     # Mercado MEXC Futures — atualiza cache de bubbles a cada 60s
