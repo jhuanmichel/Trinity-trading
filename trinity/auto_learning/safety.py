@@ -111,13 +111,6 @@ MODULE_ENV_VARS = {
     "WEEKLY_REPORT": "AUTO_WEEKLY_REPORT",
 }
 
-# Stage 1 activation (2026-05-10): master + health_monitor habilitados por DEFAULT.
-# Pra DESATIVAR: setar AUTO_LEARNING_ENABLED=false no Render env, ou reverter
-# este commit. Adicionar mais modulos aqui conforme avanca a sequencia de
-# ativacao (vide AUTOLEARNING_README ou prompt de ativacao progressiva).
-DEFAULT_MASTER_ENABLED = "true"
-DEFAULT_ENABLED_MODULES = {"HEALTH_MONITOR"}
-
 
 def _env_truthy(value: str) -> bool:
     """Converte string env var pra bool (true/1/yes/on)."""
@@ -133,19 +126,18 @@ def is_module_enabled(module_name: str) -> bool:
     Master switch: AUTO_LEARNING_ENABLED=false desliga TUDO.
     Per-module switch: AUTO_<MODULE>=false desliga so esse modulo.
 
-    Default per-module: false, EXCETO modulos em DEFAULT_ENABLED_MODULES
-    (ativacao progressiva em codigo). Override via env var sempre vence.
+    DEFAULT: tudo desabilitado (seguranca maxima).
+    Pra ligar, precisa setar EXPLICITAMENTE a env var no Render.
     """
-    # Master switch
-    master = os.getenv("AUTO_LEARNING_ENABLED", DEFAULT_MASTER_ENABLED)
+    # Master switch - DEFAULT: false
+    master = os.getenv("AUTO_LEARNING_ENABLED", "false")
     if not _env_truthy(master):
         logger.debug(f"[SAFETY] Master switch OFF: AUTO_LEARNING_ENABLED={master}")
         return False
 
-    # Per-module switch
+    # Per-module switch - DEFAULT: false
     var_name = MODULE_ENV_VARS.get(module_name, f"AUTO_{module_name}")
-    default_for_module = "true" if module_name in DEFAULT_ENABLED_MODULES else "false"
-    module_value = os.getenv(var_name, default_for_module)
+    module_value = os.getenv(var_name, "false")
     if not _env_truthy(module_value):
         logger.debug(f"[SAFETY] Module {module_name} OFF: {var_name}={module_value}")
         return False
