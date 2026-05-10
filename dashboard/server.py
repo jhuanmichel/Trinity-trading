@@ -1850,8 +1850,12 @@ async def rf_observations(days: int = 7):
 
 
 @app.post("/api/rf/retrain")
-async def rf_retrain_now(force: bool = False):
-    """Trigger manual de retreino."""
+async def rf_retrain_now(force: bool = False, source: str = ""):
+    """
+    Trigger manual de retreino.
+    Se ?source=NAME for passado, treina apenas essa source (evita OOM).
+    Se omitido, treina todas (pode estourar memoria em Render free tier).
+    """
     try:
         import os as _os
         if not force and _os.getenv("RF_CLASSIFIER_ENABLED", "false").lower() not in ("true", "1"):
@@ -1860,13 +1864,91 @@ async def rf_retrain_now(force: bool = False):
                 "hint":   "set RF_CLASSIFIER_ENABLED=true ou pass force=true",
             })
 
-        # Force=true contorna o gate de RF_AUTO_RETRAIN
-        from trinity.rf_classifier.trainer import train_all_sources
         from trinity.rf_classifier.inference import reset_cache
-        result = await asyncio.to_thread(train_all_sources)
+
+        if source:
+            # Treina 1 source so (memory-friendly em Render free tier)
+            from trinity.rf_classifier.trainer import (
+                _load_resolved_outcomes,
+                train_source,
+            )
+            from trinity.rf_classifier.feature_extractor import save_feature_schema
+            from trinity.rf_classifier.persistence import (
+                get_paths, load_metadata, save_metadata, log_retrain,
+            )
+            from datetime import datetime as _dt, timezone as _tz
+
+            def _train_single():
+                outcomes = _load_resolved_outcomes()
+                source_outcomes = [o for o in outcomes if o.get("source") == source]
+                paths = get_paths()
+                save_feature_schema(paths["feature_columns"])
+
+                src_result = train_source(source, source_outcomes)
+
+                # Atualizar metadata
+                metadata = load_metadata()
+                metadata["last_trained_at"] = _dt.now(_tz.utc).isoformat()
+                if "models" not in metadata:
+                    metadata["models"] = {}
+                if src_result.get("status") in ("success", "trained_but_not_recommended"):
+                    wf = src_result.get("walk_forward", {})
+                    metadata["models"][source] = {
+                        "samples": src_result.get("samples_with_features", 0),
+                        "wins": src_result.get("balance", {}).get("wins", 0),
+                        "losses": src_result.get("balance", {}).get("losses", 0),
+                        "auc_mean": wf.get("auc_mean"),
+                        "auc_std": wf.get("auc_std"),
+                        "is_stable": wf.get("is_stable"),
+                        "recommend_apply": wf.get("recommend_apply"),
+                        "trained_at": src_result.get("trained_at"),
+                        "top_features": src_result.get("top_features", [])[:5],
+                    }
+                save_metadata(metadata)
+                log_retrain({
+                    "timestamp": _dt.now(_tz.utc).isoformat(),
+                    "single_source": source,
+                    "status": src_result.get("status"),
+                })
+                return {
+                    "status": "completed",
+                    "source": source,
+                    "result": src_result,
+                }
+
+            result = await asyncio.to_thread(_train_single)
+        else:
+            # Treina todas (pode estourar memoria)
+            from trinity.rf_classifier.trainer import train_all_sources
+            result = await asyncio.to_thread(train_all_sources)
+
         reset_cache()
         result["cache_reset"] = True
         return JSONResponse(content=result)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/rf/sources")
+async def rf_list_sources():
+    """Lista sources com volume suficiente pra treinar."""
+    try:
+        from trinity.rf_classifier.trainer import _load_resolved_outcomes
+        from trinity.rf_classifier import MIN_SAMPLES_PER_SOURCE
+        from collections import Counter
+
+        outcomes = await asyncio.to_thread(_load_resolved_outcomes)
+        counts = Counter(o.get("source", "unknown") for o in outcomes)
+
+        result = []
+        for src, n in counts.most_common():
+            result.append({
+                "source": src,
+                "resolved": n,
+                "trainable": n >= MIN_SAMPLES_PER_SOURCE,
+                "min_required": MIN_SAMPLES_PER_SOURCE,
+            })
+        return JSONResponse(content={"total_outcomes": len(outcomes), "sources": result})
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 

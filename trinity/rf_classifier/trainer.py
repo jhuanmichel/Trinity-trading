@@ -156,13 +156,15 @@ def train_source(source: str, outcomes: list[dict]) -> dict:
     class_weight = "balanced" if balance["use_class_weight"] else None
 
     def model_factory():
+        # Params conservadores pra Render free tier (512MB RAM, 1 vCPU):
+        # n_jobs=1 evita threads extras, n_estimators=50 corta memoria pela metade
         return RandomForestClassifier(
-            n_estimators=100,
-            max_depth=8,
+            n_estimators=50,
+            max_depth=6,
             min_samples_leaf=10,
             class_weight=class_weight,
             random_state=42,
-            n_jobs=2,  # cuidado com CPU em 1-vCPU instance
+            n_jobs=1,
         )
 
     logger.info(f"[TRAIN] {source}: walk-forward com {len(X)} samples")
