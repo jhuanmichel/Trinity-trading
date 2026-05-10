@@ -698,6 +698,42 @@ def _send_crash_telegram(c: dict):
             log.debug(f"[AUTO_LEARNING] fail-open: {_ale}")
         # === END AUTO-LEARNING ===
 
+        # === RF CLASSIFIER FILTER (PROMPT 5, fail-open) ===
+        try:
+            from trinity.rf_classifier.trader_helper import evaluate_rf, build_outcome_features
+            try:
+                from trinity.traders.btc_regime_monitor import get_btc_regime as _gbr_rf
+                _br_rf = _gbr_rf()
+                _reg_rf = _br_rf.get("regime") or _br_rf.get("direction", "UNKNOWN") if isinstance(_br_rf, dict) else str(_br_rf)
+            except Exception:
+                _reg_rf = "UNKNOWN"
+            _is_bc_rf = symbol in BLUE_CHIPS
+            _features = build_outcome_features(
+                score=opp_score,
+                component_scores=c.get("component_scores", {}),
+                direction="SHORT",
+                btc_regime=_reg_rf,
+                is_blue_chip=_is_bc_rf,
+                conviction_tier=c.get("move_classification", "UNKNOWN"),
+            )
+            _rf = evaluate_rf(
+                source="crash_trader",
+                symbol=symbol,
+                direction="SHORT",
+                score_composto=opp_score,
+                outcome_features=_features,
+            )
+            if _rf["should_filter"]:
+                log.info(
+                    f"[RF_FILTER] {symbol} crash bloqueado: prob_win={_rf['prob_win']} ({_rf['reason']})"
+                )
+                return
+            if _rf["prob_win"] is not None:
+                log.info(f"[RF_PASS] {symbol} crash prob_win={_rf['prob_win']:.3f} ({_rf['mode']})")
+        except Exception as _rfe:
+            log.debug(f"[RF] fail-open: {_rfe}")
+        # === END RF CLASSIFIER ===
+
         move_pct    = c.get("expected_move_pct", 0)
         move_cls    = c.get("move_classification", "WEAK")
         action      = c.get("recommended_action", "—")

@@ -17,3 +17,7 @@ fastapi>=0.111.0          # Dashboard web — servidor API
 uvicorn>=0.29.0           # Dashboard web — servidor ASGI
 websockets>=12.0          # WebSocket Binance liquidações em tempo real
 feedparser>=6.0.0         # Parse de feeds RSS (Geopolitical Engine)
+
+# RF Classifier (PROMPT 5) — substitui score composto invertido
+scikit-learn>=1.4,<2.0
+joblib>=1.3

@@ -319,6 +319,8 @@ async def startup_event():
     asyncio.create_task(_daily_summary_loop())
     # Auto-Learning Orchestrator — tick a cada 1h (gated por AUTO_LEARNING_ENABLED)
     asyncio.create_task(_auto_learning_loop())
+    # RF Classifier retrain — diario 03:00 UTC (gated por RF_CLASSIFIER_ENABLED + RF_AUTO_RETRAIN)
+    asyncio.create_task(_rf_retrain_loop())
 
 
 async def _run_analysis_bg(force: bool = False):
@@ -958,6 +960,43 @@ async def _outcome_check_loop():
         except Exception as _e:
             _olog.error(f"Outcome check loop error: {_e}")
         await asyncio.sleep(900)   # 15 minutos
+
+
+async def _rf_retrain_loop():
+    """
+    Loop diario de retreino RF (PROMPT 5).
+    Roda as 03:00 UTC (madrugada). Gated por RF_CLASSIFIER_ENABLED + RF_AUTO_RETRAIN.
+    """
+    import logging as _log
+    import os as _os
+    rflog = _log.getLogger("rf_retrain_loop")
+
+    await asyncio.sleep(120)  # offset pra evitar race com outras inits
+    rflog.info("[RF_LOOP] Iniciado")
+
+    last_retrain_date = None
+
+    while True:
+        try:
+            enabled = _os.getenv("RF_CLASSIFIER_ENABLED", "false").lower()
+            auto_retrain = _os.getenv("RF_AUTO_RETRAIN", "false").lower()
+
+            if enabled in ("true", "1", "yes", "on") and auto_retrain in ("true", "1", "yes", "on"):
+                now = datetime.now(timezone.utc)
+                if now.hour == 3 and now.date() != last_retrain_date:
+                    rflog.info(f"[RF_LOOP] Tick {now.isoformat()} - retreinando")
+                    try:
+                        from trinity.rf_classifier.orchestrator import run_retrain
+                        result = await asyncio.to_thread(run_retrain)
+                        rflog.info(f"[RF_LOOP] status: {result.get('status')}")
+                        last_retrain_date = now.date()
+                    except Exception as _e:
+                        rflog.exception(f"[RF_LOOP] Erro: {_e}")
+        except Exception as _e:
+            rflog.exception(f"[RF_LOOP] Erro inesperado: {_e}")
+
+        # Check a cada 30 min
+        await asyncio.sleep(30 * 60)
 
 
 async def _auto_learning_loop():
@@ -1761,6 +1800,73 @@ async def auto_learning_config():
     try:
         from trinity.auto_learning import state
         return JSONResponse(content=state.load_config())
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+# ── RF Classifier endpoints (PROMPT 5) ────────────────────────────────────────
+
+@app.get("/api/rf/status")
+async def rf_status():
+    """Status geral do RF classifier."""
+    try:
+        from trinity.rf_classifier import persistence as rf_persistence
+        from trinity.rf_classifier import inference as rf_inference
+        import os as _os
+        metadata = rf_persistence.load_metadata()
+        return JSONResponse(content={
+            "version":           metadata.get("version"),
+            "last_trained_at":   metadata.get("last_trained_at"),
+            "total_outcomes":    metadata.get("total_outcomes"),
+            "models":            metadata.get("models", {}),
+            "available_models":  rf_inference.list_available_models(),
+            "filter_enabled":    _os.getenv("RF_CLASSIFIER_ENABLED", "false").lower() in ("true", "1"),
+            "observation_mode":  _os.getenv("RF_OBSERVATION_MODE", "false").lower() in ("true", "1"),
+            "auto_retrain":      _os.getenv("RF_AUTO_RETRAIN", "false").lower() in ("true", "1"),
+            "filter_threshold":  float(_os.getenv("RF_FILTER_THRESHOLD", "0.55")),
+        })
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/rf/observations")
+async def rf_observations(days: int = 7):
+    """Ultimas N observacoes (modo A/B)."""
+    try:
+        from trinity.rf_classifier import persistence as rf_persistence
+        days = max(1, min(int(days), 30))
+        obs = rf_persistence.get_recent_observations(days=days)
+        total = len(obs)
+        would_filter = sum(1 for o in obs if o.get("would_filter"))
+        return JSONResponse(content={
+            "days":          days,
+            "total":         total,
+            "would_filter":  would_filter,
+            "filter_rate":   would_filter / total if total > 0 else 0,
+            "observations":  obs[-100:],  # cap em 100 mais recentes
+        })
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.post("/api/rf/retrain")
+async def rf_retrain_now(force: bool = False):
+    """Trigger manual de retreino."""
+    try:
+        import os as _os
+        if not force and _os.getenv("RF_CLASSIFIER_ENABLED", "false").lower() not in ("true", "1"):
+            return JSONResponse(content={
+                "status": "disabled",
+                "hint":   "set RF_CLASSIFIER_ENABLED=true ou pass force=true",
+            })
+
+        # Force=true contorna o gate de RF_AUTO_RETRAIN
+        from trinity.rf_classifier.trainer import train_all_sources
+        from trinity.rf_classifier.inference import reset_cache
+        result = await asyncio.to_thread(train_all_sources)
+        reset_cache()
+        result["cache_reset"] = True
+        return JSONResponse(content=result)
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
