@@ -317,6 +317,8 @@ async def startup_event():
     asyncio.create_task(_funding_scan_loop())
     # Daily Summary — resumo diário às 08:00 UTC via Telegram
     asyncio.create_task(_daily_summary_loop())
+    # Auto-Learning Orchestrator — tick a cada 1h (gated por AUTO_LEARNING_ENABLED)
+    asyncio.create_task(_auto_learning_loop())
 
 
 async def _run_analysis_bg(force: bool = False):
@@ -956,6 +958,40 @@ async def _outcome_check_loop():
         except Exception as _e:
             _olog.error(f"Outcome check loop error: {_e}")
         await asyncio.sleep(900)   # 15 minutos
+
+
+async def _auto_learning_loop():
+    """
+    Loop de background do auto-learning - chama orchestrator a cada 1h.
+    Orchestrator INTERNAMENTE decide o que rodar baseado no horario UTC.
+    Gated por AUTO_LEARNING_ENABLED (default: false).
+    """
+    import logging as _log
+    import os as _os
+    al_logger = _log.getLogger("auto_learning_loop")
+
+    # Aguardar 90s pra evitar race com outras inicializacoes do startup
+    await asyncio.sleep(90)
+    al_logger.info("[AUTO_LOOP] Iniciado")
+
+    while True:
+        try:
+            master = _os.getenv("AUTO_LEARNING_ENABLED", "false").lower()
+            if master in ("true", "1", "yes", "on"):
+                try:
+                    from trinity.auto_learning.orchestrator import run_orchestrator
+                    result = await asyncio.to_thread(run_orchestrator, False)
+                    modules_ran = result.get("modules_ran", [])
+                    if modules_ran:
+                        al_logger.info(f"[AUTO_LOOP] Modulos rodados: {modules_ran}")
+                except Exception as _e:
+                    al_logger.exception(f"[AUTO_LOOP] Erro orchestrator: {_e}")
+            # else: silently skip (master OFF)
+        except Exception as _e:
+            al_logger.exception(f"[AUTO_LOOP] Erro inesperado: {_e}")
+
+        # 1h ate proximo tick
+        await asyncio.sleep(3600)
 
 
 async def _news_sentinel_loop():
@@ -1639,6 +1675,92 @@ def ml_risk():
             "stress_test":   mc.get("stress_test", {}),
             "before":        mc.get("before", {}),
         })
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+# ── Auto-Learning endpoints ──────────────────────────────────────────────────
+
+@app.get("/api/auto_learning/status")
+async def auto_learning_status():
+    """Status geral do auto-learning."""
+    try:
+        from trinity.auto_learning import safety, state
+        from trinity.auto_learning.orchestrator import get_orchestrator_status
+        return JSONResponse(content={
+            "orchestrator":   get_orchestrator_status(),
+            "config_summary": state.get_config_summary(),
+            "health":         safety.get_health(),
+        })
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/auto_learning/changes")
+async def auto_learning_changes(days: int = 7, module: str = None):
+    """Audit log de mudancas aplicadas."""
+    try:
+        from trinity.auto_learning import safety
+        days = max(1, min(int(days), 90))
+        changes = safety.get_recent_changes(module=module, days=days)
+        return JSONResponse(content={
+            "days": days, "module": module, "count": len(changes), "changes": changes,
+        })
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/auto_learning/metrics")
+async def auto_learning_metrics(days: int = 7):
+    """Metricas usadas pelo auto-learning."""
+    try:
+        from trinity.auto_learning import metrics as al_metrics
+        days = max(1, min(int(days), 90))
+        return JSONResponse(content={
+            "days":        days,
+            "overall_wr":  al_metrics.get_overall_wr(days=days),
+            "wr_by_day":   al_metrics.get_recent_wr_by_day(days=days),
+            "wr_by_score_band": {
+                f"{lo}-{hi}": stats
+                for (lo, hi), stats in al_metrics.get_wr_by_score_band(days=days).items()
+            },
+            "wr_by_direction_regime": {
+                f"{d}_{r}": stats
+                for (d, r), stats in al_metrics.get_wr_by_direction_regime(days=days).items()
+            },
+            "volume_stats": al_metrics.get_volume_stats(days=days),
+        })
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.post("/api/auto_learning/run_now")
+async def auto_learning_run_now(force: bool = False):
+    """Trigger manual do orchestrator (debugging/emergencia)."""
+    try:
+        from trinity.auto_learning.orchestrator import run_orchestrator
+        result = await asyncio.to_thread(run_orchestrator, bool(force))
+        return JSONResponse(content=result)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.post("/api/auto_learning/reset_guard")
+async def auto_learning_reset_guard():
+    """Reseta performance guard (uso manual apos investigar)."""
+    try:
+        from trinity.auto_learning.performance_guard import reset_kill_flag
+        return JSONResponse(content={"reset": reset_kill_flag()})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/auto_learning/config")
+async def auto_learning_config():
+    """Config ativo (read-only)."""
+    try:
+        from trinity.auto_learning import state
+        return JSONResponse(content=state.load_config())
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 

@@ -653,6 +653,32 @@ def _send_pump_telegram(c: dict):
         price       = c.get("price", 0)
         pct_change  = c.get("price_change_pct", 0)
         opp_score   = c.get("opportunity_score", 0)
+
+        # === AUTO-LEARNING FILTERS (fail-open) ===
+        try:
+            from trinity.auto_learning.trader_integration import (
+                get_active_threshold,
+                passes_auto_learning_filters,
+                normalize_btc_regime,
+            )
+            _is_bc = symbol in BLUE_CHIPS
+            _active_thr = get_active_threshold("pump", is_blue_chip=_is_bc, fallback=ALERT_THRESHOLD)
+            if opp_score < _active_thr:
+                log.debug(f"[AUTO_THRESHOLD] {symbol} score {opp_score:.1f} < {_active_thr}")
+                return
+            try:
+                from trinity.traders.btc_regime_monitor import get_btc_regime as _gbr
+                _reg = normalize_btc_regime(_gbr())
+            except Exception:
+                _reg = "UNKNOWN"
+            _passes, _reason = passes_auto_learning_filters(symbol, opp_score, "LONG", _reg)
+            if not _passes:
+                log.info(f"[AUTO_FILTER] {symbol} pump bloqueado: {_reason}")
+                return
+        except Exception as _ale:
+            log.debug(f"[AUTO_LEARNING] fail-open: {_ale}")
+        # === END AUTO-LEARNING ===
+
         move_pct    = c.get("expected_move_pct", 0)
         move_cls    = c.get("move_classification", "WEAK")
         action      = c.get("recommended_action", "—")
