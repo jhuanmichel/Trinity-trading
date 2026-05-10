@@ -976,7 +976,11 @@ async def _auto_learning_loop():
 
     while True:
         try:
-            master = _os.getenv("AUTO_LEARNING_ENABLED", "false").lower()
+            try:
+                from trinity.auto_learning.safety import DEFAULT_MASTER_ENABLED as _DEF
+            except Exception:
+                _DEF = "false"
+            master = _os.getenv("AUTO_LEARNING_ENABLED", _DEF).lower()
             if master in ("true", "1", "yes", "on"):
                 try:
                     from trinity.auto_learning.orchestrator import run_orchestrator

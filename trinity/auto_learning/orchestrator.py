@@ -117,8 +117,8 @@ def run_orchestrator(force: bool = False) -> dict:
         "modules_skipped": [],
     }
 
-    # Master kill switch
-    master = os.getenv("AUTO_LEARNING_ENABLED", "false")
+    # Master kill switch (default segue safety.DEFAULT_MASTER_ENABLED)
+    master = os.getenv("AUTO_LEARNING_ENABLED", safety.DEFAULT_MASTER_ENABLED)
     if master.lower() not in ("true", "1", "yes", "on"):
         result["status"] = "master_disabled"
         return result
@@ -210,7 +210,7 @@ def get_orchestrator_status() -> dict:
         "current_time": now.isoformat(),
         "is_sunday": now.weekday() == 6,
         "hour_utc": now.hour,
-        "master_enabled": os.getenv("AUTO_LEARNING_ENABLED", "false").lower() in ("true", "1", "yes", "on"),
+        "master_enabled": os.getenv("AUTO_LEARNING_ENABLED", safety.DEFAULT_MASTER_ENABLED).lower() in ("true", "1", "yes", "on"),
         "last_runs": last_runs,
     }
 
